@@ -1,0 +1,17 @@
+cmake_minimum_required(VERSION 3.1 FATAL_ERROR)
+
+project(OptimizeCudaMemoryUsage LANGUAGES CXX CUDA)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED True)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+set(CMAKE_CUDA_STANDARD 17)
+SET(CMAKE_CUDA_ARCHITECTURES 80)
+SET(CUDA_SEPARABLE_COMPILATION ON)
+
+enable_language(CXX CUDA)
+
+find_package(CUDA)
+
+add_subdirectory(playground)
