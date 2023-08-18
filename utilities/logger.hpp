@@ -4,8 +4,6 @@
 #include <cstdio>
 #include <cstring>
 
-#define __FILENAME__ (strrchr("/" __FILE__, '/') + 1)
-
 int __log_trace(const char* file, const char* function, const char* fmt, ...) {
   printf("[%s/%s] ", file, function);
 
@@ -17,6 +15,8 @@ int __log_trace(const char* file, const char* function, const char* fmt, ...) {
   printf("\n");
   return result;
 }
+
+#define __FILENAME__ (strrchr("/" __FILE__, '/') + 1)
 
 #define LOG_TRACE() __log_trace(__FILENAME__, __func__, "")
 
