@@ -20,3 +20,15 @@ void __check(T result, char const *const func, const char *const file, int const
 void warmUpCudaDevice();
 
 void initializeCudaDevice(bool displayDeviceInfo = false);
+
+class CudaEventClock {
+ public:
+  CudaEventClock();
+  ~CudaEventClock();
+  void start(cudaStream_t stream = 0);
+  void end(cudaStream_t stream = 0);
+  float getTimeInSeconds();
+
+ private:
+  cudaEvent_t startEvent, endEvent;
+};

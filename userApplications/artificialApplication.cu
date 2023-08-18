@@ -52,12 +52,20 @@ void case_chainOfGemms() {
     fillRandomEntries(b[i], k, n, n);
   }
 
+  CudaEventClock clock;
+
+  clock.start();
+
   // Compute
   for (int i = 0; i < CHAIN_LEN; i++) {
     tf32GemmUsingTensorCore(handle, m, n, k, a[i], b[i], c[i]);
   }
 
+  clock.end();
+
   checkCudaErrors(cudaDeviceSynchronize());
+
+  printf("[case_chainOfGemms] Total time used (s): %.2f\n", clock.getTimeInSeconds());
 
   // Clean up
   for (int i = 0; i < CHAIN_LEN; i++) {

@@ -24,3 +24,27 @@ void initializeCudaDevice(bool displayDeviceInfo) {
 
   warmUpCudaDevice();
 }
+
+CudaEventClock::CudaEventClock() {
+  checkCudaErrors(cudaEventCreate(&this->startEvent));
+  checkCudaErrors(cudaEventCreate(&this->endEvent));
+}
+
+CudaEventClock::~CudaEventClock() {
+  checkCudaErrors(cudaEventDestroy(this->startEvent));
+  checkCudaErrors(cudaEventDestroy(this->endEvent));
+}
+
+void CudaEventClock::start(cudaStream_t stream) {
+  checkCudaErrors(cudaEventRecord(this->startEvent, stream));
+}
+
+void CudaEventClock::end(cudaStream_t stream) {
+  checkCudaErrors(cudaEventRecord(this->endEvent, stream));
+}
+
+float CudaEventClock::getTimeInSeconds() {
+  float time;
+  checkCudaErrors(cudaEventElapsedTime(&time, this->startEvent, this->endEvent));
+  return time * 1e-3f;
+}
