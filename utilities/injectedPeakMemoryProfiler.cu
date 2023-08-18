@@ -13,6 +13,12 @@ std::mutex initializeInjectionMutex;
 
 void onExit() {
   LOG_TRACE();
+  auto peakMemoryProfiler = PeakMemoryProfiler::getInstance();
+  peakMemoryProfiler->finalize();
+  printf(
+    "[peakMemoryProfiler] Peak memory usage (GB): %.6lf\n",
+    static_cast<double>(peakMemoryProfiler->getPeakMemoryUsage()) * 1e-9
+  );
 }
 
 void initializeInjectionGlobals() {
@@ -27,6 +33,7 @@ void registerAtExitHandler() {
 
 void setupCupti() {
   LOG_TRACE();
+  PeakMemoryProfiler::getInstance()->initialize();
 }
 
 extern "C" int InitializeInjection() {

@@ -99,7 +99,6 @@ void CUPTIAPI bufferCompleted(CUcontext ctx, uint32_t streamId, uint8_t *buffer,
   free(buffer);
 }
 
-// Initialize CUDA driver and CUPTI
 void PeakMemoryProfiler::initialize() {
   this->finalized = false;
 
