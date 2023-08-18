@@ -109,7 +109,9 @@ void PeakMemoryProfiler::initialize() {
 }
 
 void PeakMemoryProfiler::finalize() {
-  CUPTI_CALL(cuptiActivityFlushAll(0));
+  CUPTI_CALL(cuptiGetLastError());
+
+  CUPTI_CALL(cuptiActivityFlushAll(1));
 
   CUPTI_CALL(cuptiActivityDisable(CUPTI_ACTIVITY_KIND_MEMORY2));
 

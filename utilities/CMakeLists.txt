@@ -4,3 +4,5 @@ add_library(cudaUtilities SHARED cudaUtilities.cu)
 
 add_library(peakMemoryProfiler SHARED peakMemoryProfiler.cu)
 target_link_libraries(peakMemoryProfiler cudaUtilities -lcupti)
+
+add_library(injectedPeakMemoryProfiler SHARED injectedPeakMemoryProfiler)

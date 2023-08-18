@@ -22,7 +22,11 @@ build-verbose:
 clean:
 	rm -rf ./build
 
-# Test
 .PHONY: run
 run:
 	./build/playground/helloWorld
+
+# Profile peak memory usage
+.PHONY: profile-pmu
+profile-pmu:
+	CUDA_INJECTION64_PATH=$(CURDIR)/build/utilities/libinjectedPeakMemoryProfiler.so $(TARGET)
