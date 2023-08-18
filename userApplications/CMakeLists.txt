@@ -5,5 +5,4 @@ target_link_libraries(
   ${CUDA_cublas_LIBRARY}
   utilities
   cudaUtilities
-  peakMemoryProfiler
 )

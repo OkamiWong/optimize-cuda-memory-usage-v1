@@ -3,7 +3,6 @@
 #include <cstdio>
 
 #include "../utilities/cudaUtilities.hpp"
-#include "../utilities/peakMemoryProfiler.hpp"
 #include "../utilities/utilities.hpp"
 
 void tf32GemmUsingTensorCore(cublasHandle_t handle, int m, int n, int k, float *d_A, float *d_B, float *d_C) {
@@ -38,8 +37,6 @@ void case_chainOfGemms() {
   cublasHandle_t handle;
   checkCudaErrors(cublasCreate(&handle));
   checkCudaErrors(cublasSetMathMode(handle, CUBLAS_TENSOR_OP_MATH));
-
-  auto peakMemoryProfiler = PeakMemoryProfiler::getInstance();
 
   // Allocate memory
   float *a[CHAIN_LEN], *b[CHAIN_LEN], *c[CHAIN_LEN];
@@ -78,16 +75,9 @@ void case_chainOfGemms() {
   }
 
   checkCudaErrors(cublasDestroy(handle));
-
-  peakMemoryProfiler->finalize();
-  printf("[case_chainOfGemms] Peak memory usage (GB): %.2lf\n", static_cast<double>(peakMemoryProfiler->getPeakMemoryUsage()) * 1e-9);
 }
 
 int main() {
-  // CUPTI must be initialized before warming up device.
-  // Otherwise, the reported peak memory usage is wrong.
-  PeakMemoryProfiler::getInstance()->initialize();
-
   initializeCudaDevice();
 
   case_chainOfGemms();
