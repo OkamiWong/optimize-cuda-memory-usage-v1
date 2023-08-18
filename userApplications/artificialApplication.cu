@@ -3,6 +3,7 @@
 #include <cstdio>
 
 #include "../utilities/cudaUtilities.hpp"
+#include "../utilities/logger.hpp"
 #include "../utilities/utilities.hpp"
 
 void tf32GemmUsingTensorCore(cublasHandle_t handle, int m, int n, int k, float *d_A, float *d_B, float *d_C) {
@@ -65,7 +66,7 @@ void case_chainOfGemms() {
 
   checkCudaErrors(cudaDeviceSynchronize());
 
-  printf("[case_chainOfGemms] Total time used (s): %.2f\n", clock.getTimeInSeconds());
+  LOG_TRACE_WITH_INFO("Total time used (s): %.2f", clock.getTimeInSeconds());
 
   // Clean up
   for (int i = 0; i < CHAIN_LEN; i++) {

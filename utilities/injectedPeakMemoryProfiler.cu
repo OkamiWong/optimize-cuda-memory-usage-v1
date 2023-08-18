@@ -15,8 +15,8 @@ void onExit() {
   LOG_TRACE();
   auto peakMemoryProfiler = PeakMemoryProfiler::getInstance();
   peakMemoryProfiler->finalize();
-  printf(
-    "[peakMemoryProfiler] Peak memory usage (GB): %.6lf\n",
+  LOG_TRACE_WITH_INFO(
+    "Peak memory usage (GB): %.6lf",
     static_cast<double>(peakMemoryProfiler->getPeakMemoryUsage()) * 1e-9
   );
 }
