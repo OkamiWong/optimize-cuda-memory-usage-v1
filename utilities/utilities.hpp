@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstdlib>
 
 template <typename T>
@@ -11,3 +12,12 @@ void fillRandomEntries(T *matrix, int m, int n, int lda) {
   }
 }
 
+class SystemWallClock {
+ public:
+  void start();
+  void end();
+  float getTimeInSeconds();
+
+ private:
+  std::chrono::time_point<std::chrono::system_clock> startTimePoint, endTimePoint;
+};
