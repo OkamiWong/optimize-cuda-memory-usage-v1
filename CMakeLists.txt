@@ -14,6 +14,7 @@ enable_language(CXX CUDA)
 
 find_package(CUDA)
 
-add_subdirectory(playground)
-add_subdirectory(userApplications)
 add_subdirectory(utilities)
+add_subdirectory(profiling)
+add_subdirectory(userApplications)
+add_subdirectory(playground)

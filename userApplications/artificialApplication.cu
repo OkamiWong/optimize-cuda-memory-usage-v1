@@ -2,6 +2,7 @@
 
 #include <cstdio>
 
+#include "../profiling/annotation.hpp"
 #include "../utilities/cudaUtilities.hpp"
 #include "../utilities/logger.hpp"
 #include "../utilities/utilities.hpp"
@@ -59,6 +60,7 @@ void case_chainOfGemms() {
 
   // Compute
   for (int i = 0; i < CHAIN_LEN; i++) {
+    annotateNextKernel({a[i], b[i]}, {c[i]});
     tf32GemmUsingTensorCore(handle, m, n, k, a[i], b[i], c[i]);
   }
 
