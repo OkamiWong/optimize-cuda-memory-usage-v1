@@ -16,5 +16,6 @@ __global__ void dummyKernelForAnnotation(KernelIO io);
 
 __host__ void annotateNextKernel(
   std::initializer_list<void *> inputs,
-  std::initializer_list<void *> outputs
+  std::initializer_list<void *> outputs,
+  cudaStream_t stream
 );

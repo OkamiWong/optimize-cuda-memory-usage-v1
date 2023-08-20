@@ -7,13 +7,13 @@
 #include "../utilities/logger.hpp"
 #include "../utilities/utilities.hpp"
 
-void tf32GemmUsingTensorCore(cublasHandle_t handle, int m, int n, int k, float *d_A, float *d_B, float *d_C) {
+void tf32GemmUsingTensorCore(cublasHandle_t cublasHandle, int m, int n, int k, float *d_A, float *d_B, float *d_C) {
   const float alpha = 1.0f;
   const float beta = 0.0f;
 
   checkCudaErrors(
     cublasGemmEx(
-      handle, CUBLAS_OP_N, CUBLAS_OP_N, n, m, k, &alpha,
+      cublasHandle, CUBLAS_OP_N, CUBLAS_OP_N, n, m, k, &alpha,
       d_B, CUDA_R_32F, n,
       d_A, CUDA_R_32F, k,
       &beta,
@@ -23,7 +23,7 @@ void tf32GemmUsingTensorCore(cublasHandle_t handle, int m, int n, int k, float *
   );
 }
 
-void case_chainOfGemms() {
+void case_chainOfGemms(bool useGraph = true) {
   constexpr size_t CHAIN_LEN = 16;
   constexpr size_t DIMENSION = 14 * (1 << 10);
 
@@ -36,9 +36,9 @@ void case_chainOfGemms() {
   const size_t C_SIZE = m * n * sizeof(float);
 
   // Initialzie
-  cublasHandle_t handle;
-  checkCudaErrors(cublasCreate(&handle));
-  checkCudaErrors(cublasSetMathMode(handle, CUBLAS_TENSOR_OP_MATH));
+  cublasHandle_t cublasHandle;
+  checkCudaErrors(cublasCreate(&cublasHandle));
+  checkCudaErrors(cublasSetMathMode(cublasHandle, CUBLAS_TENSOR_OP_MATH));
 
   // Allocate memory
   float *a[CHAIN_LEN], *b[CHAIN_LEN], *c[CHAIN_LEN];
@@ -56,15 +56,37 @@ void case_chainOfGemms() {
 
   CudaEventClock clock;
 
-  clock.start();
+  if (useGraph) {
+    cudaStream_t stream;
+    checkCudaErrors(cudaStreamCreate(&stream));
+    checkCudaErrors(cublasSetStream(cublasHandle, stream));
+    checkCudaErrors(cudaStreamBeginCapture(stream, cudaStreamCaptureModeGlobal));
 
-  // Compute
-  for (int i = 0; i < CHAIN_LEN; i++) {
-    annotateNextKernel({a[i], b[i]}, {c[i]});
-    tf32GemmUsingTensorCore(handle, m, n, k, a[i], b[i], c[i]);
+    for (int i = 0; i < CHAIN_LEN; i++) {
+      annotateNextKernel({a[i], b[i]}, {c[i]}, stream);
+      tf32GemmUsingTensorCore(cublasHandle, m, n, k, a[i], b[i], c[i]);
+    }
+
+    checkCudaErrors(cudaGetLastError());
+
+    cudaGraph_t graph;
+    checkCudaErrors(cudaStreamEndCapture(stream, &graph));
+
+    checkCudaErrors(cudaGraphDebugDotPrint(graph, "/home/twang/sources/projects/optimize-cuda-memory-usage-v1/graph.dot", cudaGraphDebugDotFlagsVerbose));
+
+    cudaGraphExec_t graphExec;
+    checkCudaErrors(cudaGraphInstantiate(&graphExec, graph, nullptr, nullptr, 0));
+
+    clock.start(stream);
+    checkCudaErrors(cudaGraphLaunch(graphExec, stream));
+    clock.end(stream);
+  } else {
+    clock.start();
+    for (int i = 0; i < CHAIN_LEN; i++) {
+      tf32GemmUsingTensorCore(cublasHandle, m, n, k, a[i], b[i], c[i]);
+    }
+    clock.end();
   }
-
-  clock.end();
 
   checkCudaErrors(cudaDeviceSynchronize());
 
@@ -77,7 +99,7 @@ void case_chainOfGemms() {
     checkCudaErrors(cudaFree(c[i]));
   }
 
-  checkCudaErrors(cublasDestroy(handle));
+  checkCudaErrors(cublasDestroy(cublasHandle));
 }
 
 int main() {
