@@ -72,8 +72,6 @@ void case_chainOfGemms(bool useGraph = true) {
     cudaGraph_t graph;
     checkCudaErrors(cudaStreamEndCapture(stream, &graph));
 
-    checkCudaErrors(cudaGraphDebugDotPrint(graph, "/home/twang/sources/projects/optimize-cuda-memory-usage-v1/graph.dot", cudaGraphDebugDotFlagsVerbose));
-
     cudaGraphExec_t graphExec;
     checkCudaErrors(cudaGraphInstantiate(&graphExec, graph, nullptr, nullptr, 0));
 
