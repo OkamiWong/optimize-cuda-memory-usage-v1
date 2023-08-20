@@ -1,6 +1,7 @@
 #include <cublas_v2.h>
 
 #include <cstdio>
+#include <memory>
 
 #include "../profiling/annotation.hpp"
 #include "../utilities/cudaUtilities.hpp"
@@ -24,7 +25,7 @@ void tf32GemmUsingTensorCore(cublasHandle_t cublasHandle, int m, int n, int k, f
 }
 
 void case_chainOfGemms(bool useGraph = true) {
-  constexpr size_t CHAIN_LEN = 16;
+  constexpr size_t CHAIN_LEN = 2;
   constexpr size_t DIMENSION = 14 * (1 << 10);
 
   // Calculate matrix dimensions
@@ -72,7 +73,18 @@ void case_chainOfGemms(bool useGraph = true) {
     cudaGraph_t graph;
     checkCudaErrors(cudaStreamEndCapture(stream, &graph));
 
+    // Debug
     checkCudaErrors(cudaGraphDebugDotPrint(graph, "/home/twang/sources/projects/optimize-cuda-memory-usage-v1/graph.dot", cudaGraphDebugDotFlagsVerbose));
+    size_t numRootNodes;
+    checkCudaErrors(cudaGraphGetRootNodes(graph, nullptr, &numRootNodes));
+    LOG_TRACE_WITH_INFO("%llu", numRootNodes);
+    auto rootNodes = std::make_unique<cudaGraphNode_t[]>(numRootNodes);
+    checkCudaErrors(cudaGraphGetRootNodes(graph, rootNodes.get(), &numRootNodes));
+    cudaKernelNodeParams rootNodeParams;
+    checkCudaErrors(cudaGraphKernelNodeGetParams(rootNodes[0], &rootNodeParams));
+    auto io = reinterpret_cast<KernelIO *>(rootNodeParams.kernelParams[0]);
+    LOG_TRACE_WITH_INFO("%p, %p", io->outputs[0], c[0]);
+    // Debug END
 
     cudaGraphExec_t graphExec;
     checkCudaErrors(cudaGraphInstantiate(&graphExec, graph, nullptr, nullptr, 0));
