@@ -2,6 +2,7 @@
 
 #include <cstdio>
 
+#include "../optimization/taskManager.hpp"
 #include "../profiling/annotation.hpp"
 #include "../utilities/cudaUtilities.hpp"
 #include "../utilities/logger.hpp"
@@ -71,6 +72,12 @@ void case_chainOfGemms(bool useGraph = true) {
 
     cudaGraph_t graph;
     checkCudaErrors(cudaStreamEndCapture(stream, &graph));
+
+    auto taskManager = TaskManager::getInstance();
+    auto kernelRunningTimes = taskManager->getKernelRunningTimes(graph);
+    for(const auto &[id, time]: kernelRunningTimes){
+      LOG_TRACE_WITH_INFO("%p: %.6f", id, time);
+    }
 
     cudaGraphExec_t graphExec;
     checkCudaErrors(cudaGraphInstantiate(&graphExec, graph, nullptr, nullptr, 0));

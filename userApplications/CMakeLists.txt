@@ -6,4 +6,5 @@ target_link_libraries(
   utilities
   cudaUtilities
   annotation
+  taskManager
 )

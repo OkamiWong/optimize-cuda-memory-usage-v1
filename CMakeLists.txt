@@ -16,5 +16,6 @@ find_package(CUDA)
 
 add_subdirectory(utilities)
 add_subdirectory(profiling)
+add_subdirectory(optimization)
 add_subdirectory(userApplications)
 add_subdirectory(playground)
