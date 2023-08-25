@@ -2,6 +2,8 @@
 
 #include <map>
 #include <memory>
+#include <queue>
+#include <utility>
 #include <vector>
 
 #include "../utilities/cudaUtilities.hpp"
@@ -36,10 +38,15 @@ void extractGraphNodesAndEdges(
   }
 
   edges.clear();
+  for (int i = 0; i < numEdges; i++) {
+    edges[from[i]].push_back(to[i]);
+  }
 }
 
 std::map<GraphNodeId, float> TaskManager::getKernelRunningTimes(cudaGraph_t graph) {
-  // Extract nodes and edges
+  std::vector<CUgraphNode> nodes;
+  std::map<CUgraphNode, std::vector<CUgraphNode>> edges;
+  extractGraphNodesAndEdges(graph, nodes, edges);
 
   std::map<GraphNodeId, float> kernelRunningTimes;
   return kernelRunningTimes;
