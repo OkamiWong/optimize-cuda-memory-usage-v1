@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cuda.h>
 #include <cuda_stdint.h>
 
 #include <map>
@@ -20,4 +21,11 @@ class TaskManager {
  protected:
   TaskManager() = default;
   static TaskManager *instance;
+
+ private:
+  cudaStream_t sequentialStream;
+  std::map<CUdeviceptr, void *> actualAddressInSequentialExecution;
+  void initializeSequentialExecutionEnvironment();
+  void executeNodeSequentially(CUgraphNode node);
+  void finalizeSequentialExecutionEnvironment();
 };
