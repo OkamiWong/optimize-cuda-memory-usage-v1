@@ -76,8 +76,6 @@ void TaskManager::executeNodeSequentially(CUgraphNode node) {
     config.attrs = NULL;
     config.numAttrs = 0;
 
-    // TODO: translate pointers in the parameters of the kernel
-
     if (params.func != nullptr) {
       checkCudaErrors(cuLaunchKernelEx(
         &config,
@@ -96,47 +94,6 @@ void TaskManager::executeNodeSequentially(CUgraphNode node) {
       LOG_TRACE_WITH_INFO("Currently only support params.func != NULL or params.kernel != NULL");
       exit(-1);
     }
-  } else if (nodeType == CU_GRAPH_NODE_TYPE_MEM_ALLOC) {
-    CUDA_MEM_ALLOC_NODE_PARAMS params;
-    checkCudaErrors(cuGraphMemAllocNodeGetParams(node, &params));
-    void *ptr;
-    checkCudaErrors(cudaMallocAsync(&ptr, params.bytesize, this->sequentialStream));
-    this->actualAddressInSequentialExecution[params.dptr] = ptr;
-  } else if (nodeType == CU_GRAPH_NODE_TYPE_MEM_FREE) {
-    CUdeviceptr dptr;
-    checkCudaErrors(cuGraphMemFreeNodeGetParams(node, &dptr));
-    checkCudaErrors(cudaFreeAsync(this->actualAddressInSequentialExecution[dptr], this->sequentialStream));
-  } else if (nodeType == CU_GRAPH_NODE_TYPE_MEMSET) {
-    CUDA_MEMSET_NODE_PARAMS params;
-    checkCudaErrors(cuGraphMemsetNodeGetParams(node, &params));
-
-    uint32_t value = 0;
-    if (params.elementSize == 1) {
-      uint8_t v = params.value;
-      for (int i = 0; i < 4; i++) {
-        value += v;
-        value <<= 8;
-      }
-    }
-    if (params.elementSize == 2) {
-      uint16_t v = params.value;
-      for (int i = 0; i < 2; i++) {
-        value += v;
-        value <<= 16;
-      }
-    }
-    if (params.elementSize == 4) {
-      value = params.value;
-    }
-
-    checkCudaErrors(cudaMemset2DAsync(
-      this->actualAddressInSequentialExecution[params.dst],
-      params.pitch,
-      value,
-      params.width,
-      params.height,
-      this->sequentialStream
-    ));
   } else {
     LOG_TRACE_WITH_INFO("Unsupported node type: %d", nodeType);
     exit(-1);

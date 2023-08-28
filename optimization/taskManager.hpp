@@ -24,7 +24,6 @@ class TaskManager {
 
  private:
   cudaStream_t sequentialStream;
-  std::map<CUdeviceptr, void *> actualAddressInSequentialExecution;
   void initializeSequentialExecutionEnvironment();
   void executeNodeSequentially(CUgraphNode node);
   void finalizeSequentialExecutionEnvironment();

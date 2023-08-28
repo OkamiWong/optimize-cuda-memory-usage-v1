@@ -1,5 +1,6 @@
 #include <cublas_v2.h>
 
+#include <cassert>
 #include <cstdio>
 
 #include "../optimization/taskManager.hpp"
@@ -7,6 +8,16 @@
 #include "../utilities/cudaUtilities.hpp"
 #include "../utilities/logger.hpp"
 #include "../utilities/utilities.hpp"
+
+namespace case_chainOfGemms {
+template <typename T>
+void fillRandomEntries(T *matrix, int m, int n, int lda) {
+  for (int i = 0; i < m; i++) {
+    for (int j = 0; j < n; j++) {
+      matrix[i * lda + j] = 2 * static_cast<T>(drand48()) - 1;
+    }
+  }
+}
 
 void tf32GemmUsingTensorCore(cublasHandle_t cublasHandle, int m, int n, int k, float *d_A, float *d_B, float *d_C) {
   const float alpha = 1.0f;
@@ -75,7 +86,7 @@ void case_chainOfGemms(bool useGraph = true) {
 
     auto taskManager = TaskManager::getInstance();
     auto kernelRunningTimes = taskManager->getKernelRunningTimes(graph);
-    for(const auto &[id, time]: kernelRunningTimes){
+    for (const auto &[id, time] : kernelRunningTimes) {
       LOG_TRACE_WITH_INFO("%p: %.6f", id, time);
     }
 
@@ -85,6 +96,8 @@ void case_chainOfGemms(bool useGraph = true) {
     clock.start(stream);
     checkCudaErrors(cudaGraphLaunch(graphExec, stream));
     clock.end(stream);
+
+    checkCudaErrors(cudaStreamDestroy(stream));
   } else {
     clock.start();
     for (int i = 0; i < CHAIN_LEN; i++) {
@@ -106,11 +119,125 @@ void case_chainOfGemms(bool useGraph = true) {
 
   checkCudaErrors(cublasDestroy(cublasHandle));
 }
+}  // namespace case_chainOfGemms
+
+namespace case_chainOfStreams {
+template <typename T>
+__global__ void initializeArraysKernel(T *a, T *b, T *c, T initA, T initB, T initC) {
+  const int i = blockDim.x * blockIdx.x + threadIdx.x;
+  a[i] = initA;
+  b[i] = initB;
+  c[i] = initC;
+}
+
+template <typename T>
+__global__ void addKernel(const T *a, const T *b, T *c) {
+  const int i = blockDim.x * blockIdx.x + threadIdx.x;
+  c[i] = a[i] + b[i];
+}
+
+template <typename T>
+__global__ void checkResultKernel(const T *c, const T expectedValue) {
+  const int i = blockDim.x * blockIdx.x + threadIdx.x;
+  if (c[i] != expectedValue) {
+    assert(false);
+  }
+}
+
+void run(bool useGraph = true) {
+  constexpr size_t CHAIN_LEN = 16;
+  constexpr size_t ARRAY_SIZE = 1 << 30;  // 1GiB
+  constexpr size_t ARRAY_LEN = ARRAY_SIZE / sizeof(float);
+  constexpr size_t BLOCK_SIZE = 1024;
+  constexpr size_t GRID_SIZE = ARRAY_LEN / BLOCK_SIZE;
+
+  constexpr float initA = 1;
+  constexpr float initB = 2;
+  constexpr float initC = 0;
+  constexpr float expectedC = initA + initB;
+
+  // Allocate memory
+  float *a[CHAIN_LEN], *b[CHAIN_LEN], *c[CHAIN_LEN];
+  for (int i = 0; i < CHAIN_LEN; i++) {
+    checkCudaErrors(cudaMallocManaged(&a[i], ARRAY_SIZE));
+    checkCudaErrors(cudaMallocManaged(&b[i], ARRAY_SIZE));
+    checkCudaErrors(cudaMallocManaged(&c[i], ARRAY_SIZE));
+  }
+
+  // Initialize data
+  for (int i = 0; i < CHAIN_LEN; i++) {
+    initializeArraysKernel<<<GRID_SIZE, BLOCK_SIZE>>>(a[i], b[i], c[i], initA, initB, initC);
+  }
+  checkCudaErrors(cudaDeviceSynchronize());
+
+  CudaEventClock clock;
+
+  cudaStream_t stream;
+  checkCudaErrors(cudaStreamCreate(&stream));
+
+  if (useGraph) {
+    checkCudaErrors(cudaStreamBeginCapture(stream, cudaStreamCaptureModeGlobal));
+
+    for (int i = 0; i < CHAIN_LEN; i++) {
+      annotateNextKernel({a[i], b[i]}, {c[i]}, stream);
+      addKernel<<<GRID_SIZE, BLOCK_SIZE, 0, stream>>>(a[i], b[i], c[i]);
+    }
+
+    checkCudaErrors(cudaGetLastError());
+
+    cudaGraph_t graph;
+    checkCudaErrors(cudaStreamEndCapture(stream, &graph));
+
+    auto taskManager = TaskManager::getInstance();
+    auto kernelRunningTimes = taskManager->getKernelRunningTimes(graph);
+    for (const auto &[id, time] : kernelRunningTimes) {
+      LOG_TRACE_WITH_INFO("%p: %.6f", id, time);
+    }
+
+    cudaGraphExec_t graphExec;
+    checkCudaErrors(cudaGraphInstantiate(&graphExec, graph, nullptr, nullptr, 0));
+
+    clock.start(stream);
+    checkCudaErrors(cudaGraphLaunch(graphExec, stream));
+    clock.end(stream);
+
+    checkResultKernel<<<GRID_SIZE, BLOCK_SIZE, 0, stream>>>(
+      c[generateRandomInteger(0, CHAIN_LEN - 1)],
+      expectedC
+    );
+
+  } else {
+    clock.start();
+    for (int i = 0; i < CHAIN_LEN; i++) {
+      addKernel<<<GRID_SIZE, BLOCK_SIZE, 0, stream>>>(a[i], b[i], c[i]);
+    }
+    clock.end();
+
+    checkResultKernel<<<GRID_SIZE, BLOCK_SIZE, 0, stream>>>(
+      c[generateRandomInteger(0, CHAIN_LEN - 1)],
+      expectedC
+    );
+  }
+
+  checkCudaErrors(cudaDeviceSynchronize());
+
+  LOG_TRACE_WITH_INFO("Total time used (s): %.2f", clock.getTimeInSeconds());
+
+  // Clean up
+  checkCudaErrors(cudaStreamDestroy(stream));
+  for (int i = 0; i < CHAIN_LEN; i++) {
+    checkCudaErrors(cudaFree(a[i]));
+    checkCudaErrors(cudaFree(b[i]));
+    checkCudaErrors(cudaFree(c[i]));
+  }
+}
+}  // namespace case_chainOfStreams
 
 int main() {
   initializeCudaDevice();
 
-  case_chainOfGemms();
+  // case_chainOfGemms::run();
+  case_chainOfStreams::run();
 
   return 0;
 }
