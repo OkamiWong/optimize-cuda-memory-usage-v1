@@ -24,7 +24,13 @@ class TaskManager {
 
  private:
   cudaStream_t sequentialStream;
+  CUfunction dummyKernelHandle;
+
   void initializeSequentialExecutionEnvironment();
-  void executeNodeSequentially(CUgraphNode node);
+
+  // Return false when the node is a dummy node which is not
+  // going to be executed.
+  bool executeNodeSequentially(CUgraphNode node);
+
   void finalizeSequentialExecutionEnvironment();
 };

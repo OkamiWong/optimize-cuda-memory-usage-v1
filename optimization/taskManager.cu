@@ -55,12 +55,16 @@ void TaskManager::finalizeSequentialExecutionEnvironment() {
   checkCudaErrors(cudaStreamDestroy(this->sequentialStream));
 }
 
-void TaskManager::executeNodeSequentially(CUgraphNode node) {
+bool TaskManager::executeNodeSequentially(CUgraphNode node) {
   CUgraphNodeType nodeType;
   checkCudaErrors(cuGraphNodeGetType(node, &nodeType));
   if (nodeType == CU_GRAPH_NODE_TYPE_KERNEL) {
     CUDA_KERNEL_NODE_PARAMS params;
     checkCudaErrors(cuGraphKernelNodeGetParams(node, &params));
+
+    if (params.func == this->dummyKernelHandle) {
+      return false;
+    }
 
     CUlaunchConfig config;
     config.gridDimX = params.gridDimX;
@@ -98,6 +102,8 @@ void TaskManager::executeNodeSequentially(CUgraphNode node) {
     LOG_TRACE_WITH_INFO("Unsupported node type: %d", nodeType);
     exit(-1);
   }
+
+  return true;
 }
 
 std::map<GraphNodeId, float> TaskManager::getKernelRunningTimes(cudaGraph_t graph) {
@@ -121,6 +127,12 @@ std::map<GraphNodeId, float> TaskManager::getKernelRunningTimes(cudaGraph_t grap
 
   this->initializeSequentialExecutionEnvironment();
 
+  // Register the CUfunction handle of dummyKernelForAnnotation
+  auto firstNode = nodesToExecute.front();
+  CUDA_KERNEL_NODE_PARAMS firstNodeParams;
+  checkCudaErrors(cuGraphKernelNodeGetParams(firstNode, &firstNodeParams));
+  this->dummyKernelHandle = firstNodeParams.func;
+
   // Kahn Algorithm
   std::map<GraphNodeId, float> kernelRunningTimes;
   CudaEventClock clock;
@@ -129,10 +141,12 @@ std::map<GraphNodeId, float> TaskManager::getKernelRunningTimes(cudaGraph_t grap
     nodesToExecute.pop();
 
     clock.start(this->sequentialStream);
-    this->executeNodeSequentially(u);
+    auto isExecuted = this->executeNodeSequentially(u);
     clock.end(this->sequentialStream);
     checkCudaErrors(cudaStreamSynchronize(this->sequentialStream));
-    kernelRunningTimes[reinterpret_cast<GraphNodeId>(u)] = clock.getTimeInSeconds();
+    if (isExecuted) {
+      kernelRunningTimes[reinterpret_cast<GraphNodeId>(u)] = clock.getTimeInSeconds();
+    }
 
     for (auto &v : edges[u]) {
       inDegrees[v]--;
