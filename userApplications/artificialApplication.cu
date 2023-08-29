@@ -35,7 +35,7 @@ void tf32GemmUsingTensorCore(cublasHandle_t cublasHandle, int m, int n, int k, f
   );
 }
 
-void case_chainOfGemms(bool useGraph = true) {
+void runChainOfGemms(bool useGraph = true) {
   constexpr size_t CHAIN_LEN = 16;
   constexpr size_t DIMENSION = 14 * (1 << 10);
 
@@ -144,7 +144,7 @@ __global__ void checkResultKernel(const T *c, const T expectedValue) {
   }
 }
 
-void run(bool useGraph = true) {
+void runChainOfStreams(bool useGraph = true) {
   constexpr size_t CHAIN_LEN = 16;
   constexpr size_t ARRAY_SIZE = 1 << 30;  // 1GiB
   constexpr size_t ARRAY_LEN = ARRAY_SIZE / sizeof(float);
@@ -236,8 +236,8 @@ void run(bool useGraph = true) {
 int main() {
   initializeCudaDevice();
 
-  // case_chainOfGemms::run();
-  case_chainOfStreams::run();
+  // case_chainOfGemms::runChainOfGemms();
+  case_chainOfStreams::runChainOfStreams();
 
   return 0;
 }
