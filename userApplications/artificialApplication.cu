@@ -5,6 +5,7 @@
 
 #include "../optimization/taskManager.hpp"
 #include "../profiling/annotation.hpp"
+#include "../profiling/memoryManager.hpp"
 #include "../utilities/cudaUtilities.hpp"
 #include "../utilities/logger.hpp"
 #include "../utilities/utilities.hpp"
@@ -159,9 +160,9 @@ void runChainOfStreams(bool useGraph = true) {
   // Allocate memory
   float *a[CHAIN_LEN], *b[CHAIN_LEN], *c[CHAIN_LEN];
   for (int i = 0; i < CHAIN_LEN; i++) {
-    checkCudaErrors(cudaMallocManaged(&a[i], ARRAY_SIZE));
-    checkCudaErrors(cudaMallocManaged(&b[i], ARRAY_SIZE));
-    checkCudaErrors(cudaMallocManaged(&c[i], ARRAY_SIZE));
+    checkCudaErrors(wrappedCudaMallocManaged(&a[i], ARRAY_SIZE));
+    checkCudaErrors(wrappedCudaMallocManaged(&b[i], ARRAY_SIZE));
+    checkCudaErrors(wrappedCudaMallocManaged(&c[i], ARRAY_SIZE));
   }
 
   // Initialize data
