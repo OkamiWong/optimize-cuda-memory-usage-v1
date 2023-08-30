@@ -47,6 +47,23 @@ void extractGraphNodesAndEdges(
   }
 }
 
+void TaskManager::registerDummyKernelHandle(cudaGraph_t graph) {
+  size_t numRootNodes;
+  checkCudaErrors(cuGraphGetRootNodes(graph, NULL, &numRootNodes));
+  assert(numRootNodes == 1);
+
+  auto rootNodes = std::make_unique<CUgraphNode[]>(numRootNodes);
+  checkCudaErrors(cuGraphGetRootNodes(graph, rootNodes.get(), &numRootNodes));
+
+  CUgraphNodeType nodeType;
+  checkCudaErrors(cuGraphNodeGetType(rootNodes[0], &nodeType));
+  assert(nodeType == CU_GRAPH_NODE_TYPE_KERNEL);
+
+  CUDA_KERNEL_NODE_PARAMS rootNodeParams;
+  checkCudaErrors(cuGraphKernelNodeGetParams(rootNodes[0], &rootNodeParams));
+  this->dummyKernelHandle = rootNodeParams.func;
+}
+
 void TaskManager::initializeSequentialExecutionEnvironment() {
   checkCudaErrors(cudaStreamCreate(&(this->sequentialStream)));
 }
@@ -106,7 +123,7 @@ bool TaskManager::executeNodeSequentially(CUgraphNode node) {
   return true;
 }
 
-std::map<TaskManager::GraphNodeId, float> TaskManager::getKernelRunningTimes(cudaGraph_t graph) {
+std::map<CUgraphNode, float> TaskManager::getKernelRunningTimes(cudaGraph_t graph) {
   std::vector<CUgraphNode> nodes;
   std::map<CUgraphNode, std::vector<CUgraphNode>> edges;
   extractGraphNodesAndEdges(graph, nodes, edges);
@@ -127,14 +144,8 @@ std::map<TaskManager::GraphNodeId, float> TaskManager::getKernelRunningTimes(cud
 
   this->initializeSequentialExecutionEnvironment();
 
-  // Register the CUfunction handle of dummyKernelForAnnotation
-  auto firstNode = nodesToExecute.front();
-  CUDA_KERNEL_NODE_PARAMS firstNodeParams;
-  checkCudaErrors(cuGraphKernelNodeGetParams(firstNode, &firstNodeParams));
-  this->dummyKernelHandle = firstNodeParams.func;
-
   // Kahn Algorithm
-  std::map<TaskManager::GraphNodeId, float> kernelRunningTimes;
+  std::map<CUgraphNode, float> kernelRunningTimes;
   CudaEventClock clock;
   while (!nodesToExecute.empty()) {
     auto u = nodesToExecute.front();
@@ -145,7 +156,7 @@ std::map<TaskManager::GraphNodeId, float> TaskManager::getKernelRunningTimes(cud
     clock.end(this->sequentialStream);
     checkCudaErrors(cudaStreamSynchronize(this->sequentialStream));
     if (isExecuted) {
-      kernelRunningTimes[reinterpret_cast<TaskManager::GraphNodeId>(u)] = clock.getTimeInSeconds();
+      kernelRunningTimes[u] = clock.getTimeInSeconds();
     }
 
     for (auto &v : edges[u]) {
@@ -159,4 +170,7 @@ std::map<TaskManager::GraphNodeId, float> TaskManager::getKernelRunningTimes(cud
   this->finalizeSequentialExecutionEnvironment();
 
   return kernelRunningTimes;
+}
+
+void TaskManager::executeOptimizedGraph(const CustomGraph &optimizedGraph) {
 }

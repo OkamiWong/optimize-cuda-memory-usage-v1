@@ -5,26 +5,31 @@
 
 #include <map>
 
+#include "customGraph.hpp"
+
 class TaskManager {
  public:
   static TaskManager *getInstance();
   TaskManager(TaskManager &other) = delete;
   void operator=(const TaskManager &) = delete;
 
-  // Take the address of the node as the ID
-  typedef uint64_t GraphNodeId;
+  // Take the only root node in the graph as the dummy kernel.
+  void registerDummyKernelHandle(cudaGraph_t graph);
 
-  // Run kernels one by one and record running times.
+  // Run kernels one by one and record durations.
   // Return a map containing all kernel nodes' running time.
-  std::map<GraphNodeId, float> getKernelRunningTimes(cudaGraph_t graph);
+  std::map<CUgraphNode, float> getKernelRunningTimes(cudaGraph_t graph);
+
+  void executeOptimizedGraph(const CustomGraph &optimizedGraph);
 
  protected:
   TaskManager() = default;
   static TaskManager *instance;
 
  private:
-  cudaStream_t sequentialStream;
   CUfunction dummyKernelHandle;
+
+  cudaStream_t sequentialStream;
 
   void initializeSequentialExecutionEnvironment();
 

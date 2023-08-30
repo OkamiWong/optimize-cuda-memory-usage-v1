@@ -1,7 +1,7 @@
 #include <cassert>
 #include <cstdio>
 
-#include "../optimization/taskManager.hpp"
+#include "../optimization/optimization.hpp"
 #include "../profiling/annotation.hpp"
 #include "../profiling/memoryManager.hpp"
 #include "../utilities/cudaUtilities.hpp"
@@ -59,10 +59,9 @@ void runChainOfStreams(bool useGraph = true) {
 
   CudaEventClock clock;
 
-  cudaStream_t stream;
-  checkCudaErrors(cudaStreamCreate(&stream));
-
   if (useGraph) {
+    cudaStream_t stream;
+    checkCudaErrors(cudaStreamCreate(&stream));
     checkCudaErrors(cudaStreamBeginCapture(stream, cudaStreamCaptureModeGlobal));
 
     for (int i = 0; i < CHAIN_LEN; i++) {
@@ -75,32 +74,27 @@ void runChainOfStreams(bool useGraph = true) {
     cudaGraph_t graph;
     checkCudaErrors(cudaStreamEndCapture(stream, &graph));
 
-    auto taskManager = TaskManager::getInstance();
-    auto kernelRunningTimes = taskManager->getKernelRunningTimes(graph);
-    for (const auto &[id, time] : kernelRunningTimes) {
-      LOG_TRACE_WITH_INFO("%p: %.6f", id, time);
-    }
+    checkCudaErrors(cudaStreamSynchronize(stream));
+    checkCudaErrors(cudaStreamDestroy(stream));
 
-    cudaGraphExec_t graphExec;
-    checkCudaErrors(cudaGraphInstantiate(&graphExec, graph, nullptr, nullptr, 0));
+    auto optimizedGraph = profileAndOptimize(graph);
 
-    clock.start(stream);
-    checkCudaErrors(cudaGraphLaunch(graphExec, stream));
-    clock.end(stream);
+    clock.start();
+    executeOptimizedGraph(optimizedGraph);
+    clock.end();
 
-    checkResultKernel<<<GRID_SIZE, BLOCK_SIZE, 0, stream>>>(
+    checkResultKernel<<<GRID_SIZE, BLOCK_SIZE>>>(
       c[generateRandomInteger(0, CHAIN_LEN - 1)],
       expectedC
     );
-
   } else {
     clock.start();
     for (int i = 0; i < CHAIN_LEN; i++) {
-      addKernel<<<GRID_SIZE, BLOCK_SIZE, 0, stream>>>(a[i], b[i], c[i]);
+      addKernel<<<GRID_SIZE, BLOCK_SIZE>>>(a[i], b[i], c[i]);
     }
     clock.end();
 
-    checkResultKernel<<<GRID_SIZE, BLOCK_SIZE, 0, stream>>>(
+    checkResultKernel<<<GRID_SIZE, BLOCK_SIZE>>>(
       c[generateRandomInteger(0, CHAIN_LEN - 1)],
       expectedC
     );
@@ -111,7 +105,7 @@ void runChainOfStreams(bool useGraph = true) {
   LOG_TRACE_WITH_INFO("Total time used (s): %.2f", clock.getTimeInSeconds());
 
   // Clean up
-  checkCudaErrors(cudaStreamDestroy(stream));
+  
   for (int i = 0; i < CHAIN_LEN; i++) {
     checkCudaErrors(cudaFree(a[i]));
     checkCudaErrors(cudaFree(b[i]));

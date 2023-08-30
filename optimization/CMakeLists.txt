@@ -3,3 +3,17 @@ target_link_libraries(
   taskManager
   -lcuda
 )
+
+add_library(optimizer SHARED optimizer.cu)
+target_link_libraries(
+  optimizer
+  taskManager
+  -lcuda
+)
+
+add_library(optimization SHARED optimization.cu)
+target_link_libraries(
+  optimization
+  taskManager
+  optimizer
+)
