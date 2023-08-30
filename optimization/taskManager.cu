@@ -106,7 +106,7 @@ bool TaskManager::executeNodeSequentially(CUgraphNode node) {
   return true;
 }
 
-std::map<GraphNodeId, float> TaskManager::getKernelRunningTimes(cudaGraph_t graph) {
+std::map<TaskManager::GraphNodeId, float> TaskManager::getKernelRunningTimes(cudaGraph_t graph) {
   std::vector<CUgraphNode> nodes;
   std::map<CUgraphNode, std::vector<CUgraphNode>> edges;
   extractGraphNodesAndEdges(graph, nodes, edges);
@@ -134,7 +134,7 @@ std::map<GraphNodeId, float> TaskManager::getKernelRunningTimes(cudaGraph_t grap
   this->dummyKernelHandle = firstNodeParams.func;
 
   // Kahn Algorithm
-  std::map<GraphNodeId, float> kernelRunningTimes;
+  std::map<TaskManager::GraphNodeId, float> kernelRunningTimes;
   CudaEventClock clock;
   while (!nodesToExecute.empty()) {
     auto u = nodesToExecute.front();
@@ -145,7 +145,7 @@ std::map<GraphNodeId, float> TaskManager::getKernelRunningTimes(cudaGraph_t grap
     clock.end(this->sequentialStream);
     checkCudaErrors(cudaStreamSynchronize(this->sequentialStream));
     if (isExecuted) {
-      kernelRunningTimes[reinterpret_cast<GraphNodeId>(u)] = clock.getTimeInSeconds();
+      kernelRunningTimes[reinterpret_cast<TaskManager::GraphNodeId>(u)] = clock.getTimeInSeconds();
     }
 
     for (auto &v : edges[u]) {
