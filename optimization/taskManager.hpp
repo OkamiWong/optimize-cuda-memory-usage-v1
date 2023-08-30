@@ -1,11 +1,11 @@
 #pragma once
 
 #include <cuda.h>
-#include <cuda_stdint.h>
 
 #include <map>
 
 #include "customGraph.hpp"
+#include "optimizer.hpp"
 
 class TaskManager {
  public:
@@ -17,8 +17,8 @@ class TaskManager {
   void registerDummyKernelHandle(cudaGraph_t graph);
 
   // Run kernels one by one and record durations.
-  // Return a map containing all kernel nodes' running time.
-  std::map<CUgraphNode, float> getKernelRunningTimes(cudaGraph_t graph);
+  // Return a map containing the duration of each kernel.
+  Optimizer::CuGraphNodeToKernelDurationMap getCuGraphNodeToKernelDurationMap(cudaGraph_t graph);
 
   void executeOptimizedGraph(const CustomGraph &optimizedGraph);
 

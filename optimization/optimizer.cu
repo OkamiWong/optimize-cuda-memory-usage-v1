@@ -1,4 +1,7 @@
+#include <type_traits>
+
 #include "optimizer.hpp"
+#include "strategies/strategies.hpp"
 #include "taskManager.hpp"
 
 Optimizer *Optimizer::instance = nullptr;
@@ -11,12 +14,19 @@ Optimizer *Optimizer::getInstance() {
 }
 
 CustomGraph Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
+  // Profile
   auto taskManager = TaskManager::getInstance();
-
   taskManager->registerDummyKernelHandle(originalGraph);
+  auto cuGraphNodeToKernelDurationMap = taskManager->getCuGraphNodeToKernelDurationMap(originalGraph);
 
-  auto kernelRunningTimes = taskManager->getKernelRunningTimes(originalGraph);
+  // Optimize
+  auto dataMovementPlan = this->optimize<PrefetchOnlyStrategy>(originalGraph, cuGraphNodeToKernelDurationMap);
 
-  CustomGraph temp;
-  return temp;
+  // Transform
+  auto customGraph = this->transformDataMovementPlanToCustomGraph(dataMovementPlan);
+
+  return customGraph;
+}
+
+CustomGraph Optimizer::transformDataMovementPlanToCustomGraph(DataMovementPlan dataMovementPlan) {
 }

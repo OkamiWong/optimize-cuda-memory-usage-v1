@@ -1,0 +1,1 @@
+add_library(prefetchOnlyStrategy SHARED prefetchOnlyStrategy.cu)

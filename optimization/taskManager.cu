@@ -11,6 +11,7 @@
 
 #include "../utilities/cudaUtilities.hpp"
 #include "../utilities/logger.hpp"
+#include "optimizer.hpp"
 #include "taskManager.hpp"
 
 TaskManager *TaskManager::instance = nullptr;
@@ -123,7 +124,7 @@ bool TaskManager::executeNodeSequentially(CUgraphNode node) {
   return true;
 }
 
-std::map<CUgraphNode, float> TaskManager::getKernelRunningTimes(cudaGraph_t graph) {
+Optimizer::CuGraphNodeToKernelDurationMap TaskManager::getCuGraphNodeToKernelDurationMap(cudaGraph_t graph) {
   std::vector<CUgraphNode> nodes;
   std::map<CUgraphNode, std::vector<CUgraphNode>> edges;
   extractGraphNodesAndEdges(graph, nodes, edges);
@@ -145,7 +146,7 @@ std::map<CUgraphNode, float> TaskManager::getKernelRunningTimes(cudaGraph_t grap
   this->initializeSequentialExecutionEnvironment();
 
   // Kahn Algorithm
-  std::map<CUgraphNode, float> kernelRunningTimes;
+  Optimizer::CuGraphNodeToKernelDurationMap kernelRunningTimes;
   CudaEventClock clock;
   while (!nodesToExecute.empty()) {
     auto u = nodesToExecute.front();

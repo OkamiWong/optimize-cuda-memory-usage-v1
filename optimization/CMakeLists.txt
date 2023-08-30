@@ -9,6 +9,7 @@ target_link_libraries(
   optimizer
   taskManager
   -lcuda
+  prefetchOnlyStrategy
 )
 
 add_library(optimization SHARED optimization.cu)
@@ -17,3 +18,5 @@ target_link_libraries(
   taskManager
   optimizer
 )
+
+add_subdirectory(strategies)
