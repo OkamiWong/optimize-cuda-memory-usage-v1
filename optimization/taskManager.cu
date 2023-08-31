@@ -25,19 +25,14 @@ TaskManager *TaskManager::getInstance() {
 }
 
 void TaskManager::registerDummyKernelHandle(cudaGraph_t graph) {
-  size_t numRootNodes;
-  checkCudaErrors(cuGraphGetRootNodes(graph, NULL, &numRootNodes));
-  assert(numRootNodes == 1);
-
-  auto rootNodes = std::make_unique<CUgraphNode[]>(numRootNodes);
-  checkCudaErrors(cuGraphGetRootNodes(graph, rootNodes.get(), &numRootNodes));
+  auto rootNode = getRootNode(graph);
 
   CUgraphNodeType nodeType;
-  checkCudaErrors(cuGraphNodeGetType(rootNodes[0], &nodeType));
+  checkCudaErrors(cuGraphNodeGetType(rootNode, &nodeType));
   assert(nodeType == CU_GRAPH_NODE_TYPE_KERNEL);
 
   CUDA_KERNEL_NODE_PARAMS rootNodeParams;
-  checkCudaErrors(cuGraphKernelNodeGetParams(rootNodes[0], &rootNodeParams));
+  checkCudaErrors(cuGraphKernelNodeGetParams(rootNode, &rootNodeParams));
   this->dummyKernelHandle = rootNodeParams.func;
 }
 

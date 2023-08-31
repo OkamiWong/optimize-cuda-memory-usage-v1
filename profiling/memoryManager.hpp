@@ -4,7 +4,8 @@
 #include <vector>
 
 struct MemoryManager {
-  inline static std::vector<std::tuple<void *, size_t>> managedMemorySpaces;
+  typedef std::tuple<void *, size_t> ArrayInfo;
+  inline static std::vector<ArrayInfo> managedMemorySpaces;
 };
 
 template <typename T>

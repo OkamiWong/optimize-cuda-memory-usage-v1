@@ -1,3 +1,4 @@
+#include <cassert>
 #include <map>
 #include <memory>
 #include <vector>
@@ -28,4 +29,14 @@ void extractGraphNodesAndEdges(
   for (int i = 0; i < numEdges; i++) {
     edges[from[i]].push_back(to[i]);
   }
+}
+
+CUgraphNode getRootNode(cudaGraph_t graph) {
+  size_t numRootNodes;
+  checkCudaErrors(cuGraphGetRootNodes(graph, NULL, &numRootNodes));
+  assert(numRootNodes == 1);
+
+  auto rootNodes = std::make_unique<CUgraphNode[]>(numRootNodes);
+  checkCudaErrors(cuGraphGetRootNodes(graph, rootNodes.get(), &numRootNodes));
+  return rootNodes[0];
 }

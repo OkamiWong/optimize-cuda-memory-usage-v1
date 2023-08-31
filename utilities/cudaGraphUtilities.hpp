@@ -9,3 +9,5 @@ void extractGraphNodesAndEdges(
   std::vector<CUgraphNode> &nodes,
   std::map<CUgraphNode, std::vector<CUgraphNode>> &edges
 );
+
+CUgraphNode getRootNode(cudaGraph_t graph);
