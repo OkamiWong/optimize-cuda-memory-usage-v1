@@ -74,6 +74,13 @@ void runChainOfStreams(bool useGraph = true) {
     cudaGraph_t graph;
     checkCudaErrors(cudaStreamEndCapture(stream, &graph));
 
+    for (int i = 0; i < 4; i++) {
+      checkCudaErrors(cudaMemPrefetchAsync(a[i], ARRAY_SIZE, CudaConstants::DEVICE_ID, stream));
+      checkCudaErrors(cudaMemPrefetchAsync(b[i], ARRAY_SIZE, CudaConstants::DEVICE_ID, stream));
+      checkCudaErrors(cudaMemPrefetchAsync(c[i], ARRAY_SIZE, CudaConstants::DEVICE_ID, stream));
+      markMemorySpaceInitiallyOnDevice({a[i], b[i], c[i]});
+    }
+
     checkCudaErrors(cudaStreamSynchronize(stream));
     checkCudaErrors(cudaStreamDestroy(stream));
 
@@ -105,7 +112,7 @@ void runChainOfStreams(bool useGraph = true) {
   LOG_TRACE_WITH_INFO("Total time used (s): %.2f", clock.getTimeInSeconds());
 
   // Clean up
-  
+
   for (int i = 0; i < CHAIN_LEN; i++) {
     checkCudaErrors(cudaFree(a[i]));
     checkCudaErrors(cudaFree(b[i]));
