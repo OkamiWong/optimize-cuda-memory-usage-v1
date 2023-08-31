@@ -1,1 +1,5 @@
-add_library(prefetchOnlyStrategy SHARED prefetchOnlyStrategy.cu)
+add_library(
+  strategies
+  SHARED
+  prefetchOnlyStrategy.cu
+)

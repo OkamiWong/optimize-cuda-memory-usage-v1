@@ -1,7 +1,8 @@
-#include "prefetchOnlyStrategy.hpp"
+#include "strategies.hpp"
 
-DataMovementPlan PrefetchOnlyStrategy::calculateDataMovementPlan(
+Optimizer::DataMovementPlan PrefetchOnlyStrategy::calculateDataMovementPlan(
   cudaGraph_t originalGraph,
   Optimizer::CuGraphNodeToKernelDurationMap cuGraphNodeToKernelDurationMap
 ) {
+  // TODO
 }

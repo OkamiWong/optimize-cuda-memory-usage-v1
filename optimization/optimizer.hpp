@@ -5,18 +5,6 @@
 
 #include "customGraph.hpp"
 
-struct DataMovementPlan {
-  enum class DataMovementRelativePosition {
-    beforeKernel,
-    afterKernel
-  };
-
-  cudaGraph_t originalGraph;
-  std::vector<CustomGraph::DataMovement> dataMovements;
-  std::vector<DataMovementRelativePosition> dataMovementRelativePositions;
-  std::vector<CUgraphNode> dataMovementPositions;
-};
-
 class Optimizer {
  public:
   static Optimizer *getInstance();
@@ -24,6 +12,18 @@ class Optimizer {
   void operator=(const Optimizer &) = delete;
 
   typedef std::map<CUgraphNode, float> CuGraphNodeToKernelDurationMap;
+
+  struct DataMovementPlan {
+    enum class DataMovementRelativePosition {
+      beforeKernel,
+      afterKernel
+    };
+
+    cudaGraph_t originalGraph;
+    std::vector<CustomGraph::DataMovement> dataMovements;
+    std::vector<DataMovementRelativePosition> dataMovementRelativePositions;
+    std::vector<CUgraphNode> dataMovementPositions;
+  };
 
   CustomGraph profileAndOptimize(cudaGraph_t originalGraph);
 

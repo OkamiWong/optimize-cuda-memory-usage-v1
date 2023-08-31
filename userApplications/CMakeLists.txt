@@ -4,6 +4,6 @@ target_link_libraries(
   artificialApplication
   utilities
   cudaUtilities
-  annotation
+  profiling
   optimization
 )
