@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "../utilities/cudaGraphUtilities.hpp"
 #include "../utilities/cudaUtilities.hpp"
 #include "../utilities/logger.hpp"
 #include "optimizer.hpp"
@@ -21,31 +22,6 @@ TaskManager *TaskManager::getInstance() {
     instance = new TaskManager();
   }
   return instance;
-}
-
-void extractGraphNodesAndEdges(
-  cudaGraph_t graph,
-  std::vector<CUgraphNode> &nodes,
-  std::map<CUgraphNode, std::vector<CUgraphNode>> &edges
-) {
-  size_t numNodes, numEdges;
-  checkCudaErrors(cuGraphGetNodes(graph, nullptr, &numNodes));
-  checkCudaErrors(cuGraphGetEdges(graph, nullptr, nullptr, &numEdges));
-  auto rawNodes = std::make_unique<CUgraphNode[]>(numNodes);
-  auto from = std::make_unique<CUgraphNode[]>(numEdges);
-  auto to = std::make_unique<CUgraphNode[]>(numEdges);
-  checkCudaErrors(cuGraphGetNodes(graph, rawNodes.get(), &numNodes));
-  checkCudaErrors(cuGraphGetEdges(graph, from.get(), to.get(), &numEdges));
-
-  nodes.clear();
-  for (int i = 0; i < numNodes; i++) {
-    nodes.push_back(rawNodes[i]);
-  }
-
-  edges.clear();
-  for (int i = 0; i < numEdges; i++) {
-    edges[from[i]].push_back(to[i]);
-  }
 }
 
 void TaskManager::registerDummyKernelHandle(cudaGraph_t graph) {

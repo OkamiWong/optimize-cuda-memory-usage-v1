@@ -8,6 +8,8 @@ add_library(
 target_link_libraries(
   optimization
   strategies
+  cudaUtilities
+  cudaGraphUtilities
   -lcuda
 )
 
