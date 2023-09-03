@@ -11,8 +11,8 @@
 
 std::vector<CUgraphNode> getKernelsInExecutionOrder(
   CUgraphNode rootNode,
-  const std::map<CUgraphNode, std::vector<CUgraphNode>> &edges,
-  const std::map<CUgraphNode, KernelDataDependency> &kernelToDataDependencyMap
+  std::map<CUgraphNode, std::vector<CUgraphNode>> &edges,
+  std::map<CUgraphNode, KernelDataDependency> &kernelToDataDependencyMap
 ) {
   std::vector<CUgraphNode> kernelsInExecutionOrder;
 
