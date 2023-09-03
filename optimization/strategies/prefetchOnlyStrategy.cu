@@ -51,7 +51,7 @@ PrefetchOnlyStrategy::calculateDataMovementPlan(
 
   auto kernelsInExecutionOrder = getKernelsInExecutionOrder(rootNode, edges, kernelToDataDependencyMap);
 
-  // Initialize data movement plan;
+  // Initialize data movement plan
   Optimizer::DataMovementPlan dataMovementPlan;
   dataMovementPlan.originalGraph = originalGraph;
 
