@@ -12,6 +12,8 @@ __host__ void annotateNextKernel(
   cudaStream_t stream
 ) {
   KernelIO io;
+  memset(io.inputs, 0, KernelIO::MAX_NUM_PTR * sizeof(void *));
+  memset(io.outputs, 0, KernelIO::MAX_NUM_PTR * sizeof(void *));
   memcpy(io.inputs, std::data(inputs), inputs.size() * sizeof(void *));
   memcpy(io.outputs, std::data(outputs), outputs.size() * sizeof(void *));
   dummyKernelForAnnotation<<<1, 1, 0, stream>>>(io);
