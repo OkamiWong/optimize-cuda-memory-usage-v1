@@ -13,22 +13,6 @@ class Optimizer {
 
   typedef std::map<CUgraphNode, float> CuGraphNodeToKernelDurationMap;
 
-  struct DataMovementPlan {
-    enum class DataMovementRelativePosition {
-      beforeKernel,
-      afterKernel
-    };
-
-    struct DataMovementStep {
-      CustomGraph::DataMovement dataMovement;
-      DataMovementRelativePosition dataMovementRelativePosition;
-      CUgraphNode dataMovementPosition;
-    };
-
-    cudaGraph_t originalGraph;
-    std::vector<DataMovementStep> dataMovements;
-  };
-
   CustomGraph profileAndOptimize(cudaGraph_t originalGraph);
 
  protected:
@@ -37,10 +21,8 @@ class Optimizer {
 
  private:
   template <typename Strategy>
-  DataMovementPlan optimize(cudaGraph_t originalGraph, CuGraphNodeToKernelDurationMap cuGraphNodeToKernelDurationMap) {
+  CustomGraph optimize(cudaGraph_t originalGraph, CuGraphNodeToKernelDurationMap cuGraphNodeToKernelDurationMap) {
     Strategy strategyInstance;
-    return strategyInstance.calculateDataMovementPlan(originalGraph, cuGraphNodeToKernelDurationMap);
+    return strategyInstance.run(originalGraph, cuGraphNodeToKernelDurationMap);
   }
-
-  CustomGraph transformDataMovementPlanToCustomGraph(DataMovementPlan dataMovementPlan);
 };

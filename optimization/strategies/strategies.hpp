@@ -4,7 +4,7 @@
 
 class PrefetchOnlyStrategy {
  public:
-  Optimizer::DataMovementPlan calculateDataMovementPlan(
+  CustomGraph run(
     cudaGraph_t originalGraph,
     Optimizer::CuGraphNodeToKernelDurationMap cuGraphNodeToKernelDurationMap
   );

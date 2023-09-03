@@ -20,14 +20,7 @@ CustomGraph Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
   auto cuGraphNodeToKernelDurationMap = taskManager->getCuGraphNodeToKernelDurationMap(originalGraph);
 
   // Optimize
-  auto dataMovementPlan = this->optimize<PrefetchOnlyStrategy>(originalGraph, cuGraphNodeToKernelDurationMap);
-
-  // Transform
-  auto customGraph = this->transformDataMovementPlanToCustomGraph(dataMovementPlan);
+  auto customGraph = this->optimize<PrefetchOnlyStrategy>(originalGraph, cuGraphNodeToKernelDurationMap);
 
   return customGraph;
-}
-
-CustomGraph Optimizer::transformDataMovementPlanToCustomGraph(DataMovementPlan dataMovementPlan) {
-  // TODO
 }
