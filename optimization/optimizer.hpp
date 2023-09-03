@@ -19,10 +19,14 @@ class Optimizer {
       afterKernel
     };
 
+    struct DataMovementStep {
+      CustomGraph::DataMovement dataMovement;
+      DataMovementRelativePosition dataMovementRelativePosition;
+      CUgraphNode dataMovementPosition;
+    };
+
     cudaGraph_t originalGraph;
-    std::vector<CustomGraph::DataMovement> dataMovements;
-    std::vector<DataMovementRelativePosition> dataMovementRelativePositions;
-    std::vector<CUgraphNode> dataMovementPositions;
+    std::vector<DataMovementStep> dataMovements;
   };
 
   CustomGraph profileAndOptimize(cudaGraph_t originalGraph);
