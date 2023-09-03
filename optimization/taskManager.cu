@@ -36,6 +36,11 @@ void TaskManager::registerDummyKernelHandle(cudaGraph_t graph) {
   this->dummyKernelHandle = rootNodeParams.func;
 }
 
+CUfunction TaskManager::getDummyKernelHandle() {
+  assert(this->dummyKernelHandle != nullptr);
+  return this->dummyKernelHandle;
+}
+
 void TaskManager::initializeSequentialExecutionEnvironment() {
   checkCudaErrors(cudaStreamCreate(&(this->sequentialStream)));
 }
