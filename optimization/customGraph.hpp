@@ -6,7 +6,7 @@
 #include <vector>
 
 struct CustomGraph {
-  typedef uint64_t NodeId;
+  typedef int NodeId;
 
   enum class NodeType {
     empty,
