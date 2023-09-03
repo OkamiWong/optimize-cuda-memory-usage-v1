@@ -6,6 +6,6 @@ CustomGraph profileAndOptimize(cudaGraph_t originalGraph) {
   return Optimizer::getInstance()->profileAndOptimize(originalGraph);
 }
 
-void executeOptimizedGraph(const CustomGraph& optimizedGraph) {
+void executeOptimizedGraph(CustomGraph& optimizedGraph) {
   TaskManager::getInstance()->executeOptimizedGraph(optimizedGraph);
 }

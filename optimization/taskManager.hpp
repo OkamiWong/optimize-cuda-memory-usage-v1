@@ -22,7 +22,9 @@ class TaskManager {
   // Return a map containing the duration of each kernel.
   Optimizer::CuGraphNodeToKernelDurationMap getCuGraphNodeToKernelDurationMap(cudaGraph_t graph);
 
-  void executeOptimizedGraph(const CustomGraph &optimizedGraph);
+  typedef int StreamId;
+
+  void executeOptimizedGraph(CustomGraph &optimizedGraph);
 
  protected:
   TaskManager() = default;
@@ -33,6 +35,8 @@ class TaskManager {
 
   cudaStream_t sequentialStream;
 
+  void queueKernelToStream(CUgraphNode node, cudaStream_t stream);
+
   void initializeSequentialExecutionEnvironment();
 
   // Return false when the node is a dummy node which is not
@@ -40,4 +44,7 @@ class TaskManager {
   bool executeNodeSequentially(CUgraphNode node);
 
   void finalizeSequentialExecutionEnvironment();
+
+  // Calculate the stream assignment by bipartite matching
+  std::map<CustomGraph::NodeId, StreamId> getStreamAssignment(CustomGraph &optimizedGraph);
 };

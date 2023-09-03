@@ -49,6 +49,44 @@ void TaskManager::finalizeSequentialExecutionEnvironment() {
   checkCudaErrors(cudaStreamDestroy(this->sequentialStream));
 }
 
+void TaskManager::queueKernelToStream(CUgraphNode node, cudaStream_t stream) {
+  CUDA_KERNEL_NODE_PARAMS params;
+  checkCudaErrors(cuGraphKernelNodeGetParams(node, &params));
+
+  CUlaunchConfig config;
+  config.gridDimX = params.gridDimX;
+  config.gridDimY = params.gridDimY;
+  config.gridDimZ = params.gridDimZ;
+  config.blockDimX = params.blockDimX;
+  config.blockDimY = params.blockDimY;
+  config.blockDimZ = params.blockDimZ;
+  config.sharedMemBytes = params.sharedMemBytes;
+  config.hStream = stream;
+
+  // Currently kernel attributes are ignored
+  config.attrs = NULL;
+  config.numAttrs = 0;
+
+  if (params.func != nullptr) {
+    checkCudaErrors(cuLaunchKernelEx(
+      &config,
+      params.func,
+      params.kernelParams,
+      params.extra
+    ));
+  } else if (params.kern != nullptr) {
+    checkCudaErrors(cuLaunchKernelEx(
+      &config,
+      reinterpret_cast<CUfunction>(params.kern),
+      params.kernelParams,
+      params.extra
+    ));
+  } else {
+    LOG_TRACE_WITH_INFO("Currently only support params.func != NULL or params.kernel != NULL");
+    exit(-1);
+  }
+}
+
 bool TaskManager::executeNodeSequentially(CUgraphNode node) {
   CUgraphNodeType nodeType;
   checkCudaErrors(cuGraphNodeGetType(node, &nodeType));
@@ -60,38 +98,7 @@ bool TaskManager::executeNodeSequentially(CUgraphNode node) {
       return false;
     }
 
-    CUlaunchConfig config;
-    config.gridDimX = params.gridDimX;
-    config.gridDimY = params.gridDimY;
-    config.gridDimZ = params.gridDimZ;
-    config.blockDimX = params.blockDimX;
-    config.blockDimY = params.blockDimY;
-    config.blockDimZ = params.blockDimZ;
-    config.sharedMemBytes = params.sharedMemBytes;
-    config.hStream = this->sequentialStream;
-
-    // Currently kernel attributes are ignored
-    config.attrs = NULL;
-    config.numAttrs = 0;
-
-    if (params.func != nullptr) {
-      checkCudaErrors(cuLaunchKernelEx(
-        &config,
-        params.func,
-        params.kernelParams,
-        params.extra
-      ));
-    } else if (params.kern != nullptr) {
-      checkCudaErrors(cuLaunchKernelEx(
-        &config,
-        reinterpret_cast<CUfunction>(params.kern),
-        params.kernelParams,
-        params.extra
-      ));
-    } else {
-      LOG_TRACE_WITH_INFO("Currently only support params.func != NULL or params.kernel != NULL");
-      exit(-1);
-    }
+    this->queueKernelToStream(node, this->sequentialStream);
   } else {
     LOG_TRACE_WITH_INFO("Unsupported node type: %d", nodeType);
     exit(-1);
@@ -149,6 +156,92 @@ Optimizer::CuGraphNodeToKernelDurationMap TaskManager::getCuGraphNodeToKernelDur
   return kernelRunningTimes;
 }
 
-void TaskManager::executeOptimizedGraph(const CustomGraph &optimizedGraph) {
+std::map<CustomGraph::NodeId, TaskManager::StreamId> TaskManager::getStreamAssignment(
+  CustomGraph &optimizedGraph
+) {
   // TODO
+}
+
+void TaskManager::executeOptimizedGraph(CustomGraph &optimizedGraph) {
+  // Initialization
+  auto nodeIdToStreamIdMap = this->getStreamAssignment(optimizedGraph);
+  std::map<TaskManager::StreamId, cudaStream_t> streamIdToCudaStreamMap;
+  for (auto &[nodeId, streamId] : nodeIdToStreamIdMap) {
+    if (streamIdToCudaStreamMap.count(streamId) == 0) {
+      cudaStream_t s;
+      checkCudaErrors(cudaStreamCreate(&s));
+      streamIdToCudaStreamMap[streamId] = s;
+    }
+  }
+
+  std::map<CustomGraph::NodeId, int> inDegrees;
+  for (auto &[u, outEdges] : optimizedGraph.edges) {
+    for (auto &v : outEdges) {
+      inDegrees[v] += 1;
+    }
+  }
+
+  std::queue<CustomGraph::NodeId> nodesToExecute;
+  for (auto &u : optimizedGraph.nodes) {
+    if (inDegrees[u] == 0) {
+      nodesToExecute.push(u);
+    }
+  }
+
+  std::vector<cudaEvent_t> createdCudaEvents;
+
+  // Launch nodes to assigned streams based on Kahn Algorithm
+  while (!nodesToExecute.empty()) {
+    auto u = nodesToExecute.front();
+    nodesToExecute.pop();
+
+    // Execute node
+    auto uStream = streamIdToCudaStreamMap[nodeIdToStreamIdMap[u]];
+    auto nodeType = optimizedGraph.nodeIdToNodeTypeMap[u];
+    if (nodeType == CustomGraph::NodeType::dataMovement) {
+      auto &dataMovement = optimizedGraph.nodeIdToDataMovementMap[u];
+      checkCudaErrors(cudaMemPrefetchAsync(
+        dataMovement.address,
+        dataMovement.size,
+        dataMovement.direction == CustomGraph::DataMovement::Direction::hostToDevice
+          ? CudaConstants::DEVICE_ID
+          : cudaCpuDeviceId,
+        uStream
+      ));
+    } else if (nodeType == CustomGraph::NodeType::kernel) {
+      this->queueKernelToStream(optimizedGraph.nodeIdToCuGraphNodeMap[u], uStream);
+    } else if (nodeType == CustomGraph::NodeType::empty) {
+      // Pass
+    } else {
+      LOG_TRACE_WITH_INFO("Unsupported node type: %d", nodeType);
+      exit(-1);
+    }
+
+    cudaEvent_t e = nullptr;
+    for (auto &v : optimizedGraph.edges[u]) {
+      inDegrees[v]--;
+      if (inDegrees[v] == 0) {
+        nodesToExecute.push(v);
+      }
+
+      auto vStream = streamIdToCudaStreamMap[nodeIdToStreamIdMap[v]];
+      if (uStream != vStream) {
+        if (e == nullptr) {
+          checkCudaErrors(cudaEventCreate(&e));
+          createdCudaEvents.push_back(e);
+          checkCudaErrors(cudaEventRecord(e, uStream));
+        }
+        checkCudaErrors(cudaStreamWaitEvent(vStream, e));
+      }
+    }
+  }
+
+  // Clean-up
+  checkCudaErrors(cudaDeviceSynchronize());
+  for (auto &[streamId, s] : streamIdToCudaStreamMap) {
+    checkCudaErrors(cudaStreamDestroy(s));
+  }
+  for (auto &e : createdCudaEvents) {
+    checkCudaErrors(cudaEventDestroy(e));
+  }
 }

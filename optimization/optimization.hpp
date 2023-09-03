@@ -3,4 +3,4 @@
 #include "customGraph.hpp"
 
 CustomGraph profileAndOptimize(cudaGraph_t originalGraph);
-void executeOptimizedGraph(const CustomGraph& optimizedGraph);
+void executeOptimizedGraph(CustomGraph& optimizedGraph);
