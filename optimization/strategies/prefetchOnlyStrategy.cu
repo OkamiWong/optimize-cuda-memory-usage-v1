@@ -11,8 +11,8 @@
 
 std::vector<CUgraphNode> getKernelsInExecutionOrder(
   CUgraphNode rootNode,
-  std::map < CUgraphNode, std::vector<CUgraphNode>,
-  std::map<CUgraphNode, KernelDataDependency> kernelToDataDependencyMap
+  const std::map<CUgraphNode, std::vector<CUgraphNode>> &edges,
+  const std::map<CUgraphNode, KernelDataDependency> &kernelToDataDependencyMap
 ) {
   std::vector<CUgraphNode> kernelsInExecutionOrder;
 
@@ -20,6 +20,7 @@ std::vector<CUgraphNode> getKernelsInExecutionOrder(
   for (;;) {
     assert(edges[currentNode].size() <= 1);
 
+    // Get rid of dummy kernels, such as dummyKernelForAnnotation.
     if (kernelToDataDependencyMap.find(currentNode) != kernelToDataDependencyMap.end()) {
       kernelsInExecutionOrder.push_back(currentNode);
     }
@@ -32,40 +33,6 @@ std::vector<CUgraphNode> getKernelsInExecutionOrder(
   }
 
   return kernelsInExecutionOrder;
-}
-
-std::map<void *, bool> getMemorySpaceOnDeviceOrNotMap(
-  std::vector<CUgraphNode> kernels,
-  std::map<CUgraphNode, KernelDataDependency> kernelToDataDependencyMap
-) {
-  std::map<void *, bool> memorySpaceOnDeviceOrNotMap;
-  for (auto &[ptr, size] : MemoryManager::managedMemorySpaces) {
-    memorySpaceOnDeviceOrNotMap[ptr] = false;
-  }
-  for (auto &k : kernels) {
-    auto &dataDependency = kernelToDataDependencyMap[k];
-    bool stop = false;
-    for (auto &[ptr, size] : dataDependency.inputs) {
-      if (MemoryManager::managedMemorySpacesInitiallyOnDevice.count(ptr) == 1) {
-        memorySpaceOnDeviceOrNotMap[ptr] = true;
-      } else {
-        stop = true;
-        break;
-      }
-    }
-    for (auto &[ptr, size] : dataDependency.outputs) {
-      if (MemoryManager::managedMemorySpacesInitiallyOnDevice.count(ptr) == 1) {
-        memorySpaceOnDeviceOrNotMap[ptr] = true;
-      } else {
-        stop = true;
-        break;
-      }
-    }
-    if (stop) {
-      break;
-    }
-  }
-  return memorySpaceOnDeviceOrNotMap;
 }
 
 // Currently, only support chain shape graph.
@@ -84,46 +51,36 @@ PrefetchOnlyStrategy::calculateDataMovementPlan(
 
   auto kernelsInExecutionOrder = getKernelsInExecutionOrder(rootNode, edges, kernelToDataDependencyMap);
 
-  auto memorySpaceOnDeviceOrNotMap = getMemorySpaceOnDeviceOrNotMap(kernelsInExecutionOrder, kernelToDataDependencyMap);
-
   // Initialize data movement plan;
   Optimizer::DataMovementPlan dataMovementPlan;
   dataMovementPlan.originalGraph = originalGraph;
 
-  // Schedule prefetches
-  size_t currentMemoryUsed = 0;
-  float currentPrefetchingFrontline = 0;
-  float currentComputingFrontline = 0;
-  int currentKernelIndex = 0;
-  int current
-  while (currentKernelIndex < kernelsInExecutionOrder.size()) {
-    auto &k = kernelsInExecutionOrder[currentKernelIndex];
-    auto &dataDependency = kernelToDataDependencyMap[k];
+  // Schedule prefetches: always prefetch for the next kernel
+  std::vector<std::vector<Optimizer::DataMovementPlan::DataMovementStep>>
+    dataMovementStepsPerKernel(kernelsInExecutionOrder.size());
+  for (int i = 0; i < kernelsInExecutionOrder.size() - 1; i++) {
+    auto &currentKernel = kernelsInExecutionOrder[i];
+    auto &nextKernel = kernelsInExecutionOrder[i + 1];
+    auto &dataDependency = kernelToDataDependencyMap[nextKernel];
 
-    std::vector<MemoryManager::ArrayInfo> unsatisfiedDataDependencies;
     for (auto &[ptr, size] : dataDependency.inputs) {
-      if (!memorySpaceOnDeviceOrNotMap[ptr]) {
-        unsatisfiedDataDependencies.push_back(std::make_tuple(ptr, size));
-      }
-    }
-    for (auto &[ptr, size] : dataDependency.outputs) {
-      if (!memorySpaceOnDeviceOrNotMap[ptr]) {
-        unsatisfiedDataDependencies.push_back(std::make_tuple(ptr, size));
-      }
+      Optimizer::DataMovementPlan::DataMovementStep step;
+      step.dataMovement.direction = CustomGraph::DataMovement::Direction::hostToDevice;
+      step.dataMovement.address = ptr;
+      step.dataMovement.size = size;
+      step.dataMovementPosition = currentKernel;
+      step.dataMovementRelativePosition = Optimizer::DataMovementPlan::DataMovementRelativePosition::beforeKernel;
+      dataMovementStepsPerKernel[i].push_back(step);
     }
 
-    if (unsatisfiedDataDependencies.empty()) {
-      currentComputingFrontline += cuGraphNodeToKernelDurationMap[k];
-      currentKernelIndex++;
-    } else {
-      for (auto &[ptr, size] : unsatisfiedDataDependencies) {
-        currentPrefetchingFrontline += static_cast<float>(size) / CudaConstants::PREFETCHING_BANDWIDTH;
-        Optimizer::DataMovementPlan::DataMovementStep step;
-        // TODO: Add the step to the plan
-        // TODO: Consider memory capacity limit
-      }
-      currentComputingFrontline = std::max(currentPrefetchingFrontline, currentComputingFrontline);
-      currentComputingFrontline += CuGraphNodeToKernelDurationMap[k];
+    for (auto &[ptr, size] : dataDependency.outputs) {
+      Optimizer::DataMovementPlan::DataMovementStep step;
+      step.dataMovement.direction = CustomGraph::DataMovement::Direction::hostToDevice;
+      step.dataMovement.address = ptr;
+      step.dataMovement.size = size;
+      step.dataMovementPosition = currentKernel;
+      step.dataMovementRelativePosition = Optimizer::DataMovementPlan::DataMovementRelativePosition::beforeKernel;
+      dataMovementStepsPerKernel[i].push_back(step);
     }
   }
 
