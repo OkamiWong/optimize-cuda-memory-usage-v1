@@ -51,17 +51,17 @@ CustomGraph PrefetchOnlyStrategy::run(
 
   auto kernelsInExecutionOrder = getKernelsInExecutionOrder(rootNode, edges, kernelToDataDependencyMap);
 
-  // Initialize the custom graph
-  CustomGraph customGraph;
-  customGraph.originalGraph = originalGraph;
+  // Initialize the optimized graph
+  CustomGraph optimizedGraph;
+  optimizedGraph.originalGraph = originalGraph;
 
   std::map<CUgraphNode, CustomGraph::NodeId> kernelToKernelStartNodeIdMap;
   std::map<CUgraphNode, CustomGraph::NodeId> kernelToKernelNodeIdMap;
   for (auto &kernel : kernelsInExecutionOrder) {
-    const auto kernelStartNodeId = customGraph.addEmptyNode();
-    const auto kernelNodeId = customGraph.addKernelNode(kernel);
+    const auto kernelStartNodeId = optimizedGraph.addEmptyNode();
+    const auto kernelNodeId = optimizedGraph.addKernelNode(kernel);
 
-    customGraph.addEdge(kernelStartNodeId, kernelNodeId);
+    optimizedGraph.addEdge(kernelStartNodeId, kernelNodeId);
 
     kernelToKernelStartNodeIdMap[kernel] = kernelStartNodeId;
     kernelToKernelNodeIdMap[kernel] = kernelNodeId;
@@ -70,7 +70,7 @@ CustomGraph PrefetchOnlyStrategy::run(
   for (int i = 1; i < kernelsInExecutionOrder.size() - 1; i++) {
     auto &previousKernel = kernelsInExecutionOrder[i - 1];
     auto &kernel = kernelsInExecutionOrder[i];
-    customGraph.addEdge(
+    optimizedGraph.addEdge(
       kernelToKernelNodeIdMap[previousKernel],
       kernelToKernelStartNodeIdMap[kernel]
     );
@@ -92,9 +92,9 @@ CustomGraph PrefetchOnlyStrategy::run(
       dataMovement.address = ptr;
       dataMovement.size = size;
 
-      const auto prefetchingNodeId = customGraph.addDataMovementNode(dataMovement);
-      customGraph.addEdge(currentKernelStartNodeId, prefetchingNodeId);
-      customGraph.addEdge(prefetchingNodeId, nextKernelStartNodeId);
+      const auto prefetchingNodeId = optimizedGraph.addDataMovementNode(dataMovement);
+      optimizedGraph.addEdge(currentKernelStartNodeId, prefetchingNodeId);
+      optimizedGraph.addEdge(prefetchingNodeId, nextKernelStartNodeId);
     }
 
     for (auto &[ptr, size] : dataDependency.outputs) {
@@ -103,11 +103,11 @@ CustomGraph PrefetchOnlyStrategy::run(
       dataMovement.address = ptr;
       dataMovement.size = size;
 
-      const auto prefetchingNodeId = customGraph.addDataMovementNode(dataMovement);
-      customGraph.addEdge(currentKernelStartNodeId, prefetchingNodeId);
-      customGraph.addEdge(prefetchingNodeId, nextKernelStartNodeId);
+      const auto prefetchingNodeId = optimizedGraph.addDataMovementNode(dataMovement);
+      optimizedGraph.addEdge(currentKernelStartNodeId, prefetchingNodeId);
+      optimizedGraph.addEdge(prefetchingNodeId, nextKernelStartNodeId);
     }
   }
 
-  return customGraph;
+  return optimizedGraph;
 }
