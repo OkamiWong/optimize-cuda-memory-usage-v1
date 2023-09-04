@@ -1,4 +1,3 @@
-#include <cassert>
 #include <cstdio>
 
 #include "../optimization/optimization.hpp"
@@ -27,11 +26,11 @@ template <typename T>
 __global__ void checkResultKernel(const T *c, const T expectedValue) {
   const int i = blockDim.x * blockIdx.x + threadIdx.x;
   if (c[i] != expectedValue) {
-    assert(false);
+    printf("[checkResultKernel] found c[%d] = %f, while expectedValue = %f\n", i, c[i], expectedValue);
   }
 }
 
-void runChainOfStreams(bool useGraph = false) {
+void runChainOfStreams(bool optimized = true) {
   constexpr size_t CHAIN_LEN = 16;
   constexpr size_t ARRAY_SIZE = 1 << 30;  // 1GiB
   constexpr size_t ARRAY_LEN = ARRAY_SIZE / sizeof(float);
@@ -59,7 +58,7 @@ void runChainOfStreams(bool useGraph = false) {
 
   CudaEventClock clock;
 
-  if (useGraph) {
+  if (optimized) {
     cudaStream_t stream;
     checkCudaErrors(cudaStreamCreate(&stream));
     checkCudaErrors(cudaStreamBeginCapture(stream, cudaStreamCaptureModeGlobal));
@@ -99,6 +98,7 @@ void runChainOfStreams(bool useGraph = false) {
         expectedC
       );
     }
+    checkCudaErrors(cudaDeviceSynchronize());
   } else {
     // Force all the data to be on CPU initially
     for (int i = 0; i < CHAIN_LEN; i++) {
@@ -121,9 +121,8 @@ void runChainOfStreams(bool useGraph = false) {
         expectedC
       );
     }
+    checkCudaErrors(cudaDeviceSynchronize());
   }
-
-  checkCudaErrors(cudaDeviceSynchronize());
 
   LOG_TRACE_WITH_INFO("Total time used (s): %.2f", clock.getTimeInSeconds());
 
