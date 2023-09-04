@@ -77,6 +77,32 @@ CustomGraph PrefetchOnlyStrategy::run(
   }
 
   // Schedule prefetches
+  // Prefetch the data for first kernel
+  auto &firstKernel = kernelsInExecutionOrder[0];
+  auto firstKernelStartNodeId = kernelToKernelStartNodeIdMap[firstKernel];
+  auto firstKernelNodeId = kernelToKernelNodeIdMap[firstKernel];
+  auto &firstKernelDataDependency = kernelToDataDependencyMap[firstKernel];
+  for (auto &[ptr, size] : firstKernelDataDependency.inputs) {
+    optimizedGraph.addDataMovementNode(
+      CustomGraph::DataMovement::Direction::hostToDevice,
+      ptr,
+      size,
+      firstKernelStartNodeId,
+      firstKernelNodeId
+    );
+  }
+
+  for (auto &[ptr, size] : firstKernelDataDependency.outputs) {
+    optimizedGraph.addDataMovementNode(
+      CustomGraph::DataMovement::Direction::hostToDevice,
+      ptr,
+      size,
+      firstKernelStartNodeId,
+      firstKernelNodeId
+    );
+  }
+
+  // Prefetch for the rest kernels
   for (int i = 0; i < kernelsInExecutionOrder.size() - 1; i++) {
     auto &currentKernel = kernelsInExecutionOrder[i];
     auto &nextKernel = kernelsInExecutionOrder[i + 1];
@@ -87,25 +113,23 @@ CustomGraph PrefetchOnlyStrategy::run(
     auto &dataDependency = kernelToDataDependencyMap[nextKernel];
 
     for (auto &[ptr, size] : dataDependency.inputs) {
-      CustomGraph::DataMovement dataMovement;
-      dataMovement.direction = CustomGraph::DataMovement::Direction::hostToDevice;
-      dataMovement.address = ptr;
-      dataMovement.size = size;
-
-      const auto prefetchingNodeId = optimizedGraph.addDataMovementNode(dataMovement);
-      optimizedGraph.addEdge(currentKernelStartNodeId, prefetchingNodeId);
-      optimizedGraph.addEdge(prefetchingNodeId, nextKernelStartNodeId);
+      optimizedGraph.addDataMovementNode(
+        CustomGraph::DataMovement::Direction::hostToDevice,
+        ptr,
+        size,
+        currentKernelStartNodeId,
+        nextKernelStartNodeId
+      );
     }
 
     for (auto &[ptr, size] : dataDependency.outputs) {
-      CustomGraph::DataMovement dataMovement;
-      dataMovement.direction = CustomGraph::DataMovement::Direction::hostToDevice;
-      dataMovement.address = ptr;
-      dataMovement.size = size;
-
-      const auto prefetchingNodeId = optimizedGraph.addDataMovementNode(dataMovement);
-      optimizedGraph.addEdge(currentKernelStartNodeId, prefetchingNodeId);
-      optimizedGraph.addEdge(prefetchingNodeId, nextKernelStartNodeId);
+      optimizedGraph.addDataMovementNode(
+        CustomGraph::DataMovement::Direction::hostToDevice,
+        ptr,
+        size,
+        currentKernelStartNodeId,
+        nextKernelStartNodeId
+      );
     }
   }
 

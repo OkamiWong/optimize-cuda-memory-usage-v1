@@ -55,6 +55,19 @@ struct CustomGraph {
     return u;
   }
 
+  NodeId addDataMovementNode(DataMovement::Direction direction, void* address, size_t size, NodeId start, NodeId end) {
+    DataMovement dataMovement;
+    dataMovement.direction = direction;
+    dataMovement.address = address;
+    dataMovement.size = size;
+
+    auto u = this->addDataMovementNode(dataMovement);
+    this->addEdge(start, u);
+    this->addEdge(u, end);
+
+    return u;
+  }
+
   void addEdge(NodeId from, NodeId to) {
     this->edges[from].push_back(to);
   }

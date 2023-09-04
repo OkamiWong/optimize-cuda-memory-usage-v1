@@ -74,12 +74,6 @@ void runChainOfStreams(bool useGraph = true) {
     cudaGraph_t graph;
     checkCudaErrors(cudaStreamEndCapture(stream, &graph));
 
-    // Only the first kernel's data is on device initially.
-    checkCudaErrors(cudaMemPrefetchAsync(a[0], ARRAY_SIZE, CudaConstants::DEVICE_ID, stream));
-    checkCudaErrors(cudaMemPrefetchAsync(b[0], ARRAY_SIZE, CudaConstants::DEVICE_ID, stream));
-    checkCudaErrors(cudaMemPrefetchAsync(c[0], ARRAY_SIZE, CudaConstants::DEVICE_ID, stream));
-    markMemorySpaceInitiallyOnDevice({a[0], b[0], c[0]});
-
     checkCudaErrors(cudaStreamSynchronize(stream));
     checkCudaErrors(cudaStreamDestroy(stream));
 
