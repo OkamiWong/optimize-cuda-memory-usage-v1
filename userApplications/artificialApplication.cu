@@ -31,7 +31,7 @@ __global__ void checkResultKernel(const T *c, const T expectedValue) {
   }
 }
 
-void runChainOfStreams(bool useGraph = true) {
+void runChainOfStreams(bool useGraph = false) {
   constexpr size_t CHAIN_LEN = 16;
   constexpr size_t ARRAY_SIZE = 1 << 30;  // 1GiB
   constexpr size_t ARRAY_LEN = ARRAY_SIZE / sizeof(float);
@@ -79,25 +79,48 @@ void runChainOfStreams(bool useGraph = true) {
 
     auto optimizedGraph = profileAndOptimize(graph);
 
+    // Initialize data again, because the kernels are executed during profiling
+    for (int i = 0; i < CHAIN_LEN; i++) {
+      initializeArraysKernel<<<GRID_SIZE, BLOCK_SIZE>>>(a[i], b[i], c[i], initA, initB, initC);
+      cudaMemPrefetchAsync(a[i], ARRAY_SIZE, cudaCpuDeviceId);
+      cudaMemPrefetchAsync(b[i], ARRAY_SIZE, cudaCpuDeviceId);
+      cudaMemPrefetchAsync(c[i], ARRAY_SIZE, cudaCpuDeviceId);
+    }
+    checkCudaErrors(cudaDeviceSynchronize());
+
     clock.start();
     executeOptimizedGraph(optimizedGraph);
     clock.end();
 
-    checkResultKernel<<<GRID_SIZE, BLOCK_SIZE>>>(
-      c[generateRandomInteger(0, CHAIN_LEN - 1)],
-      expectedC
-    );
+    LOG_TRACE_WITH_INFO("Verify the result");
+    for (int i = 0; i < CHAIN_LEN; i++) {
+      checkResultKernel<<<GRID_SIZE, BLOCK_SIZE>>>(
+        c[i],
+        expectedC
+      );
+    }
   } else {
+    // Force all the data to be on CPU initially
+    for (int i = 0; i < CHAIN_LEN; i++) {
+      cudaMemPrefetchAsync(a[i], ARRAY_SIZE, cudaCpuDeviceId);
+      cudaMemPrefetchAsync(b[i], ARRAY_SIZE, cudaCpuDeviceId);
+      cudaMemPrefetchAsync(c[i], ARRAY_SIZE, cudaCpuDeviceId);
+    }
+    checkCudaErrors(cudaDeviceSynchronize());
+
     clock.start();
     for (int i = 0; i < CHAIN_LEN; i++) {
       addKernel<<<GRID_SIZE, BLOCK_SIZE>>>(a[i], b[i], c[i]);
     }
     clock.end();
 
-    checkResultKernel<<<GRID_SIZE, BLOCK_SIZE>>>(
-      c[generateRandomInteger(0, CHAIN_LEN - 1)],
-      expectedC
-    );
+    LOG_TRACE_WITH_INFO("Verify the result");
+    for (int i = 0; i < CHAIN_LEN; i++) {
+      checkResultKernel<<<GRID_SIZE, BLOCK_SIZE>>>(
+        c[i],
+        expectedC
+      );
+    }
   }
 
   checkCudaErrors(cudaDeviceSynchronize());
