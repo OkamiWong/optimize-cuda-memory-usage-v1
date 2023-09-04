@@ -31,7 +31,8 @@ __global__ void checkResultKernel(const T *c, const T expectedValue) {
 }
 
 void runChainOfStreams(bool optimized = true) {
-  constexpr size_t CHAIN_LEN = 16;
+  // 27 * 3GiB = 81GibB approximately 200% oversubscription for A100-40GiB
+  constexpr size_t CHAIN_LEN = 27;
   constexpr size_t ARRAY_SIZE = 1 << 30;  // 1GiB
   constexpr size_t ARRAY_LEN = ARRAY_SIZE / sizeof(float);
   constexpr size_t BLOCK_SIZE = 1024;
