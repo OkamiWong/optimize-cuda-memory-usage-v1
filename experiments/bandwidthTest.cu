@@ -126,9 +126,9 @@ int main(int argc, char **argv) {
   bool noHeader = cmdl["no-header"];
 
   size_t startSize, endSize, stepSize;
-  cmdl("start-size", 100'000'000ull) >> startSize;  // 100 MB
-  cmdl("end-size", 1'000'000'000ull) >> endSize;     // 1 GB
-  cmdl("step-size", 100'000'000ull) >> stepSize;    // 100 MB
+  cmdl("start-size", 1'000'000ull) >> startSize;  // 1 MB
+  cmdl("end-size", 100'000'000ull) >> endSize;     // 100 MB
+  cmdl("step-size", 1'000'000ull) >> stepSize;    // 1 MB
 
   std::vector<size_t> sizes;
   size_t s = startSize;
