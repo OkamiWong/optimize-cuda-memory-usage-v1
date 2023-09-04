@@ -6,6 +6,7 @@
 #include <vector>
 
 struct CustomGraph {
+  // The domain of NodeId is [0, the total number of nodes).
   typedef int NodeId;
 
   enum class NodeType {

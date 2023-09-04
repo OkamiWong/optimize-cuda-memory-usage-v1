@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "../include/bipartiteGraphMaximumMatching.hpp"
 #include "../utilities/cudaGraphUtilities.hpp"
 #include "../utilities/cudaUtilities.hpp"
 #include "../utilities/logger.hpp"
@@ -159,7 +160,27 @@ Optimizer::CuGraphNodeToKernelDurationMap TaskManager::getCuGraphNodeToKernelDur
 std::map<CustomGraph::NodeId, TaskManager::StreamId> TaskManager::getStreamAssignment(
   CustomGraph &optimizedGraph
 ) {
-  // TODO
+  augment_path augmentPathAlgorithm(optimizedGraph.nodes.size(), optimizedGraph.nodes.size());
+  for (auto &[u, edges] : optimizedGraph.edges) {
+    for (auto v : edges) {
+      augmentPathAlgorithm.add(u, v);
+    }
+  }
+  augmentPathAlgorithm.solve();
+
+  std::map<CustomGraph::NodeId, TaskManager::StreamId> nodeIdToStreamIdMap;
+  TaskManager::StreamId nextStreamId = 0;
+  for (auto u : optimizedGraph.nodes) {
+    if (nodeIdToStreamIdMap.count(u) == 0) {
+      auto uStreamId = nextStreamId++;
+      nodeIdToStreamIdMap[u] = uStreamId;
+      for (auto v = augmentPathAlgorithm.pa[u]; v != -1; v = augmentPathAlgorithm.pa[v]) {
+        nodeIdToStreamIdMap[v] = uStreamId;
+      }
+    }
+  }
+
+  return nodeIdToStreamIdMap;
 }
 
 void TaskManager::executeOptimizedGraph(CustomGraph &optimizedGraph) {
