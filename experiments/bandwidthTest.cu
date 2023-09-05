@@ -113,8 +113,14 @@ void testPcieBandwidth(const std::vector<size_t> &sizes, bool useUnifiedMemory, 
   if (!noHeader) {
     printHeader();
   }
-  printDataOfTheSameKind("PCIe-HostToDevice", sizes, hostToDeviceTimes);
-  printDataOfTheSameKind("PCIe-DeviceToHost", sizes, deviceToHostTimes);
+
+  if (useUnifiedMemory) {
+    printDataOfTheSameKind("PCIe-HostToDevice-UnifiedMemory", sizes, hostToDeviceTimes);
+    printDataOfTheSameKind("PCIe-DeviceToHost-UnifiedMemory", sizes, deviceToHostTimes);
+  } else {
+    printDataOfTheSameKind("PCIe-HostToDevice", sizes, hostToDeviceTimes);
+    printDataOfTheSameKind("PCIe-DeviceToHost", sizes, deviceToHostTimes);
+  }
 }
 
 int main(int argc, char **argv) {
