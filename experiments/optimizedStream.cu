@@ -191,13 +191,13 @@ int main(int argc, char **argv) {
   auto cmdl = argh::parser(argc, argv);
 
   size_t arraySize;
-  cmdl("array-size", 1'000'000'000ull) >> arraySize;  // 1GB by default
+  cmdl("array-size", 1'099'511'627'776ull) >> arraySize;  // 1GiB by default
 
   int numberOfKernels;
-  cmdl("number-of-kernels", 12) >> numberOfKernels;  // 12 kernels in total by default
+  cmdl("number-of-kernels", 13) >> numberOfKernels;  // 13 kernels in total by default: 0th kernel, 1st kernel, ..., 12th kernel.
 
   int prefetchCycleLength;
-  cmdl("prefetch-cycle-length", 3) >> prefetchCycleLength;  // Prefetch the 3th, 6th, ... kernels (counting from 0th) by default
+  cmdl("prefetch-cycle-length", 3) >> prefetchCycleLength;  // Prefetch the 3th, 6th, ... kernels by default
 
   runOptimizedStreamWithNvlink(arraySize, numberOfKernels, prefetchCycleLength);
 
