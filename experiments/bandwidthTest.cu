@@ -60,8 +60,8 @@ void disablePeerAccessForNvlink() {
 }
 
 template <typename T>
-__global__ void initializeArrayKernel(T *array, T initialValue, int count) {
-  const int i = blockDim.x * blockIdx.x + threadIdx.x;
+__global__ void initializeArrayKernel(T *array, T initialValue, size_t count) {
+  const size_t i = blockDim.x * blockIdx.x + threadIdx.x;
   if (i < count) {
     array[i] = initialValue;
   }
@@ -71,6 +71,7 @@ void testNvlinkBandwidth(const std::vector<size_t> &sizes, bool useUnifiedMemory
   enablePeerAccessForNvlink();
 
   cudaStream_t stream;
+  checkCudaErrors(cudaSetDevice(NVLINK_DEVICE_ID_A));
   checkCudaErrors(cudaStreamCreate(&stream));
 
   std::vector<float> deviceToDeviceTimes;
@@ -78,7 +79,25 @@ void testNvlinkBandwidth(const std::vector<size_t> &sizes, bool useUnifiedMemory
   for (auto size : sizes) {
     float minDeviceToDeviceTime = std::numeric_limits<float>::max();
     if (useUnifiedMemory) {
-      // TODO
+      int *array;
+      checkCudaErrors(cudaMallocManaged(&array, size));
+      checkCudaErrors(cudaSetDevice(NVLINK_DEVICE_ID_A));
+      initializeArrayKernel<<<(size / 512) + 1, 512>>>(array, 0, size / sizeof(int));
+      checkCudaErrors(cudaDeviceSynchronize());
+
+      checkCudaErrors(cudaSetDevice(NVLINK_DEVICE_ID_A));
+      CudaEventClock clock;
+      for (int i = 0; i < REPETITION; i++) {
+        clock.start(stream);
+        checkCudaErrors(cudaMemPrefetchAsync(array, size, i % 2 == 0 ? NVLINK_DEVICE_ID_B : NVLINK_DEVICE_ID_A, stream));
+        clock.end(stream);
+        checkCudaErrors(cudaStreamSynchronize(stream));
+        minDeviceToDeviceTime = std::min(minDeviceToDeviceTime, clock.getTimeInSeconds());
+      }
+
+      checkCudaErrors(cudaFree(array));
+
+      deviceToDeviceTimes.push_back(minDeviceToDeviceTime);
     } else {
       int *arrayOnDeviceA;
       checkCudaErrors(cudaSetDevice(NVLINK_DEVICE_ID_A));
@@ -92,6 +111,7 @@ void testNvlinkBandwidth(const std::vector<size_t> &sizes, bool useUnifiedMemory
       initializeArrayKernel<<<(size / 512) + 1, 512>>>(arrayOnDeviceB, 0, size / sizeof(int));
       checkCudaErrors(cudaDeviceSynchronize());
 
+      checkCudaErrors(cudaSetDevice(NVLINK_DEVICE_ID_A));
       CudaEventClock clock;
       for (int i = 0; i < REPETITION; i++) {
         clock.start(stream);
