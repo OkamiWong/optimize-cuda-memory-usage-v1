@@ -4,3 +4,11 @@ target_link_libraries(
   utilities
   cudaUtilities
 )
+
+add_executable(optimizedStream optimizedStream.cu)
+target_link_libraries(
+  optimizedStream
+  utilities
+  cudaUtilities
+  logger
+)
