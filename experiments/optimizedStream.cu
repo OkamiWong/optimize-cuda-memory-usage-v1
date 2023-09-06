@@ -62,6 +62,34 @@ __global__ void checkResultKernel(const T *c, const T expectedValue) {
   }
 }
 
+void warmUpDevice(const int deviceId) {
+  checkCudaErrors(cudaSetDevice(deviceId));
+  constexpr size_t WARMUP_ARRAY_SIZE = 1024ull * 1024 * 1024;  // 1GiB
+  constexpr size_t WARMUP_ARRAY_LENGTH = WARMUP_ARRAY_SIZE / sizeof(float);
+  constexpr size_t BLOCK_SIZE = 1024;
+  constexpr size_t GRID_SIZE = WARMUP_ARRAY_LENGTH / BLOCK_SIZE;
+
+  constexpr float initA = 1;
+  constexpr float initB = 2;
+  constexpr float expectedC = initA + initB;
+
+  float *a, *b, *c;
+  checkCudaErrors(cudaMalloc(&a, WARMUP_ARRAY_SIZE));
+  checkCudaErrors(cudaMalloc(&b, WARMUP_ARRAY_SIZE));
+  checkCudaErrors(cudaMalloc(&c, WARMUP_ARRAY_SIZE));
+
+  initializeArrayKernel<<<GRID_SIZE, BLOCK_SIZE>>>(a, initA, WARMUP_ARRAY_SIZE);
+  initializeArrayKernel<<<GRID_SIZE, BLOCK_SIZE>>>(b, initB, WARMUP_ARRAY_SIZE);
+
+  addKernel<<<GRID_SIZE, BLOCK_SIZE>>>(a, b, c, WARMUP_ARRAY_LENGTH);
+
+  checkResultKernel<<<GRID_SIZE, BLOCK_SIZE>>>(c, expectedC);
+
+  checkCudaErrors(cudaFree(a));
+  checkCudaErrors(cudaFree(b));
+  checkCudaErrors(cudaFree(c));
+}
+
 void runOptimizedStreamWithNvlink(size_t arraySize, int numberOfKernels, int prefetchCycleLength) {
   const size_t arrayLength = arraySize / sizeof(float);
   constexpr size_t BLOCK_SIZE = 1024;
@@ -75,6 +103,9 @@ void runOptimizedStreamWithNvlink(size_t arraySize, int numberOfKernels, int pre
   constexpr float expectedC = initA + initB;
 
   enablePeerAccessForNvlink();
+
+  warmUpDevice(COMPUTE_DEVICE_ID);
+  warmUpDevice(STORAGE_DEVICE_ID);
 
   // Initialize data
   auto aOnComputeDevice = std::make_unique<float *[]>(numberOfKernels);
