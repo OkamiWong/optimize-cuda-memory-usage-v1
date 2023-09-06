@@ -46,11 +46,8 @@ __global__ void initializeArrayKernel(T *array, T initialValue, size_t count) {
 }
 
 template <typename T>
-__global__ void addKernel(const T *a, const T *b, T *c, size_t count) {
+__global__ void addKernel(const T *a, const T *b, T *c) {
   const size_t i = blockDim.x * blockIdx.x + threadIdx.x;
-  // if (i < count) {
-  //   c[i] = a[i] + b[i];
-  // }
   c[i] = a[i] + b[i];
 }
 
@@ -81,7 +78,7 @@ void warmUpDevice(const int deviceId) {
   initializeArrayKernel<<<GRID_SIZE, BLOCK_SIZE>>>(a, initA, WARMUP_ARRAY_SIZE);
   initializeArrayKernel<<<GRID_SIZE, BLOCK_SIZE>>>(b, initB, WARMUP_ARRAY_SIZE);
 
-  addKernel<<<GRID_SIZE, BLOCK_SIZE>>>(a, b, c, WARMUP_ARRAY_LENGTH);
+  addKernel<<<GRID_SIZE, BLOCK_SIZE>>>(a, b, c);
 
   checkResultKernel<<<GRID_SIZE, BLOCK_SIZE>>>(c, expectedC);
 
@@ -94,6 +91,8 @@ void runOptimizedStreamWithNvlink(size_t arraySize, int numberOfKernels, int pre
   const size_t arrayLength = arraySize / sizeof(float);
   constexpr size_t BLOCK_SIZE = 1024;
   const size_t GRID_SIZE = arrayLength / BLOCK_SIZE;
+
+  assert(arrayLength % BLOCK_SIZE == 0ull);
 
   constexpr int COMPUTE_DEVICE_ID = NVLINK_DEVICE_ID_A;
   constexpr int STORAGE_DEVICE_ID = NVLINK_DEVICE_ID_B;
@@ -164,7 +163,7 @@ void runOptimizedStreamWithNvlink(size_t arraySize, int numberOfKernels, int pre
     }
 
     checkCudaErrors(cudaMallocAsync(&cOnComputeDevice[i], arraySize, computeStream));
-    addKernel<<<GRID_SIZE, BLOCK_SIZE, 0, computeStream>>>(aOnComputeDevice[i], bOnComputeDevice[i], cOnComputeDevice[i], arrayLength);
+    addKernel<<<GRID_SIZE, BLOCK_SIZE, 0, computeStream>>>(aOnComputeDevice[i], bOnComputeDevice[i], cOnComputeDevice[i]);
     checkResultKernel<<<1, 1, 0, computeStream>>>(cOnComputeDevice[i], expectedC);
     checkCudaErrors(cudaFreeAsync(aOnComputeDevice[i], computeStream));
     checkCudaErrors(cudaFreeAsync(bOnComputeDevice[i], computeStream));
