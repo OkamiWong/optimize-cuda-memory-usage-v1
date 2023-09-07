@@ -5,6 +5,13 @@ target_link_libraries(
   cudaUtilities
 )
 
+add_executable(splitDataMovement splitDataMovement.cu)
+target_link_libraries(
+  splitDataMovement
+  utilities
+  cudaUtilities
+)
+
 add_executable(optimizedStream optimizedStream.cu)
 target_link_libraries(
   optimizedStream
