@@ -124,7 +124,7 @@ void runOptimizedStreamWithNvlink(size_t arraySize, int numberOfKernels, int pre
   checkCudaErrors(cudaStreamCreate(&dataMovementStream));
 
   for (int i = 0; i < numberOfKernels; i++) {
-    if (i != 0 && i % prefetchCycleLength == 0) {
+    if (i != 1 && i % prefetchCycleLength == 1) {
       checkCudaErrors(cudaSetDevice(STORAGE_DEVICE_ID));
       checkCudaErrors(cudaMalloc(&aOnStorageDevice[i], arraySize));
       checkCudaErrors(cudaMalloc(&bOnStorageDevice[i], arraySize));
@@ -153,16 +153,16 @@ void runOptimizedStreamWithNvlink(size_t arraySize, int numberOfKernels, int pre
   clock.start(computeStream);
 
   for (int i = 0; i < numberOfKernels; i++) {
-    if (i % prefetchCycleLength == 0) {
+    if (i % prefetchCycleLength == 1) {
       if (i + prefetchCycleLength < numberOfKernels) {
         checkCudaErrors(cudaMallocAsync(&aOnComputeDevice[i + prefetchCycleLength], arraySize, dataMovementStream));
         checkCudaErrors(cudaMallocAsync(&bOnComputeDevice[i + prefetchCycleLength], arraySize, dataMovementStream));
         checkCudaErrors(cudaMemcpyAsync(aOnComputeDevice[i + prefetchCycleLength], aOnStorageDevice[i + prefetchCycleLength], arraySize, cudaMemcpyDeviceToDevice, dataMovementStream));
         checkCudaErrors(cudaMemcpyAsync(bOnComputeDevice[i + prefetchCycleLength], bOnStorageDevice[i + prefetchCycleLength], arraySize, cudaMemcpyDeviceToDevice, dataMovementStream));
-        checkCudaErrors(cudaEventRecord(prefetchEvents[i / prefetchCycleLength], dataMovementStream));
+        checkCudaErrors(cudaEventRecord(prefetchEvents[(i - 1) / prefetchCycleLength], dataMovementStream));
       }
-      if (i != 0) {
-        checkCudaErrors(cudaStreamWaitEvent(computeStream, prefetchEvents[i / prefetchCycleLength - 1]));
+      if (i != 1) {
+        checkCudaErrors(cudaStreamWaitEvent(computeStream, prefetchEvents[(i - 1) / prefetchCycleLength - 1]));
       }
     }
 
@@ -201,7 +201,7 @@ int main(int argc, char **argv) {
   cmdl("number-of-kernels", 21) >> numberOfKernels;  // 21 kernels in total by default: 0th kernel, 1st kernel, ..., 20th kernel.
 
   int prefetchCycleLength;
-  cmdl("prefetch-cycle-length", 4) >> prefetchCycleLength;  // Prefetch the 4th, 8th, ... kernels by default
+  cmdl("prefetch-cycle-length", 4) >> prefetchCycleLength;  // Prefetch the 5th, 9th, 13th, ... kernels by default
 
   runOptimizedStreamWithNvlink(arraySize, numberOfKernels, prefetchCycleLength);
 
