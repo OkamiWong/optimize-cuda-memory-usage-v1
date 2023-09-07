@@ -70,21 +70,30 @@ void warmUpDevice(const int deviceId) {
   constexpr float initB = 2;
   constexpr float expectedC = initA + initB;
 
-  float *a, *b, *c;
-  checkCudaErrors(cudaMalloc(&a, WARMUP_ARRAY_SIZE));
-  checkCudaErrors(cudaMalloc(&b, WARMUP_ARRAY_SIZE));
-  checkCudaErrors(cudaMalloc(&c, WARMUP_ARRAY_SIZE));
+  SystemWallClock clock;
+  float timePassed = 0.0;
+  while (timePassed < 1.0) {
+    clock.start();
 
-  initializeArrayKernel<<<GRID_SIZE, BLOCK_SIZE>>>(a, initA, WARMUP_ARRAY_SIZE);
-  initializeArrayKernel<<<GRID_SIZE, BLOCK_SIZE>>>(b, initB, WARMUP_ARRAY_SIZE);
+    float *a, *b, *c;
+    checkCudaErrors(cudaMalloc(&a, WARMUP_ARRAY_SIZE));
+    checkCudaErrors(cudaMalloc(&b, WARMUP_ARRAY_SIZE));
+    checkCudaErrors(cudaMalloc(&c, WARMUP_ARRAY_SIZE));
 
-  addKernel<<<GRID_SIZE, BLOCK_SIZE>>>(a, b, c);
+    initializeArrayKernel<<<GRID_SIZE, BLOCK_SIZE>>>(a, initA, WARMUP_ARRAY_SIZE);
+    initializeArrayKernel<<<GRID_SIZE, BLOCK_SIZE>>>(b, initB, WARMUP_ARRAY_SIZE);
 
-  checkResultKernel<<<GRID_SIZE, BLOCK_SIZE>>>(c, expectedC);
+    addKernel<<<GRID_SIZE, BLOCK_SIZE>>>(a, b, c);
 
-  checkCudaErrors(cudaFree(a));
-  checkCudaErrors(cudaFree(b));
-  checkCudaErrors(cudaFree(c));
+    checkResultKernel<<<GRID_SIZE, BLOCK_SIZE>>>(c, expectedC);
+
+    checkCudaErrors(cudaFree(a));
+    checkCudaErrors(cudaFree(b));
+    checkCudaErrors(cudaFree(c));
+
+    clock.end();
+    timePassed += clock.getTimeInSeconds();
+  }
 }
 
 void runOptimizedStreamWithNvlink(size_t arraySize, int numberOfKernels, int prefetchCycleLength) {
@@ -194,10 +203,10 @@ int main(int argc, char **argv) {
   cmdl("array-size", 1'073'741'824ull) >> arraySize;  // 1GiB by default
 
   int numberOfKernels;
-  cmdl("number-of-kernels", 13) >> numberOfKernels;  // 13 kernels in total by default: 0th kernel, 1st kernel, ..., 12th kernel.
+  cmdl("number-of-kernels", 21) >> numberOfKernels;  // 21 kernels in total by default: 0th kernel, 1st kernel, ..., 20th kernel.
 
   int prefetchCycleLength;
-  cmdl("prefetch-cycle-length", 3) >> prefetchCycleLength;  // Prefetch the 3th, 6th, ... kernels by default
+  cmdl("prefetch-cycle-length", 4) >> prefetchCycleLength;  // Prefetch the 4th, 8th, ... kernels by default
 
   runOptimizedStreamWithNvlink(arraySize, numberOfKernels, prefetchCycleLength);
 
