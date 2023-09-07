@@ -125,6 +125,8 @@ void runOptimizedStreamWithNvlink(size_t arraySize, int numberOfKernels, int pre
 
   for (int i = 0; i < numberOfKernels; i++) {
     if (i != 1 && i % prefetchCycleLength == 1) {
+      LOG_TRACE_WITH_INFO("Kernel %d is prefetched", i);
+
       checkCudaErrors(cudaSetDevice(STORAGE_DEVICE_ID));
       checkCudaErrors(cudaMalloc(&aOnStorageDevice[i], arraySize));
       checkCudaErrors(cudaMalloc(&bOnStorageDevice[i], arraySize));
