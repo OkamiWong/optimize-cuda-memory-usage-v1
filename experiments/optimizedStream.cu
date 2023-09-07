@@ -70,30 +70,25 @@ void warmUpDevice(const int deviceId) {
   constexpr float initB = 2;
   constexpr float expectedC = initA + initB;
 
-  SystemWallClock clock;
-  float timePassed = 0.0;
-  while (timePassed < 1.0) {
-    clock.start();
+  float *a, *b, *c;
+  checkCudaErrors(cudaMalloc(&a, WARMUP_ARRAY_SIZE));
+  checkCudaErrors(cudaMalloc(&b, WARMUP_ARRAY_SIZE));
+  checkCudaErrors(cudaMalloc(&c, WARMUP_ARRAY_SIZE));
 
-    float *a, *b, *c;
-    checkCudaErrors(cudaMalloc(&a, WARMUP_ARRAY_SIZE));
-    checkCudaErrors(cudaMalloc(&b, WARMUP_ARRAY_SIZE));
-    checkCudaErrors(cudaMalloc(&c, WARMUP_ARRAY_SIZE));
+  initializeArrayKernel<<<GRID_SIZE, BLOCK_SIZE>>>(a, initA, WARMUP_ARRAY_SIZE);
+  initializeArrayKernel<<<GRID_SIZE, BLOCK_SIZE>>>(b, initB, WARMUP_ARRAY_SIZE);
 
-    initializeArrayKernel<<<GRID_SIZE, BLOCK_SIZE>>>(a, initA, WARMUP_ARRAY_SIZE);
-    initializeArrayKernel<<<GRID_SIZE, BLOCK_SIZE>>>(b, initB, WARMUP_ARRAY_SIZE);
+  addKernel<<<GRID_SIZE, BLOCK_SIZE>>>(a, b, c);
 
-    addKernel<<<GRID_SIZE, BLOCK_SIZE>>>(a, b, c);
+  checkResultKernel<<<GRID_SIZE, BLOCK_SIZE>>>(c, expectedC);
 
-    checkResultKernel<<<GRID_SIZE, BLOCK_SIZE>>>(c, expectedC);
+  checkCudaErrors(cudaDeviceSynchronize());
 
-    checkCudaErrors(cudaFree(a));
-    checkCudaErrors(cudaFree(b));
-    checkCudaErrors(cudaFree(c));
+  checkCudaErrors(cudaFree(a));
+  checkCudaErrors(cudaFree(b));
+  checkCudaErrors(cudaFree(c));
 
-    clock.end();
-    timePassed += clock.getTimeInSeconds();
-  }
+  checkCudaErrors(cudaDeviceSynchronize());
 }
 
 void runOptimizedStreamWithNvlink(size_t arraySize, int numberOfKernels, int prefetchCycleLength) {
