@@ -91,6 +91,33 @@ void warmUpDevice(const int deviceId) {
   checkCudaErrors(cudaDeviceSynchronize());
 }
 
+void warmUpDataMovement(int deviceA, int deviceB) {
+  const size_t ARRAY_SIZE = 1ull << 30;
+  const size_t ARRAY_LENGTH = ARRAY_SIZE / sizeof(int);
+
+  int *arrayOnA;
+  checkCudaErrors(cudaSetDevice(deviceA));
+  checkCudaErrors(cudaMalloc(&arrayOnA, ARRAY_SIZE));
+
+  int *arrayOnB;
+  checkCudaErrors(cudaSetDevice(deviceB));
+  checkCudaErrors(cudaMalloc(&arrayOnB, ARRAY_SIZE));
+  initializeArrayKernel<<<ARRAY_LENGTH / 1024, 1024>>>(arrayOnB, 0, ARRAY_LENGTH);
+
+  checkCudaErrors(cudaSetDevice(deviceA));
+
+  cudaStream_t stream;
+  checkCudaErrors(cudaStreamCreate(&stream));
+  checkCudaErrors(cudaMemcpyAsync(arrayOnA, arrayOnB, ARRAY_SIZE, cudaMemcpyDeviceToDevice, stream));
+  checkCudaErrors(cudaStreamSynchronize(stream));
+  checkCudaErrors(cudaStreamDestroy(stream));
+
+  checkCudaErrors(cudaFree(arrayOnA));
+
+  checkCudaErrors(cudaSetDevice(deviceB));
+  checkCudaErrors(cudaFree(arrayOnB));
+}
+
 void runOptimizedStreamWithNvlink(size_t arraySize, int numberOfKernels, int prefetchCycleLength) {
   const size_t arrayLength = arraySize / sizeof(float);
   constexpr size_t BLOCK_SIZE = 1024;
@@ -109,6 +136,8 @@ void runOptimizedStreamWithNvlink(size_t arraySize, int numberOfKernels, int pre
 
   warmUpDevice(COMPUTE_DEVICE_ID);
   warmUpDevice(STORAGE_DEVICE_ID);
+
+  warmUpDataMovement(COMPUTE_DEVICE_ID, STORAGE_DEVICE_ID);
 
   // Initialize data
   auto aOnComputeDevice = std::make_unique<float *[]>(numberOfKernels);
@@ -190,6 +219,15 @@ void runOptimizedStreamWithNvlink(size_t arraySize, int numberOfKernels, int pre
 
   checkCudaErrors(cudaStreamDestroy(computeStream));
   checkCudaErrors(cudaStreamDestroy(dataMovementStream));
+
+  checkCudaErrors(cudaSetDevice(STORAGE_DEVICE_ID));
+  for (int i = 0; i < numberOfKernels; i++) {
+    if (i != 1 && i % prefetchCycleLength == 1) {
+      checkCudaErrors(cudaFree(aOnStorageDevice[i]));
+      checkCudaErrors(cudaFree(bOnStorageDevice[i]));
+    }
+  }
+
   disablePeerAccessForNvlink();
 }
 
