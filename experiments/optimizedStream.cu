@@ -137,6 +137,7 @@ void runOptimizedStreamWithNvlink(size_t arraySize, int numberOfKernels, int pre
   warmUpDevice(COMPUTE_DEVICE_ID);
   warmUpDevice(STORAGE_DEVICE_ID);
 
+  warmUpDataMovement(STORAGE_DEVICE_ID, COMPUTE_DEVICE_ID);
   warmUpDataMovement(COMPUTE_DEVICE_ID, STORAGE_DEVICE_ID);
 
   // Initialize data
