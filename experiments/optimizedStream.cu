@@ -181,12 +181,18 @@ void runOptimizedStreamWithNvlink(size_t arraySize, int numberOfKernels, int pre
     checkCudaErrors(cudaEventCreate(&prefetchEvents[i]));
   }
 
+  cudaEvent_t endOfKernelEvent;
+  checkCudaErrors(cudaEventCreate(&endOfKernelEvent));
+
   CudaEventClock clock;
   clock.start(computeStream);
 
   for (int i = 0; i < numberOfKernels; i++) {
     if (i % prefetchCycleLength == 1) {
       if (i + prefetchCycleLength < numberOfKernels) {
+        checkCudaErrors(cudaEventRecord(endOfKernelEvent, computeStream));
+        checkCudaErrors(cudaStreamWaitEvent(dataMovementStream, endOfKernelEvent));
+
         checkCudaErrors(cudaMallocAsync(&aOnComputeDevice[i + prefetchCycleLength], arraySize, dataMovementStream));
         checkCudaErrors(cudaMallocAsync(&bOnComputeDevice[i + prefetchCycleLength], arraySize, dataMovementStream));
         checkCudaErrors(cudaMemcpyAsync(aOnComputeDevice[i + prefetchCycleLength], aOnStorageDevice[i + prefetchCycleLength], arraySize, cudaMemcpyDeviceToDevice, dataMovementStream));
@@ -217,6 +223,8 @@ void runOptimizedStreamWithNvlink(size_t arraySize, int numberOfKernels, int pre
   for (int i = 0; i < numberOfKernels / prefetchCycleLength; i++) {
     checkCudaErrors(cudaEventDestroy(prefetchEvents[i]));
   }
+
+  checkCudaErrors(cudaEventDestroy(endOfKernelEvent));
 
   checkCudaErrors(cudaStreamDestroy(computeStream));
   checkCudaErrors(cudaStreamDestroy(dataMovementStream));
