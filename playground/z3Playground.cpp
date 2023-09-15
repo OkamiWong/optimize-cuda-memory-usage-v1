@@ -1,4 +1,5 @@
 #include <z3++.h>
+#include <fmt/core.h>
 
 #include <cmath>
 #include <iostream>
@@ -23,7 +24,7 @@ void longestPathExample() {
   std::vector<std::string> zNames;
 
   for (int i = 0; i < n; i++) {
-    zNames.push_back("z[" + std::to_string(i) + "]");
+    zNames.push_back(fmt::format("z[{}]", i));
     if (i == 0) {
       z.push_back(context.real_val(0));
     } else {
@@ -35,7 +36,6 @@ void longestPathExample() {
 
   for (int i = 1; i < n; i++) {
     for (int j = 0; j < n; j++) {
-      std::cout << i << ", " << j << ": " << dis[j][i] << std::endl;
       if (fabs(dis[j][i]) <= std::numeric_limits<double>::epsilon()) {
         optimize.add(z[i] >= z[j] + minusInfinity);
       } else {

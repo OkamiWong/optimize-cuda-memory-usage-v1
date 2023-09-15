@@ -14,6 +14,7 @@ enable_language(CXX CUDA)
 
 find_package(CUDA REQUIRED)
 find_package(Z3 REQUIRED)
+find_package(fmt REQUIRED)
 
 add_subdirectory(utilities)
 add_subdirectory(profiling)

@@ -1,5 +1,6 @@
 {
   "dependencies": [
-    "z3"
+    "z3",
+    "fmt"
   ]
 }
