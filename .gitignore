@@ -6,3 +6,4 @@ build/
 
 # Debug
 *.dot
+*.z3-trace
