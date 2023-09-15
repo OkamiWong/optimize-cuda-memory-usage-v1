@@ -6,7 +6,7 @@
 
 using namespace z3;
 
-void opt_example() {
+void optExample() {
   context c;
   optimize opt(c);
   params p(c);
@@ -29,6 +29,6 @@ void opt_example() {
 }
 
 int main() {
-  opt_example();
+  optExample();
   return 0;
 }
