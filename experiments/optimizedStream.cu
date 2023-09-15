@@ -247,10 +247,10 @@ int main(int argc, char **argv) {
   cmdl("array-size", 1'073'741'824ull) >> arraySize;  // 1GiB by default
 
   int numberOfKernels;
-  cmdl("number-of-kernels", 21) >> numberOfKernels;  // 21 kernels in total by default: 0th kernel, 1st kernel, ..., 20th kernel.
+  cmdl("number-of-kernels", 22) >> numberOfKernels;  // 22 kernels in total by default: 1th kernel, 2nd kernel, ..., 22th kernel.
 
   int prefetchCycleLength;
-  cmdl("prefetch-cycle-length", 4) >> prefetchCycleLength;  // Prefetch the 5th, 9th, 13th, ... kernels by default
+  cmdl("prefetch-cycle-length", 4) >> prefetchCycleLength;  // Prefetch the 6th, 10th,..., 22nd kernels by default
 
   runOptimizedStreamWithNvlink(arraySize, numberOfKernels, prefetchCycleLength);
 
