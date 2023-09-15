@@ -12,7 +12,8 @@ SET(CUDA_SEPARABLE_COMPILATION ON)
 
 enable_language(CXX CUDA)
 
-find_package(CUDA)
+find_package(CUDA REQUIRED)
+find_package(Z3 REQUIRED)
 
 add_subdirectory(utilities)
 add_subdirectory(profiling)
