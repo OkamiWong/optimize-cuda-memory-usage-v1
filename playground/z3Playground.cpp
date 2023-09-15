@@ -54,7 +54,12 @@ void longestPathExample() {
   }
 }
 
+void chainOfStreamKernelsExample() {
+
+}
+
 int main() {
   longestPathExample();
+  chainOfStreamKernelsExample();
   return 0;
 }
