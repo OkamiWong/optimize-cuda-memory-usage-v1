@@ -7,6 +7,15 @@
 #include <string>
 #include <vector>
 
+void ite_example2() {
+  std::cout << "if-then-else example2\n";
+  z3::context c;
+  z3::expr b = c.bool_const("b");
+  z3::expr x = c.int_const("x");
+  z3::expr y = c.int_const("y");
+  std::cout << (z3::ite(b, x, y) > 0) << "\n";
+}
+
 void longestPathExample() {
   // Adjacency matrix
   std::vector<std::vector<double>> dis = {
@@ -365,6 +374,7 @@ void chainOfStreamKernelsExample() {
 
 int main() {
   // longestPathExample();
-  chainOfStreamKernelsExample();
+  // chainOfStreamKernelsExample();
+  ite_example2();
   return 0;
 }
