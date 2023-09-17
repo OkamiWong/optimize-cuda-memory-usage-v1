@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-void ite_example2() {
+void iteExample2() {
   std::cout << "if-then-else example2\n";
   z3::context c;
   z3::expr b = c.bool_const("b");
@@ -373,8 +373,8 @@ void chainOfStreamKernelsExample() {
 }
 
 int main() {
+  // iteExample2();
   // longestPathExample();
-  // chainOfStreamKernelsExample();
-  ite_example2();
+  chainOfStreamKernelsExample();
   return 0;
 }
