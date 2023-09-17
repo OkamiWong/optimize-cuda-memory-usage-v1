@@ -63,10 +63,10 @@ struct OptimizationInput {
   double prefetchingBandwidth, offloadingBandwidth;
 };
 
-constexpr size_t ARRAY_SIZE = 1'073'741'824ull;  // 1GiB
-constexpr int NUMBER_OF_KERNELS = 22;
+constexpr size_t ARRAY_SIZE = 1000000ull;
+constexpr int NUMBER_OF_KERNELS = 4;
 constexpr int EXPECTED_PREFETCH_START_KERNEL = 1;
-constexpr int EXPECTED_PREFETCH_CYCLE = 4;
+constexpr int EXPECTED_PREFETCH_CYCLE = 3;
 constexpr double KERNEL_RUNNING_TIME = 0.002;
 
 OptimizationInput getChainOfStreamKernelsExampleOptimizationInput() {
@@ -85,7 +85,7 @@ OptimizationInput getChainOfStreamKernelsExampleOptimizationInput() {
     input.kernelDataDependencies.push_back({});
     for (int j = i * 3; j < (i + 1) * 3; j++) {
       input.kernelDataDependencies[i].push_back(j);
-      if (i % EXPECTED_PREFETCH_CYCLE == EXPECTED_PREFETCH_START_KERNEL) {
+      if (i % EXPECTED_PREFETCH_CYCLE == EXPECTED_PREFETCH_START_KERNEL && i != EXPECTED_PREFETCH_START_KERNEL) {
         input.arrayInitiallyOnDevice[j] = false;
       }
     }
@@ -327,13 +327,39 @@ void chainOfStreamKernelsExample() {
 
   // Objective
   auto handle = optimize.minimize(peakMemoryUsage);
+  auto handle2 = optimize.minimize(z[getKernelVertexIndex(numberOfKernels - 1)]);
 
   // Solve
   if (optimize.check() == z3::check_result::sat) {
-    std::cout << optimize.get_model() << std::endl;
-    std::cout << optimize.lower(handle) << std::endl;
+    auto model = optimize.get_model();
+
+    std::cout << "Optimal peak memory usage (Byte): " << optimize.lower(handle) << std::endl;
+
+    std::cout << "Total running time (s): " << optimize.lower(handle2).get_decimal_string(6) << std::endl;
+
+    std::cout << "---\nInitial data distribution:\n";
+    for (int i = 0; i < numberOfArrays; i++) {
+      fmt::print("I_{{{}}} = {}\n", i, static_cast<int>(input.arrayInitiallyOnDevice[i]));
+    }
+
+    std::cout << "---\nSolution:\n";
+
+    for (int i = 0; i < numberOfKernels; i++) {
+      for (int j = 0; j < numberOfArrays; j++) {
+        fmt::print("p_{{{}, {}}} = {}, ", i, j, model.eval(p[i][j]).get_numeral_int());
+      }
+      fmt::print("\n");
+    }
+    for (int i = 0; i < numberOfKernels; i++) {
+      for (int j = 0; j < numberOfArrays; j++) {
+        for (int k = 0; k < numberOfKernels; k++) {
+          fmt::print("o_{{{}, {}, {}}} = {}, ", i, j, k, model.eval(o[i][j][k]).get_numeral_int());
+        }
+        fmt::print("\n");
+      }
+    }
   } else {
-    std::cout << "No solution found" << std::endl;
+    std::cout << "No solution found." << std::endl;
   }
 }
 
