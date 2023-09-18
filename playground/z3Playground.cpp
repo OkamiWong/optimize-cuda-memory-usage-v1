@@ -242,7 +242,7 @@ void chainOfStreamKernelsExample() {
   // Add edges between kernel and kernel start vertices
   for (int i = 0; i < numberOfKernels; i++) {
     e[getKernelStartVertexIndex(i)][getKernelVertexIndex(i)] = oneIntConstantExpr;
-    if (i > 1) {
+    if (i > 0) {
       e[getKernelVertexIndex(i - 1)][getKernelStartVertexIndex(i)] = oneIntConstantExpr;
     }
   }
