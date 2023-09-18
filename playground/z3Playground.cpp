@@ -135,6 +135,8 @@ void chainOfStreamKernelsExample() {
   z3::context context;
   z3::optimize optimize(context);
 
+  const auto trueBoolConstantExpr = context.bool_val(true);
+  const auto falseBoolConstantExpr = context.bool_val(false);
   const auto oneIntConstantExpr = context.int_val(1);
   const auto zeroIntConstantExpr = context.int_val(0);
   const auto zeroRealConstantExpr = context.real_val(0);
@@ -145,9 +147,7 @@ void chainOfStreamKernelsExample() {
   for (int i = 0; i < numberOfKernels; i++) {
     p.push_back({});
     for (int j = 0; j < numberOfArrays; j++) {
-      p[i].push_back(context.int_const(fmt::format("p_{{{},{}}}", i, j).c_str()));
-      optimize.add(p[i][j] >= 0);
-      optimize.add(p[i][j] <= 1);
+      p[i].push_back(context.bool_const(fmt::format("p_{{{},{}}}", i, j).c_str()));
     }
   }
 
@@ -159,12 +159,10 @@ void chainOfStreamKernelsExample() {
       o[i].push_back({});
       for (int k = 0; k < numberOfKernels; k++) {
         if (k <= i) {
-          o[i][j].push_back(zeroIntConstantExpr);
+          o[i][j].push_back(falseBoolConstantExpr);
         } else {
-          o[i][j].push_back(context.int_const(fmt::format("o_{{{},{},{}}}", i, j, k).c_str()));
-          optimize.add(o[i][j][k] >= 0);
-          optimize.add(o[i][j][k] <= 1);
-          optimize.add(o[i][j][k] + p[i][j] <= 1);
+          o[i][j].push_back(context.bool_const(fmt::format("o_{{{},{},{}}}", i, j, k).c_str()));
+          optimize.add(!(o[i][j][k] && p[i][j]));
         }
       }
     }
@@ -175,15 +173,14 @@ void chainOfStreamKernelsExample() {
   for (int i = 0; i < numberOfKernels; i++) {
     x.push_back({});
     for (int j = 0; j < numberOfArrays; j++) {
-      x[i].push_back(context.int_const(fmt::format("x_{{{},{}}}", i, j).c_str()));
       auto rhs = context.int_val(input.arrayInitiallyOnDevice[j]);
       for (int u = 0; u <= i; u++) {
-        rhs = rhs + p[u][j];
+        rhs = rhs + z3::ite(p[u][j], oneIntConstantExpr, zeroIntConstantExpr);
         for (int v = u + 1; v <= i; v++) {
-          rhs = rhs - o[u][j][v];
+          rhs = rhs - z3::ite(o[u][j][v], oneIntConstantExpr, zeroIntConstantExpr);
         }
       }
-      optimize.add(x[i][j] == rhs);
+      x[i].push_back(rhs);
       optimize.add(x[i][j] >= 0);
       optimize.add(x[i][j] <= 1);
     }
@@ -194,15 +191,14 @@ void chainOfStreamKernelsExample() {
   for (int i = 0; i < numberOfKernels; i++) {
     y.push_back({});
     for (int j = 0; j < numberOfArrays; j++) {
-      y[i].push_back(context.int_const(fmt::format("y_{{{},{}}}", i, j).c_str()));
       auto rhs = context.int_val(input.arrayInitiallyOnDevice[j]);
       for (int u = 0; u <= i; u++) {
-        rhs = rhs + p[u][j];
+        rhs = rhs + z3::ite(p[u][j], oneIntConstantExpr, zeroIntConstantExpr);
         for (int v = u + 1; v < numberOfKernels; v++) {
-          rhs = rhs - o[u][j][v];
+          rhs = rhs - z3::ite(o[u][j][v], oneIntConstantExpr, zeroIntConstantExpr);
         }
       }
-      optimize.add(y[i][j] == rhs);
+      y[i].push_back(rhs);
       optimize.add(y[i][j] >= 0);
       optimize.add(y[i][j] <= 1);
     }
@@ -211,7 +207,7 @@ void chainOfStreamKernelsExample() {
   // Add weights for kernel vertices
   std::vector<z3::expr> w(numberOfVertices, zeroRealConstantExpr);
   for (int i = 0; i < numberOfKernels; i++) {
-    w[getKernelStartVertexIndex(i)] = context.real_val(0);
+    w[getKernelStartVertexIndex(i)] = zeroRealConstantExpr;
     w[getKernelVertexIndex(i)] = context.real_val(fmt::format("{:.6f}", input.kernelRunningTimes[i]).c_str());
   }
 
@@ -227,11 +223,11 @@ void chainOfStreamKernelsExample() {
   // Add weights for data movements
   for (int i = 0; i < numberOfKernels; i++) {
     for (int j = 0; j < numberOfArrays; j++) {
-      w[getPrefetchVertexIndex(i, j)] = p[i][j] * arrayPrefetchingTimes[j];
+      w[getPrefetchVertexIndex(i, j)] = z3::ite(p[i][j], arrayPrefetchingTimes[j], zeroRealConstantExpr);
 
-      auto rhs = o[i][j][0];
-      for (int k = 1; k < numberOfKernels; k++) {
-        rhs = rhs + o[i][j][k];
+      auto rhs = zeroIntConstantExpr;
+      for (int k = 0; k < numberOfKernels; k++) {
+        rhs = rhs + z3::ite(o[i][j][k], oneIntConstantExpr, zeroIntConstantExpr);
       }
       optimize.add(rhs <= 1);
 
@@ -240,13 +236,13 @@ void chainOfStreamKernelsExample() {
   }
 
   // Add edges
-  std::vector<std::vector<z3::expr>> e(numberOfVertices, std::vector<z3::expr>(numberOfVertices, zeroIntConstantExpr));
+  std::vector<std::vector<z3::expr>> e(numberOfVertices, std::vector<z3::expr>(numberOfVertices, falseBoolConstantExpr));
 
   // Add edges between kernel and kernel start vertices
   for (int i = 0; i < numberOfKernels; i++) {
-    e[getKernelStartVertexIndex(i)][getKernelVertexIndex(i)] = oneIntConstantExpr;
+    e[getKernelStartVertexIndex(i)][getKernelVertexIndex(i)] = trueBoolConstantExpr;
     if (i > 0) {
-      e[getKernelVertexIndex(i - 1)][getKernelStartVertexIndex(i)] = oneIntConstantExpr;
+      e[getKernelVertexIndex(i - 1)][getKernelStartVertexIndex(i)] = trueBoolConstantExpr;
     }
   }
 
@@ -257,7 +253,7 @@ void chainOfStreamKernelsExample() {
       for (int k = i; k < numberOfKernels; k++) {
         for (auto &arr : input.kernelDataDependencies[k]) {
           if (arr == j) {
-            e[getPrefetchVertexIndex(i, j)][getKernelVertexIndex(k)] = oneIntConstantExpr;
+            e[getPrefetchVertexIndex(i, j)][getKernelVertexIndex(k)] = trueBoolConstantExpr;
             break;
           }
         }
@@ -270,10 +266,10 @@ void chainOfStreamKernelsExample() {
     for (int j = 0; j < numberOfArrays; j++) {
       if (j == 0) {
         if (i != 0) {
-          e[getPrefetchVertexIndex(i - 1, numberOfArrays - 1)][getPrefetchVertexIndex(i, j)] = oneIntConstantExpr;
+          e[getPrefetchVertexIndex(i - 1, numberOfArrays - 1)][getPrefetchVertexIndex(i, j)] = trueBoolConstantExpr;
         }
       } else {
-        e[getPrefetchVertexIndex(i, j - 1)][getPrefetchVertexIndex(i, j)] = oneIntConstantExpr;
+        e[getPrefetchVertexIndex(i, j - 1)][getPrefetchVertexIndex(i, j)] = trueBoolConstantExpr;
       }
     }
   }
@@ -282,8 +278,8 @@ void chainOfStreamKernelsExample() {
   for (int i = 0; i < numberOfKernels; i++) {
     for (int j = 0; j < numberOfArrays; j++) {
       auto rhs = o[i][j][0];
-      for (int k = 0; k < numberOfKernels; k++) {
-        rhs = rhs + o[i][j][k];
+      for (int k = 1; k < numberOfKernels; k++) {
+        rhs = rhs || o[i][j][k];
       }
 
       e[getKernelStartVertexIndex(i)][getOffloadVertexIndex(i, j)] = rhs;
@@ -298,10 +294,10 @@ void chainOfStreamKernelsExample() {
     for (int j = 0; j < numberOfArrays; j++) {
       if (j == 0) {
         if (i != 0) {
-          e[getOffloadVertexIndex(i - 1, numberOfArrays - 1)][getOffloadVertexIndex(i, j)] = oneIntConstantExpr;
+          e[getOffloadVertexIndex(i - 1, numberOfArrays - 1)][getOffloadVertexIndex(i, j)] = trueBoolConstantExpr;
         }
       } else {
-        e[getOffloadVertexIndex(i, j - 1)][getOffloadVertexIndex(i, j)] = oneIntConstantExpr;
+        e[getOffloadVertexIndex(i, j - 1)][getOffloadVertexIndex(i, j)] = trueBoolConstantExpr;
       }
     }
   }
@@ -316,7 +312,7 @@ void chainOfStreamKernelsExample() {
 
   for (int u = 1; u < numberOfVertices; u++) {
     for (int v = 0; v < numberOfVertices; v++) {
-      optimize.add(z[u] >= z[v] + w[u] + (1 - e[v][u]) * (minusInfinityRealConstantExpr));
+      optimize.add(z[u] >= z[v] + w[u] + z3::ite(e[v][u], zeroRealConstantExpr, minusInfinityRealConstantExpr));
     }
   }
 
@@ -364,7 +360,7 @@ void chainOfStreamKernelsExample() {
 
     for (int i = 0; i < numberOfKernels; i++) {
       for (int j = 0; j < numberOfArrays; j++) {
-        fmt::print("p_{{{}, {}}} = {}, ", i, j, model.eval(p[i][j]).get_numeral_int());
+        fmt::print("p_{{{}, {}}} = {}, ", i, j, model.eval(p[i][j]).is_true());
         fmt::print("\n");
       }
     }
@@ -372,7 +368,7 @@ void chainOfStreamKernelsExample() {
     for (int i = 0; i < numberOfKernels; i++) {
       for (int j = 0; j < numberOfArrays; j++) {
         for (int k = 0; k < numberOfKernels; k++) {
-          fmt::print("o_{{{}, {}, {}}} = {}, ", i, j, k, model.eval(o[i][j][k]).get_numeral_int());
+          fmt::print("o_{{{}, {}, {}}} = {}, ", i, j, k, model.eval(o[i][j][k]).is_true());
         }
         fmt::print("\n");
       }
