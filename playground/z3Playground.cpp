@@ -82,18 +82,18 @@ OptimizationInput getChainOfStreamKernelsExampleOptimizationInput() {
   OptimizationInput input;
 
   for (int i = 0; i < NUMBER_OF_KERNELS; i++) {
-    for (int j = 0; j < 3; j++) {
-      input.arrayInitiallyOnDevice.push_back(true);
-      input.arraySizes.push_back(ARRAY_SIZE);
-    }
-  }
-
-  for (int i = 0; i < NUMBER_OF_KERNELS; i++) {
     input.kernelExecutionSequence.push_back(i);
     input.kernelRunningTimes.push_back(KERNEL_RUNNING_TIME);
     input.kernelDataDependencies.push_back({});
     for (int j = i * 3; j < (i + 1) * 3; j++) {
       input.kernelDataDependencies[i].push_back(j);
+    }
+  }
+
+  for (int i = 0; i < NUMBER_OF_KERNELS; i++) {
+    for (int j = i * 3; j < (i + 1) * 3; j++) {
+      input.arrayInitiallyOnDevice.push_back(true);
+      input.arraySizes.push_back(ARRAY_SIZE);
       if (i % EXPECTED_PREFETCH_CYCLE == EXPECTED_PREFETCH_START_KERNEL && i != EXPECTED_PREFETCH_START_KERNEL) {
         input.arrayInitiallyOnDevice[j] = false;
       }
