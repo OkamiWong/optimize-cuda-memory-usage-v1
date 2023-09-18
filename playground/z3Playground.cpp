@@ -72,7 +72,7 @@ struct OptimizationInput {
 
   std::vector<size_t> arraySizes;
   std::vector<bool> arrayInitiallyOnDevice;
-  std::vector<int> applicationInputArrays, applicationOutputArrays;
+  std::set<int> applicationInputArrays, applicationOutputArrays;
   std::vector<std::set<int>> kernelInputArrays, kernelOutputArrays;
 
   double prefetchingBandwidth, offloadingBandwidth;
@@ -92,8 +92,8 @@ OptimizationInput getChainOfStreamKernelsExampleOptimizationInput() {
     input.kernelRunningTimes.push_back(KERNEL_RUNNING_TIME);
     input.kernelInputArrays.push_back({i * 3, i * 3 + 1});
     input.kernelOutputArrays.push_back({i * 3 + 2});
-    input.applicationInputArrays.insert(input.applicationInputArrays.end(), {i * 3, i * 3 + 1});
-    input.applicationOutputArrays.insert(input.applicationOutputArrays.end(), {i * 3 + 2});
+    input.applicationInputArrays.insert({i * 3, i * 3 + 1});
+    input.applicationOutputArrays.insert({i * 3 + 2});
   }
 
   for (int i = 0; i < NUMBER_OF_KERNELS; i++) {
