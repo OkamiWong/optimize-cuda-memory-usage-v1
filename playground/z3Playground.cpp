@@ -115,6 +115,7 @@ OptimizationInput getChainOfStreamKernelsExampleOptimizationInput() {
 }
 
 void chainOfStreamKernelsExample() {
+  // Preprocess the input
   auto input = getChainOfStreamKernelsExampleOptimizationInput();
 
   const int numberOfKernels = input.kernelExecutionSequence.size();
@@ -138,6 +139,27 @@ void chainOfStreamKernelsExample() {
     return numberOfKernels * 2 + numberOfKernels * numberOfArrays + i * numberOfArrays + j;
   };
 
+  std::vector<int> arrayFirstWritingKernel(numberOfArrays, 0x7fffffff);
+  for (auto arr : input.applicationInputArrays) {
+    arrayFirstWritingKernel[arr] = -1;
+  }
+  for (int i = 0; i < numberOfKernels; i++) {
+    for (auto arr : input.kernelOutputArrays[i]) {
+      arrayFirstWritingKernel[arr] = std::min(arrayFirstWritingKernel[arr], i);
+    }
+  }
+
+  std::vector<int> arrayLastReadingKernel(numberOfArrays, 0);
+  for (auto arr : input.applicationOutputArrays) {
+    arrayLastReadingKernel[arr] = numberOfKernels;
+  }
+  for (int i = 0; i < numberOfKernels; i++) {
+    for (auto arr : input.kernelInputArrays[i]) {
+      arrayLastReadingKernel[arr] = std::max(arrayLastReadingKernel[arr], i);
+    }
+  }
+
+  // Formulating the optimization problem
   z3::context context;
   z3::optimize optimize(context);
 
@@ -226,18 +248,33 @@ void chainOfStreamKernelsExample() {
     arrayOffloadingTimes.push_back(context.real_val(fmt::format("{:.6f}", offloadingTime).c_str()));
   }
 
-  // Add weights for data movements
+  // Add weights for prefetches
   for (int i = 0; i < numberOfKernels; i++) {
     for (int j = 0; j < numberOfArrays; j++) {
-      w[getPrefetchVertexIndex(i, j)] = z3::ite(p[i][j], arrayPrefetchingTimes[j], zeroRealConstantExpr);
-
-      auto rhs = zeroIntConstantExpr;
-      for (int k = 0; k < numberOfKernels; k++) {
-        rhs = rhs + z3::ite(o[i][j][k], oneIntConstantExpr, zeroIntConstantExpr);
+      if (input.kernelOutputArrays[i].count(j) > 0 && i == arrayFirstWritingKernel[j]) {
+        // Replace prefetch with allocation
+        w[getPrefetchVertexIndex(i, j)] = zeroRealConstantExpr;
+      } else {
+        w[getPrefetchVertexIndex(i, j)] = z3::ite(p[i][j], arrayPrefetchingTimes[j], zeroRealConstantExpr);
       }
-      optimize.add(rhs <= 1);
+    }
+  }
 
-      w[getOffloadVertexIndex(i, j)] = rhs * arrayOffloadingTimes[j];
+  // Add weights for offloadings
+  for (int i = 0; i < numberOfKernels; i++) {
+    for (int j = 0; j < numberOfArrays; j++) {
+      if (i > 0 && input.kernelInputArrays[i - 1].count(j) > 0 && arrayLastReadingKernel[j] == i - 1) {
+        // Replace offloading with deallocation
+        w[getOffloadVertexIndex(i, j)] = zeroRealConstantExpr;
+      } else {
+        auto rhs = zeroIntConstantExpr;
+        for (int k = 0; k < numberOfKernels; k++) {
+          rhs = rhs + z3::ite(o[i][j][k], oneIntConstantExpr, zeroIntConstantExpr);
+        }
+        optimize.add(rhs <= 1);
+
+        w[getOffloadVertexIndex(i, j)] = rhs * arrayOffloadingTimes[j];
+      }
     }
   }
 
