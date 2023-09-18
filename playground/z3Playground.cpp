@@ -309,13 +309,14 @@ void chainOfStreamKernelsExample() {
   // Constraints for the longest path
   std::vector<z3::expr> z(numberOfVertices, zeroRealConstantExpr);
 
-  // z[0] corresponds with the start of the first kernel.
-  z[0] = zeroRealConstantExpr;
-
+  z[getKernelStartVertexIndex(0)] = zeroRealConstantExpr;
   for (int u = 1; u < numberOfVertices; u++) {
     z[u] = context.real_const(fmt::format("z_{{{}}}", u).c_str());
+  }
+
+  for (int u = 1; u < numberOfVertices; u++) {
     for (int v = 0; v < numberOfVertices; v++) {
-      optimize.add(z[u] >= z[v] + w[u] + (1 - e[v][u]) * (-infinityRealConstantExpr));
+      optimize.add(z[u] >= z[v] + w[u] + (1 - e[v][u]) * (minusInfinityRealConstantExpr));
     }
   }
 
