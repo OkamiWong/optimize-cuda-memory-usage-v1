@@ -17,11 +17,14 @@ void iteExample2() {
 }
 
 void longestPathExample() {
+  constexpr int S = 0;
+  constexpr int T = 2;
   // Adjacency matrix
   std::vector<std::vector<double>> dis = {
-    {0, 1, 3},
-    {0, 0, 3},
-    {0, 0, 0}
+    {0, 1, 3, 0},
+    {0, 0, 3, 0},
+    {0, 0, 0, 0},
+    {0, 0, 1, 0},
   };
 
   const int n = dis.size();
@@ -32,7 +35,7 @@ void longestPathExample() {
   std::vector<z3::expr> z;
 
   for (int i = 0; i < n; i++) {
-    if (i == 0) {
+    if (i == S) {
       z.push_back(context.real_val(0));
     } else {
       z.push_back(context.real_const(fmt::format("z[{}]", i).c_str()));
@@ -53,7 +56,7 @@ void longestPathExample() {
 
   std::cout << optimize << std::endl;
 
-  auto handle = optimize.minimize(z[n - 1]);
+  auto handle = optimize.minimize(z[T]);
   if (optimize.check() == z3::check_result::sat) {
     std::cout << optimize.lower(handle) << std::endl;
   } else {
