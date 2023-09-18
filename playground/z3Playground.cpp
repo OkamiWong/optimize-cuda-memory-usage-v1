@@ -376,16 +376,16 @@ void chainOfStreamKernelsExample() {
       }
     }
 
-    for (int i = 0; i < numberOfKernels; i++) {
-      fmt::print("z[{} Start] = {}; z[{}] = {}\n", i, model.eval(z[getKernelStartVertexIndex(i)]).get_decimal_string(6), i, model.eval(z[getKernelVertexIndex(i)]).get_decimal_string(6));
-    }
+    // for (int i = 0; i < numberOfKernels; i++) {
+    //   fmt::print("z[{} Start] = {}; z[{}] = {}\n", i, model.eval(z[getKernelStartVertexIndex(i)]).get_decimal_string(6), i, model.eval(z[getKernelVertexIndex(i)]).get_decimal_string(6));
+    // }
 
-    auto printZPrefetch = [&](int i, int j) {
-      fmt::print("z[P_{{{}, {}}}] = {}\n", i, j, model.eval(z[getPrefetchVertexIndex(i, j)]).get_decimal_string(6));
-    };
-    printZPrefetch(0, 0);
-    printZPrefetch(0, 1);
-    printZPrefetch(0, 2);
+    // auto printZPrefetch = [&](int i, int j) {
+    //   fmt::print("z[P_{{{}, {}}}] = {}\n", i, j, model.eval(z[getPrefetchVertexIndex(i, j)]).get_decimal_string(6));
+    // };
+    // printZPrefetch(0, 0);
+    // printZPrefetch(0, 1);
+    // printZPrefetch(0, 2);
   } else {
     std::cout << "No solution found." << std::endl;
   }
