@@ -2,8 +2,10 @@
 #include <z3++.h>
 
 #include <cmath>
+#include <initializer_list>
 #include <iostream>
 #include <limits>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -70,14 +72,14 @@ struct OptimizationInput {
 
   std::vector<size_t> arraySizes;
   std::vector<bool> arrayInitiallyOnDevice;
-  std::vector<std::vector<int>> kernelDataDependencies;
+  std::vector<int> applicationInputArrays, applicationOutputArrays;
+  std::vector<std::set<int>> kernelInputArrays, kernelOutputArrays;
 
   double prefetchingBandwidth, offloadingBandwidth;
 };
 
 constexpr int NUMBER_OF_KERNELS = 4;
-constexpr int EXPECTED_PREFETCH_START_KERNEL = 1;
-constexpr int EXPECTED_PREFETCH_CYCLE = 2;
+constexpr std::initializer_list<int> KERNELS_TO_PREFETCH = {3};
 constexpr double KERNEL_RUNNING_TIME = 1;
 constexpr double CONNECTION_BANDWIDTH = 281.0 * 1e9;
 constexpr size_t ARRAY_SIZE = CONNECTION_BANDWIDTH * KERNEL_RUNNING_TIME / 3.0 * 2.0;
@@ -88,19 +90,22 @@ OptimizationInput getChainOfStreamKernelsExampleOptimizationInput() {
   for (int i = 0; i < NUMBER_OF_KERNELS; i++) {
     input.kernelExecutionSequence.push_back(i);
     input.kernelRunningTimes.push_back(KERNEL_RUNNING_TIME);
-    input.kernelDataDependencies.push_back({});
-    for (int j = i * 3; j < (i + 1) * 3; j++) {
-      input.kernelDataDependencies[i].push_back(j);
-    }
+    input.kernelInputArrays.push_back({i * 3, i * 3 + 1});
+    input.kernelOutputArrays.push_back({i * 3 + 2});
+    input.applicationInputArrays.insert(input.applicationInputArrays.end(), {i * 3, i * 3 + 1});
+    input.applicationOutputArrays.insert(input.applicationOutputArrays.end(), {i * 3 + 2});
   }
 
   for (int i = 0; i < NUMBER_OF_KERNELS; i++) {
     for (int j = i * 3; j < (i + 1) * 3; j++) {
       input.arrayInitiallyOnDevice.push_back(true);
       input.arraySizes.push_back(ARRAY_SIZE);
-      if (i % EXPECTED_PREFETCH_CYCLE == EXPECTED_PREFETCH_START_KERNEL && i != EXPECTED_PREFETCH_START_KERNEL) {
-        input.arrayInitiallyOnDevice[j] = false;
-      }
+    }
+  }
+
+  for (auto i : KERNELS_TO_PREFETCH) {
+    for (int j = i * 3; j < (i + 1) * 3; j++) {
+      input.arrayInitiallyOnDevice[j] = false;
     }
   }
 
@@ -252,11 +257,9 @@ void chainOfStreamKernelsExample() {
     for (int j = 0; j < numberOfArrays; j++) {
       e[getKernelStartVertexIndex(i)][getPrefetchVertexIndex(i, j)] = p[i][j];
       for (int k = i; k < numberOfKernels; k++) {
-        for (auto &arr : input.kernelDataDependencies[k]) {
-          if (arr == j) {
-            e[getPrefetchVertexIndex(i, j)][getKernelVertexIndex(k)] = trueBoolConstantExpr;
-            break;
-          }
+        if (input.kernelInputArrays[k].count(j) != 0 || input.kernelOutputArrays[k].count(j) != 0) {
+          e[getPrefetchVertexIndex(i, j)][getKernelVertexIndex(k)] = trueBoolConstantExpr;
+          break;
         }
       }
     }
@@ -321,7 +324,10 @@ void chainOfStreamKernelsExample() {
 
   // Constraints for meeting the data dependencies of each kernel
   for (int i = 0; i < numberOfKernels; i++) {
-    for (auto &arr : input.kernelDataDependencies[i]) {
+    for (auto &arr : input.kernelInputArrays[i]) {
+      optimize.add(y[i][arr] == 1);
+    }
+    for (auto &arr : input.kernelOutputArrays[i]) {
       optimize.add(y[i][arr] == 1);
     }
   }
