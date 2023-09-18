@@ -340,25 +340,27 @@ void chainOfStreamKernelsExample() {
   }
 
   // Objective
-  auto handle = optimize.minimize(peakMemoryUsage);
-  auto handle2 = optimize.minimize(z[getKernelVertexIndex(numberOfKernels - 1)]);
+  auto objective1 = optimize.minimize(peakMemoryUsage);
+  auto objective2 = optimize.minimize(z[getKernelVertexIndex(numberOfKernels - 1)]);
 
   // Solve
   if (optimize.check() == z3::check_result::sat) {
     auto model = optimize.get_model();
-    auto optimizedPeakMemoryUsage = optimize.lower(handle).get_numeral_int64();
+    auto optimizedPeakMemoryUsage = optimize.lower(objective1).get_numeral_int64();
+    auto totalRunningTime = optimize.lower(objective2).as_double();
 
-    std::cout << "Optimal peak memory usage (Byte): " << optimizedPeakMemoryUsage << std::endl;
+    fmt::print("Optimal peak memory usage (Byte): {}\n", optimizedPeakMemoryUsage);
     fmt::print("Optimized peak memory usage / original: {:.6f}%\n", static_cast<double>(optimizedPeakMemoryUsage) / (NUMBER_OF_KERNELS * ARRAY_SIZE * 3.0) * 100.0);
 
-    std::cout << "Total running time (s): " << optimize.lower(handle2).get_decimal_string(6) << std::endl;
+    fmt::print("Total running time (s): {:.6f}\n", totalRunningTime);
+    fmt::print("Total running time / original: {:.6f}%\n", totalRunningTime / (NUMBER_OF_KERNELS * KERNEL_RUNNING_TIME) * 100.0);
 
-    std::cout << "---\nInitial data distribution:\n";
+    fmt::print("---\nInitial data distribution:\n");
     for (int i = 0; i < numberOfArrays; i++) {
       fmt::print("I_{{{}}} = {}\n", i, static_cast<int>(input.arrayInitiallyOnDevice[i]));
     }
 
-    std::cout << "---\nSolution:\n";
+    fmt::print("---\nSolution:\n");
 
     for (int i = 0; i < numberOfKernels; i++) {
       for (int j = 0; j < numberOfArrays; j++) {
@@ -387,7 +389,7 @@ void chainOfStreamKernelsExample() {
     // printZPrefetch(0, 1);
     // printZPrefetch(0, 2);
   } else {
-    std::cout << "No solution found." << std::endl;
+    fmt::print("No solution found.\n");
   }
 }
 
