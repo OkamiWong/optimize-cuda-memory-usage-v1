@@ -370,6 +370,9 @@ void chainOfStreamKernelsExample() {
         fmt::print("\n");
       }
     }
+    for (int i = 0; i < numberOfKernels; i++) {
+      fmt::print("z[{} Start] = {}; z[{}] = {}\n", i, model.eval(z[getKernelStartVertexIndex(i)]).get_decimal_string(6), i, model.eval(z[getKernelVertexIndex(i)]).get_decimal_string(6));
+    }
   } else {
     std::cout << "No solution found." << std::endl;
   }
