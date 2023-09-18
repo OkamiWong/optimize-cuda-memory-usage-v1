@@ -101,8 +101,14 @@ struct TwoStepIntegerProgrammingStrategy {
 
     for (int i = 0; i < NUMBER_OF_KERNELS; i++) {
       for (int j = i * 3; j < (i + 1) * 3; j++) {
-        secondStepInput.arrayInitiallyOnDevice.push_back(true);
         secondStepInput.arraySizes.push_back(ARRAY_SIZE);
+        if (j == i * 3 + 2) {
+          // Output
+          secondStepInput.arrayInitiallyOnDevice.push_back(false);
+        } else {
+          // Input
+          secondStepInput.arrayInitiallyOnDevice.push_back(true);
+        }
       }
     }
 
@@ -388,7 +394,7 @@ struct TwoStepIntegerProgrammingStrategy {
     optimize->add(z[getKernelVertexIndex(numberOfKernels - 1)] <= context->real_val(fmt::format("{:.6f}", NUMBER_OF_KERNELS * KERNEL_RUNNING_TIME * 1.1).c_str()));
   }
 
-  void addKernelDataDependencyConstraints(const SecondStepInput &secondStepInput){
+  void addKernelDataDependencyConstraints(const SecondStepInput &secondStepInput) {
     for (int i = 0; i < numberOfKernels; i++) {
       for (auto &arr : secondStepInput.kernelInputArrays[i]) {
         optimize->add(y[i][arr] == 1);
@@ -399,7 +405,7 @@ struct TwoStepIntegerProgrammingStrategy {
     }
   }
 
-    void solveSecondStep(const SecondStepInput &secondStepInput) {
+  void solveSecondStep(const SecondStepInput &secondStepInput) {
     this->preprocessSecondStepInput(secondStepInput);
 
     this->initializeZ3();
