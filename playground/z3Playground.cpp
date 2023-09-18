@@ -73,7 +73,7 @@ struct TwoStepIntegerProgrammingStrategy {
   static constexpr std::initializer_list<int> KERNELS_TO_PREFETCH = {3};
   static constexpr double KERNEL_RUNNING_TIME = 1;
   static constexpr double CONNECTION_BANDWIDTH = 281.0 * 1e9;
-  static constexpr size_t ARRAY_SIZE = CONNECTION_BANDWIDTH * KERNEL_RUNNING_TIME / 3.0 * 2.0;
+  static constexpr size_t ARRAY_SIZE = CONNECTION_BANDWIDTH * KERNEL_RUNNING_TIME / 2.0 * 2.0;
 
   struct SecondStepInput {
     std::vector<int> kernelExecutionSequence;
