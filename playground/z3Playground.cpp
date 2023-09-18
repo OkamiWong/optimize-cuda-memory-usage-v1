@@ -72,7 +72,7 @@ struct OptimizationInput {
   double prefetchingBandwidth, offloadingBandwidth;
 };
 
-constexpr size_t ARRAY_SIZE = 1000000ull;
+constexpr size_t ARRAY_SIZE = 1ull << 30;
 constexpr int NUMBER_OF_KERNELS = 4;
 constexpr int EXPECTED_PREFETCH_START_KERNEL = 1;
 constexpr int EXPECTED_PREFETCH_CYCLE = 3;
@@ -161,7 +161,7 @@ void chainOfStreamKernelsExample() {
           o[i][j].push_back(context.int_const(fmt::format("o_{{{},{},{}}}", i, j, k).c_str()));
           optimize.add(o[i][j][k] >= 0);
           optimize.add(o[i][j][k] <= 1);
-          optimize.add(o[i][j][k] + p[i][j] <=1);
+          optimize.add(o[i][j][k] + p[i][j] <= 1);
         }
       }
     }
@@ -342,8 +342,10 @@ void chainOfStreamKernelsExample() {
   // Solve
   if (optimize.check() == z3::check_result::sat) {
     auto model = optimize.get_model();
+    auto optimizedPeakMemoryUsage = optimize.lower(handle).get_numeral_int64();
 
-    std::cout << "Optimal peak memory usage (Byte): " << optimize.lower(handle) << std::endl;
+    std::cout << "Optimal peak memory usage (Byte): " << optimizedPeakMemoryUsage << std::endl;
+    fmt::print("Optimized peak memory usage / original: {:.6f}%\n", static_cast<double>(optimizedPeakMemoryUsage) / (NUMBER_OF_KERNELS * ARRAY_SIZE * 3.0) * 100.0);
 
     std::cout << "Total running time (s): " << optimize.lower(handle2).get_decimal_string(6) << std::endl;
 
