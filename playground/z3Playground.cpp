@@ -75,11 +75,12 @@ struct OptimizationInput {
   double prefetchingBandwidth, offloadingBandwidth;
 };
 
-constexpr size_t ARRAY_SIZE = 1ull << 30;
 constexpr int NUMBER_OF_KERNELS = 4;
 constexpr int EXPECTED_PREFETCH_START_KERNEL = 1;
-constexpr int EXPECTED_PREFETCH_CYCLE = 3;
-constexpr double KERNEL_RUNNING_TIME = 0.002;
+constexpr int EXPECTED_PREFETCH_CYCLE = 2;
+constexpr double KERNEL_RUNNING_TIME = 1;
+constexpr double CONNECTION_BANDWIDTH = 281.0 * 1e9;
+constexpr size_t ARRAY_SIZE = CONNECTION_BANDWIDTH * KERNEL_RUNNING_TIME / 3.0 * 2.0;
 
 OptimizationInput getChainOfStreamKernelsExampleOptimizationInput() {
   OptimizationInput input;
@@ -103,7 +104,7 @@ OptimizationInput getChainOfStreamKernelsExampleOptimizationInput() {
     }
   }
 
-  input.prefetchingBandwidth = input.offloadingBandwidth = 281.0 * 1e9;
+  input.prefetchingBandwidth = input.offloadingBandwidth = CONNECTION_BANDWIDTH;
 
   return input;
 }
@@ -316,7 +317,7 @@ void chainOfStreamKernelsExample() {
     }
   }
 
-  optimize.add(z[getKernelVertexIndex(numberOfKernels - 1)] <= context.real_val(fmt::format("{:.6f}", NUMBER_OF_KERNELS * KERNEL_RUNNING_TIME * 10).c_str()));
+  optimize.add(z[getKernelVertexIndex(numberOfKernels - 1)] <= context.real_val(fmt::format("{:.6f}", NUMBER_OF_KERNELS * KERNEL_RUNNING_TIME * 1.1).c_str()));
 
   // Constraints for meeting the data dependencies of each kernel
   for (int i = 0; i < numberOfKernels; i++) {
