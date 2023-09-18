@@ -362,8 +362,8 @@ void chainOfStreamKernelsExample() {
     for (int i = 0; i < numberOfKernels; i++) {
       for (int j = 0; j < numberOfArrays; j++) {
         fmt::print("p_{{{}, {}}} = {}, ", i, j, model.eval(p[i][j]).get_numeral_int());
+        fmt::print("\n");
       }
-      fmt::print("\n");
     }
 
     for (int i = 0; i < numberOfKernels; i++) {
@@ -378,6 +378,13 @@ void chainOfStreamKernelsExample() {
     for (int i = 0; i < numberOfKernels; i++) {
       fmt::print("z[{} Start] = {}; z[{}] = {}\n", i, model.eval(z[getKernelStartVertexIndex(i)]).get_decimal_string(6), i, model.eval(z[getKernelVertexIndex(i)]).get_decimal_string(6));
     }
+
+    auto printZPrefetch = [&](int i, int j) {
+      fmt::print("z[P_{{{}, {}}}] = {}\n", i, j, model.eval(z[getPrefetchVertexIndex(i, j)]).get_decimal_string(6));
+    };
+    printZPrefetch(0, 0);
+    printZPrefetch(0, 1);
+    printZPrefetch(0, 2);
   } else {
     std::cout << "No solution found." << std::endl;
   }
