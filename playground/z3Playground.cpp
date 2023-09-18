@@ -138,7 +138,7 @@ void chainOfStreamKernelsExample() {
   const auto oneIntConstantExpr = context.int_val(1);
   const auto zeroIntConstantExpr = context.int_val(0);
   const auto zeroRealConstantExpr = context.real_val(0);
-  const auto infinityRealConstantExpr = context.real_val(0x7fffffff);
+  const auto minusInfinityRealConstantExpr = context.real_val(-(0x7fffffff));
 
   // Add decision variables for prefetching
   std::vector<std::vector<z3::expr>> p;
