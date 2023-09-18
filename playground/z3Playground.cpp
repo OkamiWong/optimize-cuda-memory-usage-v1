@@ -161,6 +161,7 @@ void chainOfStreamKernelsExample() {
           o[i][j].push_back(context.int_const(fmt::format("o_{{{},{},{}}}", i, j, k).c_str()));
           optimize.add(o[i][j][k] >= 0);
           optimize.add(o[i][j][k] <= 1);
+          optimize.add(o[i][j][k] + p[i][j] <=1);
         }
       }
     }
