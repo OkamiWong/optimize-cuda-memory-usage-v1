@@ -220,8 +220,12 @@ struct TwoStepIntegerProgrammingStrategy {
       x.push_back({});
       for (int j = 0; j < numberOfArrays; j++) {
         auto rhs = context->int_val(secondStepInput.arrayInitiallyOnDevice[j]);
+
         for (int u = 0; u <= i; u++) {
           rhs = rhs + z3::ite(p[u][j], context->int_val(1), context->int_val(0));
+        }
+
+        for (int u = 0; u <= i - 1; u++) {
           for (int v = u + 1; v <= i; v++) {
             rhs = rhs - z3::ite(o[u][j][v], context->int_val(1), context->int_val(0));
           }
@@ -238,12 +242,17 @@ struct TwoStepIntegerProgrammingStrategy {
       y.push_back({});
       for (int j = 0; j < numberOfArrays; j++) {
         auto rhs = context->int_val(secondStepInput.arrayInitiallyOnDevice[j]);
+
         for (int u = 0; u <= i; u++) {
           rhs = rhs + z3::ite(p[u][j], context->int_val(1), context->int_val(0));
+        }
+
+        for (int u = 0; u <= i - 1; u++) {
           for (int v = u + 1; v < numberOfKernels; v++) {
             rhs = rhs - z3::ite(o[u][j][v], context->int_val(1), context->int_val(0));
           }
         }
+
         y[i].push_back(rhs);
         optimize->add(y[i][j] >= 0);
         optimize->add(y[i][j] <= 1);
@@ -289,7 +298,7 @@ struct TwoStepIntegerProgrammingStrategy {
     // Add weights for offloadings
     for (int i = 0; i < numberOfKernels; i++) {
       for (int j = 0; j < numberOfArrays; j++) {
-        if (i > 0 && secondStepInput.kernelInputArrays[i - 1].count(j) > 0 && arrayLastReadingKernel[j] == i - 1) {
+        if (secondStepInput.kernelInputArrays[i].count(j) > 0 && arrayLastReadingKernel[j] == i) {
           // Replace offloading with deallocation
           w[getOffloadVertexIndex(i, j)] = context->real_val(0);
         } else {
@@ -353,7 +362,7 @@ struct TwoStepIntegerProgrammingStrategy {
           rhs = rhs || o[i][j][k];
         }
 
-        e[getKernelStartVertexIndex(i)][getOffloadVertexIndex(i, j)] = rhs;
+        e[getKernelVertexIndex(i)][getOffloadVertexIndex(i, j)] = rhs;
         for (int k = i + 1; k < numberOfKernels; k++) {
           e[getOffloadVertexIndex(i, j)][getKernelStartVertexIndex(k)] = o[i][j][k];
         }
