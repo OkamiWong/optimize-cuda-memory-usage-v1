@@ -5,6 +5,7 @@
 #include <initializer_list>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <memory>
 #include <set>
 #include <string>
@@ -70,7 +71,6 @@ void longestPathExample() {
 struct TwoStepIntegerProgrammingStrategy {
   // Experiment setup
   static constexpr int NUMBER_OF_KERNELS = 4;
-  static constexpr std::initializer_list<int> KERNELS_TO_PREFETCH = {3};
   static constexpr double KERNEL_RUNNING_TIME = 1;
   static constexpr double CONNECTION_BANDWIDTH = 281.0 * 1e9;
   static constexpr size_t ARRAY_SIZE = CONNECTION_BANDWIDTH * KERNEL_RUNNING_TIME / 2.0 * 2.0;
@@ -111,7 +111,7 @@ struct TwoStepIntegerProgrammingStrategy {
 
   // States of the strategy
   int numberOfKernels, numberOfArrays, numberOfVertices;
-  std::vector<int> arrayFirstWritingKernel, arrayLastReadingKernel;
+  std::map<std::pair<int, int>, bool> shouldAllocate, shouldDeallocate;
 
   int getKernelVertexIndex(int i) {
     return i * 2 + 1;
@@ -130,29 +130,39 @@ struct TwoStepIntegerProgrammingStrategy {
   }
 
   void preprocessSecondStepInput(const SecondStepInput &secondStepInput) {
-    this->numberOfKernels = secondStepInput.kernelExecutionSequence.size();
-    this->numberOfArrays = secondStepInput.arraySizes.size();
-    this->numberOfVertices = this->numberOfKernels * 2 + this->numberOfKernels * this->numberOfArrays * 2;
+    numberOfKernels = secondStepInput.kernelExecutionSequence.size();
+    numberOfArrays = secondStepInput.arraySizes.size();
+    numberOfVertices = numberOfKernels * 2 + numberOfKernels * numberOfArrays * 2;
 
-    this->arrayFirstWritingKernel.clear();
-    this->arrayFirstWritingKernel.resize(this->numberOfArrays, std::numeric_limits<int>::max());
+    shouldAllocate.clear();
+    std::vector<int> arrayFirstWritingKernel(numberOfArrays, std::numeric_limits<int>::max());
+
     for (auto arr : secondStepInput.applicationInputArrays) {
-      this->arrayFirstWritingKernel[arr] = -1;
+      arrayFirstWritingKernel[arr] = -1;
     }
-    for (int i = 0; i < this->numberOfKernels; i++) {
+
+    for (int i = 0; i < numberOfKernels; i++) {
       for (auto arr : secondStepInput.kernelOutputArrays[i]) {
-        this->arrayFirstWritingKernel[arr] = std::min(this->arrayFirstWritingKernel[arr], i);
+        if (i < arrayFirstWritingKernel[arr]) {
+          arrayFirstWritingKernel[arr] = i;
+          shouldAllocate[std::make_pair(i, arr)] = true;
+        }
       }
     }
 
-    this->arrayLastReadingKernel.clear();
-    this->arrayLastReadingKernel.resize(this->numberOfArrays, -1);
+    shouldDeallocate.clear();
+    std::vector<int> arrayLastReadingKernel(numberOfArrays, -1);
+
     for (auto arr : secondStepInput.applicationOutputArrays) {
-      arrayLastReadingKernel[arr] = this->numberOfKernels;
+      arrayLastReadingKernel[arr] = numberOfKernels;
     }
-    for (int i = 0; i < this->numberOfKernels; i++) {
+
+    for (int i = numberOfKernels - 1; i >= 0; i--) {
       for (auto arr : secondStepInput.kernelInputArrays[i]) {
-        arrayLastReadingKernel[arr] = std::max(arrayLastReadingKernel[arr], i);
+        if (i > arrayLastReadingKernel[arr]) {
+          arrayLastReadingKernel[arr] = i;
+          shouldDeallocate[std::make_pair(i, arr)] = true;
+        }
       }
     }
   }
@@ -161,8 +171,8 @@ struct TwoStepIntegerProgrammingStrategy {
   std::unique_ptr<z3::optimize> optimize;
 
   void initializeZ3() {
-    this->context = std::make_unique<z3::context>();
-    this->optimize = std::make_unique<z3::optimize>(*this->context);
+    context = std::make_unique<z3::context>();
+    optimize = std::make_unique<z3::optimize>(*context);
   }
 
   std::vector<z3::expr> initiallyAllocatedOnDevice;
@@ -182,7 +192,11 @@ struct TwoStepIntegerProgrammingStrategy {
     for (int i = 0; i < numberOfKernels; i++) {
       p.push_back({});
       for (int j = 0; j < numberOfArrays; j++) {
-        p[i].push_back(context->bool_const(fmt::format("p_{{{},{}}}", i, j).c_str()));
+        if (shouldAllocate[std::make_pair(i, j)]) {
+          p[i].push_back(context->bool_val(true));
+        } else {
+          p[i].push_back(context->bool_const(fmt::format("p_{{{},{}}}", i, j).c_str()));
+        }
       }
     }
 
@@ -192,12 +206,22 @@ struct TwoStepIntegerProgrammingStrategy {
       o.push_back({});
       for (int j = 0; j < numberOfArrays; j++) {
         o[i].push_back({});
-        for (int k = 0; k < numberOfKernels; k++) {
-          if (k <= i) {
-            o[i][j].push_back(context->bool_val(false));
-          } else {
-            o[i][j].push_back(context->bool_const(fmt::format("o_{{{},{},{}}}", i, j, k).c_str()));
-            optimize->add(!(o[i][j][k] && p[i][j]));
+        if (shouldDeallocate[std::make_pair(i, j)]) {
+          for (int k = 0; k < numberOfKernels; k++) {
+            if (k == i + 1) {
+              o[i][j].push_back(context->bool_val(true));
+            } else {
+              o[i][j].push_back(context->bool_val(false));
+            }
+          }
+        } else {
+          for (int k = 0; k < numberOfKernels; k++) {
+            if (k <= i) {
+              o[i][j].push_back(context->bool_val(false));
+            } else {
+              o[i][j].push_back(context->bool_const(fmt::format("o_{{{},{},{}}}", i, j, k).c_str()));
+              optimize->add(!(o[i][j][k] && p[i][j]));
+            }
           }
         }
       }
@@ -280,8 +304,7 @@ struct TwoStepIntegerProgrammingStrategy {
     // Add weights for prefetches
     for (int i = 0; i < numberOfKernels; i++) {
       for (int j = 0; j < numberOfArrays; j++) {
-        if (secondStepInput.kernelOutputArrays[i].count(j) > 0 && i == arrayFirstWritingKernel[j]) {
-          // Replace prefetch with allocation
+        if (shouldAllocate[std::make_pair(i, j)]) {
           w[getPrefetchVertexIndex(i, j)] = context->real_val(0);
         } else {
           w[getPrefetchVertexIndex(i, j)] = z3::ite(p[i][j], arrayPrefetchingTimes[j], context->real_val(0));
@@ -292,8 +315,7 @@ struct TwoStepIntegerProgrammingStrategy {
     // Add weights for offloadings
     for (int i = 0; i < numberOfKernels; i++) {
       for (int j = 0; j < numberOfArrays; j++) {
-        if (secondStepInput.kernelInputArrays[i].count(j) > 0 && arrayLastReadingKernel[j] == i) {
-          // Replace offloading with deallocation
+        if (shouldDeallocate[std::make_pair(i, j)]) {
           w[getOffloadVertexIndex(i, j)] = context->real_val(0);
         } else {
           auto rhs = context->int_val(0);
