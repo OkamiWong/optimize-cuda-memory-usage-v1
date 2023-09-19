@@ -472,7 +472,7 @@ struct TwoStepIntegerProgrammingStrategy {
       auto totalRunningTime = optimize->lower(objective2).as_double();
 
       fmt::print("Optimal peak memory usage (Byte): {}\n", optimizedPeakMemoryUsage);
-      fmt::print("Optimized peak memory usage / original: {:.6f}%\n", static_cast<double>(optimizedPeakMemoryUsage) / (NUMBER_OF_KERNELS * ARRAY_SIZE * 3.0) * 100.0);
+      fmt::print("Optimized peak memory usage / original: {:.6f}%\n", static_cast<double>(optimizedPeakMemoryUsage) / (NUMBER_OF_KERNELS * ARRAY_SIZE * 2.0 + ARRAY_SIZE) * 100.0);
 
       fmt::print("Total running time (s): {:.6f}\n", totalRunningTime);
       fmt::print("Total running time / original: {:.6f}%\n", totalRunningTime / (NUMBER_OF_KERNELS * KERNEL_RUNNING_TIME) * 100.0);
