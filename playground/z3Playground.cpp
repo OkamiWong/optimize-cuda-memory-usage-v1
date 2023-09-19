@@ -461,39 +461,33 @@ struct TwoStepIntegerProgrammingStrategy {
       fmt::print("Total running time (s): {:.6f}\n", totalRunningTime);
       fmt::print("Total running time / original: {:.6f}%\n", totalRunningTime / (NUMBER_OF_KERNELS * KERNEL_RUNNING_TIME) * 100.0);
 
-      fmt::print("---\nInitial data distribution:\n");
+      fmt::print("---\nSolution:\n");
+
       for (int i = 0; i < numberOfArrays; i++) {
-        fmt::print("I_{{{}}} = {}\n", i, static_cast<int>(secondStepInput.arrayInitiallyOnDevice[i]));
+        fmt::print("I_{{{}}} = {}\n", i, model.eval(initiallyAllocatedOnDevice[i]).is_true());
       }
 
-      fmt::print("---\nSolution:\n");
+      fmt::print("\n");
 
       for (int i = 0; i < numberOfKernels; i++) {
         for (int j = 0; j < numberOfArrays; j++) {
-          fmt::print("p_{{{}, {}}} = {}, ", i, j, model.eval(p[i][j]).is_true());
-          fmt::print("\n");
+          if (model.eval(p[i][j]).is_true()) {
+            fmt::print("p_{{{}, {}}} = {}\n", i, j, true);
+          }
         }
       }
+
+      fmt::print("\n");
 
       for (int i = 0; i < numberOfKernels; i++) {
         for (int j = 0; j < numberOfArrays; j++) {
           for (int k = 0; k < numberOfKernels; k++) {
-            fmt::print("o_{{{}, {}, {}}} = {}, ", i, j, k, model.eval(o[i][j][k]).is_true());
+            if (model.eval(o[i][j][k]).is_true()) {
+              fmt::print("o_{{{}, {}, {}}} = {}\n", i, j, k, true);
+            }
           }
-          fmt::print("\n");
         }
       }
-
-      // for (int i = 0; i < numberOfKernels; i++) {
-      //   fmt::print("z[{} Start] = {}; z[{}] = {}\n", i, model.eval(z[getKernelStartVertexIndex(i)]).get_decimal_string(6), i, model.eval(z[getKernelVertexIndex(i)]).get_decimal_string(6));
-      // }
-
-      // auto printZPrefetch = [&](int i, int j) {
-      //   fmt::print("z[P_{{{}, {}}}] = {}\n", i, j, model.eval(z[getPrefetchVertexIndex(i, j)]).get_decimal_string(6));
-      // };
-      // printZPrefetch(0, 0);
-      // printZPrefetch(0, 1);
-      // printZPrefetch(0, 2);
     } else {
       fmt::print("No solution found.\n");
     }
