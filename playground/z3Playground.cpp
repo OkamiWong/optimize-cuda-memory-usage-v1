@@ -80,7 +80,6 @@ struct TwoStepIntegerProgrammingStrategy {
     std::vector<double> kernelRunningTimes;
 
     std::vector<size_t> arraySizes;
-    std::vector<bool> arrayInitiallyOnDevice;
     std::set<int> applicationInputArrays, applicationOutputArrays;
     std::vector<std::set<int>> kernelInputArrays, kernelOutputArrays;
 
@@ -102,19 +101,6 @@ struct TwoStepIntegerProgrammingStrategy {
     for (int i = 0; i < NUMBER_OF_KERNELS; i++) {
       for (int j = i * 3; j < (i + 1) * 3; j++) {
         secondStepInput.arraySizes.push_back(ARRAY_SIZE);
-        if (j == i * 3 + 2) {
-          // Output
-          secondStepInput.arrayInitiallyOnDevice.push_back(false);
-        } else {
-          // Input
-          secondStepInput.arrayInitiallyOnDevice.push_back(true);
-        }
-      }
-    }
-
-    for (auto i : KERNELS_TO_PREFETCH) {
-      for (int j = i * 3; j < (i + 1) * 3; j++) {
-        secondStepInput.arrayInitiallyOnDevice[j] = false;
       }
     }
 
@@ -179,10 +165,18 @@ struct TwoStepIntegerProgrammingStrategy {
     this->optimize = std::make_unique<z3::optimize>(*this->context);
   }
 
+  std::vector<z3::expr> initiallyAllocatedOnDevice;
   std::vector<std::vector<z3::expr>> p;
   std::vector<std::vector<std::vector<z3::expr>>> o;
 
-  void defineDecisionVariables() {
+  void defineDecisionVariables(const SecondStepInput &secondStepInput) {
+    // Add decision variables for initially allocated on device or not
+    initiallyAllocatedOnDevice.clear();
+    initiallyAllocatedOnDevice.resize(numberOfArrays, context->bool_val(false));
+    for (auto arr : secondStepInput.applicationInputArrays) {
+      initiallyAllocatedOnDevice[arr] = context->bool_const(fmt::format("I_{{{}}}", arr).c_str());
+    }
+
     // Add decision variables for prefetching
     p.clear();
     for (int i = 0; i < numberOfKernels; i++) {
@@ -219,7 +213,7 @@ struct TwoStepIntegerProgrammingStrategy {
     for (int i = 0; i < numberOfKernels; i++) {
       x.push_back({});
       for (int j = 0; j < numberOfArrays; j++) {
-        auto rhs = context->int_val(secondStepInput.arrayInitiallyOnDevice[j]);
+        auto rhs = z3::ite(initiallyAllocatedOnDevice[j], context->int_val(1), context->int_val(0));
 
         for (int u = 0; u <= i; u++) {
           rhs = rhs + z3::ite(p[u][j], context->int_val(1), context->int_val(0));
@@ -241,7 +235,7 @@ struct TwoStepIntegerProgrammingStrategy {
     for (int i = 0; i < numberOfKernels; i++) {
       y.push_back({});
       for (int j = 0; j < numberOfArrays; j++) {
-        auto rhs = context->int_val(secondStepInput.arrayInitiallyOnDevice[j]);
+        auto rhs = z3::ite(initiallyAllocatedOnDevice[j], context->int_val(1), context->int_val(0));
 
         for (int u = 0; u <= i; u++) {
           rhs = rhs + z3::ite(p[u][j], context->int_val(1), context->int_val(0));
@@ -415,11 +409,11 @@ struct TwoStepIntegerProgrammingStrategy {
   }
 
   void solveSecondStep(const SecondStepInput &secondStepInput) {
-    this->preprocessSecondStepInput(secondStepInput);
-
     this->initializeZ3();
 
-    this->defineDecisionVariables();
+    this->preprocessSecondStepInput(secondStepInput);
+
+    this->defineDecisionVariables(secondStepInput);
 
     this->defineXAndY(secondStepInput);
 
