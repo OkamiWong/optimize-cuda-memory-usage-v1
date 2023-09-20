@@ -74,6 +74,7 @@ struct TwoStepIntegerProgrammingStrategy {
   static constexpr double KERNEL_RUNNING_TIME = 1;
   static constexpr double CONNECTION_BANDWIDTH = 281.0 * 1e9;
   static constexpr size_t ARRAY_SIZE = CONNECTION_BANDWIDTH * KERNEL_RUNNING_TIME / 2.0 * 2.0;
+  static constexpr double ACCEPTABLE_RUNNING_TIME_FACTOR = 2.0;
 
   struct SecondStepInput {
     std::vector<int> kernelExecutionSequence;
@@ -416,7 +417,7 @@ struct TwoStepIntegerProgrammingStrategy {
       }
     }
 
-    optimize->add(z[getKernelVertexIndex(numberOfKernels - 1)] <= context->real_val(fmt::format("{:.6f}", NUMBER_OF_KERNELS * KERNEL_RUNNING_TIME * 1.1).c_str()));
+    optimize->add(z[getKernelVertexIndex(numberOfKernels - 1)] <= context->real_val(fmt::format("{:.6f}", NUMBER_OF_KERNELS * KERNEL_RUNNING_TIME * ACCEPTABLE_RUNNING_TIME_FACTOR).c_str()));
   }
 
   void addKernelDataDependencyConstraints(const SecondStepInput &secondStepInput) {
