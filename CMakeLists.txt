@@ -10,11 +10,12 @@ set(CMAKE_CUDA_STANDARD 17)
 SET(CMAKE_CUDA_ARCHITECTURES 80)
 SET(CUDA_SEPARABLE_COMPILATION ON)
 
-enable_language(CXX CUDA)
+enable_language(C CXX CUDA)
 
 find_package(CUDA REQUIRED)
 find_package(Z3 REQUIRED)
 find_package(fmt REQUIRED)
+find_package(ortools REQUIRED)
 
 add_subdirectory(utilities)
 add_subdirectory(profiling)
