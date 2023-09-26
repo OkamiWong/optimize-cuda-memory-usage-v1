@@ -186,8 +186,15 @@ struct TwoStepIntegerProgrammingStrategy {
       for (int j = 0; j < numberOfArrays; j++) {
         o[i].push_back({});
 
+        auto sumLessThanOneConstraint = solver->MakeRowConstraint(0, 1);
+
+        sumLessThanOneConstraint->SetCoefficient(p[i][j], 1);
+
         for (int k = 0; k < numberOfKernels; k++) {
           o[i][j].push_back(solver->MakeBoolVar(fmt::format("o_{{{},{},{}}}", i, j, k)));
+
+          sumLessThanOneConstraint->SetCoefficient(o[i][j][k], 1);
+
           if (shouldDeallocate[std::make_pair(i, j)]) {
             if (k == i + 1) {
               o[i][j][k]->SetLB(1);
@@ -197,11 +204,6 @@ struct TwoStepIntegerProgrammingStrategy {
           } else {
             if (k <= i) {
               o[i][j][k]->SetUB(0);
-            } else {
-              // 0 <= o[i][j][k] + p[i][j] <= 1
-              auto constraint = solver->MakeRowConstraint(0, 1);
-              constraint->SetCoefficient(o[i][j][k], 1);
-              constraint->SetCoefficient(p[i][j], 1);
             }
           }
         }
@@ -303,14 +305,10 @@ struct TwoStepIntegerProgrammingStrategy {
         } else {
           w[getOffloadVertexIndex(i, j)] = solver->MakeNumVar(0, arrayOffloadingTimes[j], fmt::format("w_{{{}}}", getOffloadVertexIndex(i, j)));
 
-          auto sumLessThanOneConstraint = solver->MakeRowConstraint(0, 1);
-          auto weightContraint = solver->MakeRowConstraint(0, 0);
-
-          weightContraint->SetCoefficient(w[getOffloadVertexIndex(i, j)], -1);
-
+          auto constraint = solver->MakeRowConstraint(0, 0);
+          constraint->SetCoefficient(w[getOffloadVertexIndex(i, j)], -1);
           for (int k = 0; k < numberOfKernels; k++) {
-            sumLessThanOneConstraint->SetCoefficient(o[i][j][k], 1);
-            weightContraint->SetCoefficient(o[i][j][k], arrayOffloadingTimes[j]);
+            constraint->SetCoefficient(o[i][j][k], arrayOffloadingTimes[j]);
           }
         }
       }
@@ -324,7 +322,7 @@ struct TwoStepIntegerProgrammingStrategy {
     auto oneConstant = solver->MakeIntVar(1, 1, "one");
 
     e.clear();
-    e.resize(numberOfVertices, std::vector<MPVariable *>(numberOfVertices, nullptr));
+    e.resize(numberOfVertices, std::vector<MPVariable *>(numberOfVertices, zeroConstant));
 
     // Add edges between kernel and kernel start vertices
     for (int i = 0; i < numberOfKernels; i++) {
@@ -397,16 +395,17 @@ struct TwoStepIntegerProgrammingStrategy {
     z.clear();
 
     for (int u = 0; u < numberOfVertices; u++) {
-      z.push_back(solver->MakeNumVar(0, infinity, ""));
+      if (u == getKernelStartVertexIndex(0)) {
+        z.push_back(solver->MakeNumVar(0, 0, ""));
+      } else {
+        z.push_back(solver->MakeNumVar(0, infinity, ""));
+      }
     }
-
-    auto z0Constraint = solver->MakeRowConstraint(0, 0);
-    z0Constraint->SetCoefficient(z[0], 1);
 
     for (int u = 1; u < numberOfVertices; u++) {
       for (int v = 0; v < numberOfVertices; v++) {
         auto inverseE = solver->MakeBoolVar("");
-        auto inverseEConstraint = solver->MakeRowConstraint(0, 0);
+        auto inverseEConstraint = solver->MakeRowConstraint(1, 1);
         inverseEConstraint->SetCoefficient(inverseE, 1);
         inverseEConstraint->SetCoefficient(e[v][u], 1);
 
@@ -522,7 +521,7 @@ struct TwoStepIntegerProgrammingStrategy {
 };
 
 int main() {
-  operations_research::BasicExample();
+  // operations_research::BasicExample();
 
   auto twoStepIntegerProgrammingStrategy = std::make_unique<TwoStepIntegerProgrammingStrategy>();
   twoStepIntegerProgrammingStrategy->runSecondStepExample();
