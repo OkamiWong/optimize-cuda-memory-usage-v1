@@ -491,8 +491,17 @@ struct TwoStepIntegerProgrammingStrategy {
 
       fmt::print("---\nSolution:\n");
 
-      for (int i = 0; i < numberOfArrays; i++) {
-        fmt::print("I_{{{}}} = {}\n", i, initiallyAllocatedOnDevice[i]->solution_value());
+      for (int i = 0; i < numberOfKernels; i++) {
+        fmt::print("K_{{{}}}\n", i);
+        for (int j = 0; j < 3; j++) {
+          const int arrayIndex = i * 3 + j;
+          fmt::print(
+            "  I_{{{}}} = {} {}\n",
+            arrayIndex,
+            initiallyAllocatedOnDevice[arrayIndex]->solution_value(),
+            arrayIndex % 3 == 2 ? "(Output)" : ""
+          );
+        }
       }
 
       fmt::print("\n");
