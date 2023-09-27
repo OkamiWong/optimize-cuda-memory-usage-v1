@@ -254,6 +254,12 @@ struct TwoStepIntegerProgrammingStrategy {
             constraint->SetCoefficient(o[u][j][v], -1);
           }
         }
+
+        auto offloadingConstraint = solver->MakeRowConstraint(0, 1);
+        offloadingConstraint->SetCoefficient(y[i][j], 1);
+        for (int k = i + 1; k < numberOfKernels; k++) {
+          offloadingConstraint->SetCoefficient(o[i][j][k], -1);
+        }
       }
     }
   }
