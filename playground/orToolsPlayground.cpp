@@ -419,7 +419,7 @@ struct TwoStepIntegerProgrammingStrategy {
           constraint->SetCoefficient(z[u], 1);
           constraint->SetCoefficient(z[v], -1);
           constraint->SetCoefficient(w[u], -1);
-          constraint->SetCoefficient(oneMinusE, infinity);
+          constraint->SetCoefficient(oneMinusE, std::numeric_limits<float>::max());
         }
       }
     }
@@ -490,10 +490,6 @@ struct TwoStepIntegerProgrammingStrategy {
       fmt::print("Total running time / original: {:.6f}%\n", totalRunningTime / (NUMBER_OF_KERNELS * KERNEL_RUNNING_TIME) * 100.0);
 
       fmt::print("---\nSolution:\n");
-
-      for (int i = 0; i < numberOfKernels; i++) {
-        fmt::print("w[K_{{{}}}] = {}; Z[S_{{{}}}] = {}; Z[K_{{{}}}] = {}\n", i, w[getKernelVertexIndex(i)]->solution_value(), i, z[getKernelStartVertexIndex(i)]->solution_value(), i, z[getKernelVertexIndex(i)]->solution_value());
-      }
 
       for (int i = 0; i < numberOfKernels; i++) {
         fmt::print("K_{{{}}}\n", i);
