@@ -44,8 +44,8 @@ struct TwoStepIntegerProgrammingStrategy {
   static constexpr int NUMBER_OF_KERNELS = 4;
   static constexpr double KERNEL_RUNNING_TIME = 1;
   static constexpr double CONNECTION_BANDWIDTH = 281.0 * 1e9;
-  static constexpr size_t ARRAY_SIZE = CONNECTION_BANDWIDTH * KERNEL_RUNNING_TIME / 2.0 * 2.0;
-  static constexpr double ACCEPTABLE_RUNNING_TIME_FACTOR = 2.0;
+  static constexpr size_t ARRAY_SIZE = CONNECTION_BANDWIDTH * KERNEL_RUNNING_TIME;
+  static constexpr double ACCEPTABLE_RUNNING_TIME_FACTOR = 1.0;
 
   struct SecondStepInput {
     std::vector<int> kernelExecutionSequence;
