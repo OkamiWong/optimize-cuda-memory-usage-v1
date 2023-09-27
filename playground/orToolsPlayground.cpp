@@ -339,7 +339,6 @@ struct TwoStepIntegerProgrammingStrategy {
         for (int k = i; k < numberOfKernels; k++) {
           if (secondStepInput.kernelInputArrays[k].count(j) != 0 || secondStepInput.kernelOutputArrays[k].count(j) != 0) {
             e[getPrefetchVertexIndex(i, j)][getKernelVertexIndex(k)] = oneConstant;
-            break;
           }
         }
       }
@@ -402,18 +401,20 @@ struct TwoStepIntegerProgrammingStrategy {
       }
     }
 
-    for (int u = 1; u < numberOfVertices; u++) {
-      for (int v = 0; v < numberOfVertices; v++) {
-        auto inverseE = solver->MakeBoolVar("");
-        auto inverseEConstraint = solver->MakeRowConstraint(1, 1);
-        inverseEConstraint->SetCoefficient(inverseE, 1);
-        inverseEConstraint->SetCoefficient(e[v][u], 1);
+    for (int u = 0; u < numberOfVertices; u++) {
+      if (u != getKernelStartVertexIndex(0)) {
+        for (int v = 0; v < numberOfVertices; v++) {
+          auto oneMinusE = solver->MakeBoolVar("");
+          auto oneMinusEConstraint = solver->MakeRowConstraint(1, 1);
+          oneMinusEConstraint->SetCoefficient(oneMinusE, 1);
+          oneMinusEConstraint->SetCoefficient(e[v][u], 1);
 
-        auto constraint = solver->MakeRowConstraint(0, infinity);
-        constraint->SetCoefficient(z[u], 1);
-        constraint->SetCoefficient(z[v], -1);
-        constraint->SetCoefficient(w[u], -1);
-        constraint->SetCoefficient(inverseE, infinity);
+          auto constraint = solver->MakeRowConstraint(0, infinity);
+          constraint->SetCoefficient(z[u], 1);
+          constraint->SetCoefficient(z[v], -1);
+          constraint->SetCoefficient(w[u], -1);
+          constraint->SetCoefficient(oneMinusE, infinity);
+        }
       }
     }
 
