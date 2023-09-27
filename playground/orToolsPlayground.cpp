@@ -492,6 +492,10 @@ struct TwoStepIntegerProgrammingStrategy {
       fmt::print("---\nSolution:\n");
 
       for (int i = 0; i < numberOfKernels; i++) {
+        fmt::print("w[K_{{{}}}] = {}; Z[S_{{{}}}] = {}; Z[K_{{{}}}] = {}\n", i, w[getKernelVertexIndex(i)]->solution_value(), i, z[getKernelStartVertexIndex(i)]->solution_value(), i, z[getKernelVertexIndex(i)]->solution_value());
+      }
+
+      for (int i = 0; i < numberOfKernels; i++) {
         fmt::print("K_{{{}}}\n", i);
         for (int j = 0; j < 3; j++) {
           const int arrayIndex = i * 3 + j;
@@ -509,7 +513,7 @@ struct TwoStepIntegerProgrammingStrategy {
       for (int i = 0; i < numberOfKernels; i++) {
         for (int j = 0; j < numberOfArrays; j++) {
           if (p[i][j]->solution_value() > 0) {
-            fmt::print("p_{{{}, {}}} = {}\n", i, j, true);
+            fmt::print("p_{{{}, {}}} = {}; w = {}; z = {}\n", i, j, true, w[getPrefetchVertexIndex(i, j)]->solution_value(), z[getPrefetchVertexIndex(i, j)]->solution_value());
           }
         }
       }
@@ -520,7 +524,7 @@ struct TwoStepIntegerProgrammingStrategy {
         for (int j = 0; j < numberOfArrays; j++) {
           for (int k = 0; k < numberOfKernels; k++) {
             if (o[i][j][k]->solution_value() > 0) {
-              fmt::print("o_{{{}, {}, {}}} = {}\n", i, j, k, true);
+              fmt::print("o_{{{}, {}, {}}} = {}; w = {}; z = {}\n", i, j, k, true, w[getOffloadVertexIndex(i, j)]->solution_value(), z[getOffloadVertexIndex(i, j)]->solution_value());
             }
           }
         }
