@@ -88,13 +88,17 @@ bool verifyCholeskyDecomposition(double *A, double *L, const int n) {
 }
 
 int main() {
-  cusolverDnHandle_t solver_handle;
-  checkCudaErrors(cusolverDnCreate(&solver_handle));
+  // Initialize libaries
+  cusolverDnHandle_t cusolverDnHandle;
+  checkCudaErrors(cusolverDnCreate(&cusolverDnHandle));
 
-  cublasHandle_t cublas_handle;
-  checkCudaErrors(cublasCreate(&cublas_handle));
+  cusolverDnParams_t cusolverDnParams;
+  checkCudaErrors(cusolverDnCreateParams(&cusolverDnParams));
 
-  // Init
+  cublasHandle_t cublasHandle;
+  checkCudaErrors(cublasCreate(&cublasHandle));
+
+  // Initialize data
   double *h_A = (double *)malloc(N * N * sizeof(double));
   generateRandomSymmetricPositiveDefiniteMatrix(h_A, N);
 
@@ -102,24 +106,52 @@ int main() {
   checkCudaErrors(cudaMalloc(&d_A, N * N * sizeof(double)));
   checkCudaErrors(cudaMemcpy(d_A, h_A, N * N * sizeof(double), cudaMemcpyHostToDevice));
 
-  int work_size = 0;
-  checkCudaErrors(cusolverDnDpotrf_bufferSize(solver_handle, CUBLAS_FILL_MODE_LOWER, N, d_A, N, &work_size));
+  size_t workspaceInBytesOnDevice, workspaceInBytesOnHost;
 
-  double *work;
-  checkCudaErrors(cudaMalloc(&work, work_size * sizeof(double)));
+  checkCudaErrors(cusolverDnXpotrf_bufferSize(
+    cusolverDnHandle,
+    cusolverDnParams,
+    CUBLAS_FILL_MODE_LOWER,
+    N,
+    CUDA_R_64F,
+    d_A,
+    N,
+    CUDA_R_64F,
+    &workspaceInBytesOnDevice,
+    &workspaceInBytesOnHost
+  ));
 
-  int *devInfo;
-  checkCudaErrors(cudaMalloc(&devInfo, sizeof(int)));
+  void *h_workspace = malloc(workspaceInBytesOnHost);
+
+  void *d_workspace;
+  checkCudaErrors(cudaMalloc(&d_workspace, workspaceInBytesOnDevice));
+
+  int *d_info;
+  checkCudaErrors(cudaMalloc(&d_info, sizeof(int)));
 
   // Calculate
-  checkCudaErrors(cusolverDnDpotrf(solver_handle, CUBLAS_FILL_MODE_LOWER, N, d_A, N, work, work_size, devInfo));
+  checkCudaErrors(cusolverDnXpotrf(
+    cusolverDnHandle,
+    cusolverDnParams,
+    CUBLAS_FILL_MODE_LOWER,
+    N,
+    CUDA_R_64F,
+    d_A,
+    N,
+    CUDA_R_64F,
+    d_workspace,
+    workspaceInBytesOnDevice,
+    h_workspace,
+    workspaceInBytesOnHost,
+    d_info
+  ));
 
   // Check
-  int devInfo_h = 0;
-  checkCudaErrors(cudaMemcpy(&devInfo_h, devInfo, sizeof(int), cudaMemcpyDeviceToHost));
-  if (devInfo_h != 0) {
+  int h_info = 0;
+  checkCudaErrors(cudaMemcpy(&h_info, d_info, sizeof(int), cudaMemcpyDeviceToHost));
+  if (h_info != 0) {
     std::cout << "Unsuccessful potrf execution\n\n"
-              << "devInfo = " << devInfo_h << "\n\n";
+              << "d_info = " << h_info << "\n\n";
   }
 
   // Verify
@@ -129,7 +161,7 @@ int main() {
   fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(h_A, h_L, N));
 
   // Clean
-  checkCudaErrors(cusolverDnDestroy(solver_handle));
+  checkCudaErrors(cusolverDnDestroy(cusolverDnHandle));
 
   return 0;
 }
