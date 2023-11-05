@@ -17,4 +17,5 @@ target_link_libraries(
   cudaUtilities
   ${CUDA_cublas_LIBRARY}
   ${CUDA_cusolver_LIBRARY}
+  fmt::fmt
 )
