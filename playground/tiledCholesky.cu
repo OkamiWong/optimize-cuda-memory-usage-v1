@@ -13,10 +13,13 @@
 
 #include "../utilities/cudaUtilities.hpp"
 
-const int N = 8;
+constexpr size_t N = 8;
+constexpr size_t B = 2;
+
+constexpr size_t T = N / B;
 
 // Credit to: https://math.stackexchange.com/questions/357980/how-to-generate-random-symmetric-positive-definite-matrices-using-matlab
-void generateRandomSymmetricPositiveDefiniteMatrix(double *h_A, const int n) {
+void generateRandomSymmetricPositiveDefiniteMatrix(double *h_A, const size_t n) {
   // --- Initialize random seed
   srand(time(NULL));
 
@@ -33,11 +36,11 @@ void generateRandomSymmetricPositiveDefiniteMatrix(double *h_A, const int n) {
   for (int i = 0; i < n; i++) h_A[i * n + i] = h_A[i * n + i] + n;
 }
 
-void printSquareMatrix(double *h_A, const int N) {
-  for (int i = 0; i < N; i++) {
-    for (int j = 0; j < N; j++) {
+void printSquareMatrix(double *h_A, const size_t n) {
+  for (int i = 0; i < n; i++) {
+    for (int j = 0; j < n; j++) {
       if (j != 0) std::cout << " ";
-      std::cout << std::setw(6) << std::setprecision(3) << h_A[i * N + j];
+      std::cout << std::setw(6) << std::setprecision(3) << h_A[i * n + j];
     }
     std::cout << std::endl;
   }
