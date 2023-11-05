@@ -70,15 +70,15 @@ bool verifyCholeskyDecomposition(double *A, double *L, const int n) {
     }
   }
 
-  fmt::print("A:\n");
-  printSquareMatrix(A, n);
+  // fmt::print("A:\n");
+  // printSquareMatrix(A, n);
 
-  fmt::print("\nnewA:\n");
-  printSquareMatrix(newA.get(), n);
+  // fmt::print("\nnewA:\n");
+  // printSquareMatrix(newA.get(), n);
 
-  fmt::print("\nL:\n");
-  printSquareMatrix(L, n);
-  fmt::print("\n");
+  // fmt::print("\nL:\n");
+  // printSquareMatrix(L, n);
+  // fmt::print("\n");
 
   fmt::print("error = {:.6f}\n", error);
 
