@@ -43,6 +43,8 @@ void printSquareMatrix(double *h_A, const int N) {
   }
 }
 
+// Set upper triangle entries (excluding diagonal entries) in column-major order to zero.
+// Then, transpose to row-major order.
 void cleanCusolverCholeskyDecompositionResult(double *L, const int n) {
   for (int i = 0; i < n; i++) {
     for (int j = i + 1; j < n; j++) {
