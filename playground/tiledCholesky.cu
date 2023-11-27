@@ -74,6 +74,16 @@ bool verifyCholeskyDecomposition(double *A, double *L, const int n) {
     }
   }
 
+  fmt::print("A:\n");
+  printSquareMatrix(A, n);
+
+  fmt::print("\nnewA:\n");
+  printSquareMatrix(newA.get(), n);
+
+  fmt::print("\nL:\n");
+  printSquareMatrix(L, n);
+  fmt::print("\n");
+
   fmt::print("error = {:.6f}\n", error);
 
   return error <= 1e-6;
@@ -242,6 +252,7 @@ void tiledCholesky() {
         getMatrixBlock(i, k), N
       ));
     }
+
     for (int i = k + 1; i < T; i++) {
       // A[i][i] = SYRK(A[i][k], A[i][i])
       // A[i][i] = A[i][i] - L[i][k] * L[i][k]^T
@@ -273,6 +284,8 @@ void tiledCholesky() {
       }
     }
   }
+
+  checkCudaErrors(cudaDeviceSynchronize());
 
   cleanCusolverCholeskyDecompositionResult(d_matrix, N);
   fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(originalMatrix.get(), d_matrix, N));
