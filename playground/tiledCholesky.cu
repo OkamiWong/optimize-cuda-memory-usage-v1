@@ -159,8 +159,133 @@ void trivialCholesky() {
   checkCudaErrors(cudaFree(d_info));
 }
 
+void tiledCholesky() {
+  // Initialize data
+  auto originalMatrix = std::make_unique<double[]>(N * N);  // Column-major
+  generateRandomSymmetricPositiveDefiniteMatrix(originalMatrix.get(), N);
+
+  // Copy to device
+  double *d_matrix;
+  checkCudaErrors(cudaMallocManaged(&d_matrix, N * N * sizeof(double)));
+  checkCudaErrors(cudaMemcpy(d_matrix, originalMatrix.get(), N * N * sizeof(double), cudaMemcpyHostToDevice));
+
+  auto getMatrixBlock = [&](int i, int j) {
+    return d_matrix + i * B + j * B * N;
+  };
+
+  // Initialize libraries
+  cusolverDnHandle_t cusolverDnHandle;
+  cusolverDnParams_t cusolverDnParams;
+  cublasHandle_t cublasHandle;
+  checkCudaErrors(cusolverDnCreate(&cusolverDnHandle));
+  checkCudaErrors(cusolverDnCreateParams(&cusolverDnParams));
+  checkCudaErrors(cublasCreate(&cublasHandle));
+
+  // Prepare constants
+  double *one, *minusOne;
+  checkCudaErrors(cudaMallocManaged(&one, sizeof(double)));
+  checkCudaErrors(cudaMallocManaged(&minusOne, sizeof(double)));
+  *one = 1.0;
+  *minusOne = -1.0;
+
+  // Prepare buffer for potrf
+  size_t workspaceInBytesOnDevice, workspaceInBytesOnHost;
+  checkCudaErrors(cusolverDnXpotrf_bufferSize(
+    cusolverDnHandle,
+    cusolverDnParams,
+    CUBLAS_FILL_MODE_LOWER,
+    B,
+    CUDA_R_64F,
+    d_matrix,
+    N,
+    CUDA_R_64F,
+    &workspaceInBytesOnDevice,
+    &workspaceInBytesOnHost
+  ));
+  void *h_workspace, *d_workspace;
+  int *d_info;
+  checkCudaErrors(cudaMallocManaged(&h_workspace, workspaceInBytesOnHost));
+  checkCudaErrors(cudaMallocManaged(&d_workspace, workspaceInBytesOnDevice));
+  checkCudaErrors(cudaMallocManaged(&d_info, sizeof(int)));
+
+  for (int k = 0; k < T; k++) {
+    // A[k][k] = POTRF(A[k][k])
+    // L[k][k] = POTRF(A[k][k])
+    checkCudaErrors(cusolverDnXpotrf(
+      cusolverDnHandle,
+      cusolverDnParams,
+      CUBLAS_FILL_MODE_LOWER,
+      B,
+      CUDA_R_64F,
+      getMatrixBlock(k, k),
+      N,
+      CUDA_R_64F,
+      d_workspace,
+      workspaceInBytesOnDevice,
+      h_workspace,
+      workspaceInBytesOnHost,
+      d_info
+    ));
+
+    for (int i = k + 1; i < T; i++) {
+      // A[i][k] = TRSM(A[k][k], A[i][k])
+      // L[i][k] * L[k][k]^T = A[i][k]
+      checkCudaErrors(cublasDtrsm(
+        cublasHandle,
+        CUBLAS_SIDE_RIGHT,
+        CUBLAS_FILL_MODE_LOWER,
+        CUBLAS_OP_T,
+        CUBLAS_DIAG_NON_UNIT,
+        B, B,
+        one,
+        getMatrixBlock(k, k), N,
+        getMatrixBlock(i, k), N
+      ));
+    }
+    for (int i = k + 1; i < T; i++) {
+      // A[i][i] = SYRK(A[i][k], A[i][i])
+      // A[i][i] = A[i][i] - L[i][k] * L[i][k]^T
+      checkCudaErrors(cublasDsyrk(
+        cublasHandle,
+        CUBLAS_FILL_MODE_LOWER,
+        CUBLAS_OP_N,
+        B, B,
+        minusOne, getMatrixBlock(i, k), N,
+        one, getMatrixBlock(i, i), N
+      ));
+
+      for (int j = i + 1; j < T; j++) {
+        // A[j][i] = GEMM(A[j][k], A[i][k])
+        // A[j][i] = A[j][i] - L[j][k] * L[i][k]^T
+        checkCudaErrors(cublasGemmEx(
+          cublasHandle,
+          CUBLAS_OP_N,
+          CUBLAS_OP_T,
+          B, B, B,
+          minusOne,
+          getMatrixBlock(j, k), CUDA_R_64F, N,
+          getMatrixBlock(i, k), CUDA_R_64F, N,
+          one,
+          getMatrixBlock(j, i), CUDA_R_64F, N,
+          CUBLAS_COMPUTE_64F,
+          CUBLAS_GEMM_DEFAULT
+        ));
+      }
+    }
+  }
+
+  cleanCusolverCholeskyDecompositionResult(d_matrix, N);
+  fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(originalMatrix.get(), d_matrix, N));
+
+  free(h_workspace);
+  cudaFree(d_matrix);
+  cudaFree(d_workspace);
+}
+
 int main() {
-  trivialCholesky();
+  // trivialCholesky();
+
+  tiledCholesky();
 
   return 0;
 }
