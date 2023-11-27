@@ -150,7 +150,13 @@ void trivialCholesky() {
   fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(h_A, h_L, N));
 
   // Clean
+  free(h_A);
+  free(h_workspace);
+  free(h_L);
   checkCudaErrors(cusolverDnDestroy(cusolverDnHandle));
+  checkCudaErrors(cudaFree(d_A));
+  checkCudaErrors(cudaFree(d_workspace));
+  checkCudaErrors(cudaFree(d_info));
 }
 
 int main() {
