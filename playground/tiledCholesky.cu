@@ -87,9 +87,6 @@ void trivialCholesky() {
   cusolverDnParams_t cusolverDnParams;
   checkCudaErrors(cusolverDnCreateParams(&cusolverDnParams));
 
-  cublasHandle_t cublasHandle;
-  checkCudaErrors(cublasCreate(&cublasHandle));
-
   // Initialize data
   double *h_A = (double *)malloc(N * N * sizeof(double));
   generateRandomSymmetricPositiveDefiniteMatrix(h_A, N);
