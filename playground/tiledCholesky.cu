@@ -79,7 +79,7 @@ bool verifyCholeskyDecomposition(double *A, double *L, const int n) {
   return error <= 1e-6;
 }
 
-int main() {
+void trivialCholesky() {
   // Initialize libaries
   cusolverDnHandle_t cusolverDnHandle;
   checkCudaErrors(cusolverDnCreate(&cusolverDnHandle));
@@ -154,6 +154,10 @@ int main() {
 
   // Clean
   checkCudaErrors(cusolverDnDestroy(cusolverDnHandle));
+}
+
+int main() {
+  trivialCholesky();
 
   return 0;
 }
