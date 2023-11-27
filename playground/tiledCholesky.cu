@@ -20,7 +20,6 @@ constexpr size_t T = N / B;
 
 // Credit to: https://math.stackexchange.com/questions/357980/how-to-generate-random-symmetric-positive-definite-matrices-using-matlab
 void generateRandomSymmetricPositiveDefiniteMatrix(double *h_A, const size_t n) {
-  // --- Initialize random seed
   srand(time(NULL));
 
   double *h_A_temp = (double *)malloc(n * n * sizeof(double));
@@ -74,16 +73,6 @@ bool verifyCholeskyDecomposition(double *A, double *L, const int n) {
       error += fabs(A[i * n + j] - newA[i * n + j]);
     }
   }
-
-  // fmt::print("A:\n");
-  // printSquareMatrix(A, n);
-
-  // fmt::print("\nnewA:\n");
-  // printSquareMatrix(newA.get(), n);
-
-  // fmt::print("\nL:\n");
-  // printSquareMatrix(L, n);
-  // fmt::print("\n");
 
   fmt::print("error = {:.6f}\n", error);
 
