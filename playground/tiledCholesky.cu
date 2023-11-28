@@ -11,6 +11,7 @@
 #include <limits>
 #include <memory>
 
+#include "../profiling/annotation.hpp"
 #include "../utilities/cudaUtilities.hpp"
 
 constexpr size_t N = 8;
@@ -229,6 +230,7 @@ void tiledCholesky() {
   for (int k = 0; k < T; k++) {
     // A[k][k] = POTRF(A[k][k])
     // L[k][k] = POTRF(A[k][k])
+    annotateNextKernel({},{},s);
     checkCudaErrors(cusolverDnXpotrf(
       cusolverDnHandle,
       cusolverDnParams,
@@ -244,6 +246,7 @@ void tiledCholesky() {
       workspaceInBytesOnHost,
       d_info
     ));
+    annotateNextKernel({},{},s);
 
     for (int i = k + 1; i < T; i++) {
       // A[i][k] = TRSM(A[k][k], A[i][k])
