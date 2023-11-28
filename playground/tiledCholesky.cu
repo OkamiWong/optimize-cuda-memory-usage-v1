@@ -218,6 +218,14 @@ void tiledCholesky() {
   checkCudaErrors(cudaMallocManaged(&d_workspace, workspaceInBytesOnDevice));
   checkCudaErrors(cudaMallocManaged(&d_info, sizeof(int)));
 
+  cudaStream_t s;
+  checkCudaErrors(cudaStreamCreate(&s));
+
+  checkCudaErrors(cusolverDnSetStream(cusolverDnHandle, s));
+  checkCudaErrors(cublasSetStream(cublasHandle, s));
+
+  checkCudaErrors(cudaStreamBeginCapture(s, cudaStreamCaptureModeGlobal));
+
   for (int k = 0; k < T; k++) {
     // A[k][k] = POTRF(A[k][k])
     // L[k][k] = POTRF(A[k][k])
@@ -284,6 +292,15 @@ void tiledCholesky() {
       }
     }
   }
+
+  cudaGraph_t graph;
+  checkCudaErrors(cudaStreamEndCapture(s, &graph));
+
+  checkCudaErrors(cudaGraphDebugDotPrint(graph, "./graph.dot", cudaGraphDebugDotFlagsVerbose));
+
+  cudaGraphExec_t graphExec;
+  checkCudaErrors(cudaGraphInstantiate(&graphExec, graph, nullptr, nullptr, 0));
+  checkCudaErrors(cudaGraphLaunch(graphExec, s));
 
   checkCudaErrors(cudaDeviceSynchronize());
 
