@@ -15,8 +15,8 @@ __global__ void bar(int p) {
 }
 
 int main() {
-  KernelParam p;
-  p.a[0] = 233;
+  // KernelParam p;
+  // p.a[0] = 233;
 
   cudaEvent_t e1, e2;
   checkCudaErrors(cudaEventCreate(&e1));
