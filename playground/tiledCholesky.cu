@@ -4,12 +4,19 @@
 #include <cusolverDn.h>
 #include <fmt/core.h>
 
+#include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <cstdlib>
+#include <initializer_list>
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <memory>
+#include <set>
+#include <tuple>
+#include <vector>
 
 #include "../profiling/annotation.hpp"
 #include "../utilities/cudaUtilities.hpp"
@@ -170,6 +177,109 @@ void trivialCholesky() {
   checkCudaErrors(cudaFree(d_info));
 }
 
+typedef std::pair<int, int> MatrixTile;
+
+class TiledCholeskyGraphCreator {
+ public:
+  TiledCholeskyGraphCreator(cudaStream_t stream, cudaGraph_t graph) : stream(stream), graph(graph) {
+    this->lastModifiedTile = std::make_pair(-1, -1);
+  }
+  void beginCaptureOperation(MatrixTile tileToWrite, std::initializer_list<MatrixTile> tilesToRead) {
+    auto tiles = std::vector<MatrixTile>(tilesToRead);
+    tiles.push_back(tileToWrite);
+    auto dependencies = this->getDependencies(tiles);
+
+    this->lastModifiedTile = tileToWrite;
+    this->lastDependencies = dependencies;
+
+    checkCudaErrors(cudaStreamBeginCaptureToGraph(this->stream, this->graph, dependencies.data(), nullptr, dependencies.size(), cudaStreamCaptureModeGlobal));
+  }
+
+  void endCaptureOperation() {
+    assert(this->lastModifiedTile.first != -1 && this->lastModifiedTile.second != -1);
+    checkCudaErrors(cudaStreamEndCapture(this->stream, &this->graph));
+    this->tileLastModifiedByMap[this->lastModifiedTile] = this->getTailOfLastCapturedNodeChain();
+    this->lastModifiedTile = std::make_pair(-1, -1);
+  };
+
+ private:
+  std::map<MatrixTile, cudaGraphNode_t> tileLastModifiedByMap;
+  std::map<cudaGraphNode_t, bool> visited;
+  cudaStream_t stream;
+  cudaGraph_t graph;
+  MatrixTile lastModifiedTile;
+  std::vector<cudaGraphNode_t> lastDependencies;
+
+  std::vector<cudaGraphNode_t> getDependencies(std::vector<MatrixTile> tiles) {
+    std::vector<cudaGraphNode_t> dependencies;
+    for (auto tile : tiles) {
+      auto it = this->tileLastModifiedByMap.find(tile);
+      if (it != this->tileLastModifiedByMap.end()) {
+        dependencies.push_back(it->second);
+      }
+    }
+
+    auto dedupedEnd = std::unique(dependencies.begin(), dependencies.end());
+    dependencies.resize(std::distance(dependencies.begin(), dedupedEnd));
+    return dependencies;
+  }
+
+  cudaGraphNode_t getTailOfLastCapturedNodeChain() {
+    if (lastDependencies.size() == 0) {
+      size_t numEdges;
+      checkCudaErrors(cudaGraphGetEdges(this->graph, nullptr, nullptr, &numEdges));
+      auto from = std::make_unique<cudaGraphNode_t[]>(numEdges);
+      auto to = std::make_unique<cudaGraphNode_t[]>(numEdges);
+      checkCudaErrors(cudaGraphGetEdges(this->graph, from.get(), to.get(), &numEdges));
+
+      std::map<cudaGraphNode_t, bool> hasOutGoingEdge;
+      std::set<cudaGraphNode_t> noOutGoingEdgeNodes;
+      for (int i = 0; i < numEdges; i++) {
+        hasOutGoingEdge[from[i]] = true;
+        noOutGoingEdgeNodes.erase(from[i]);
+        if (!hasOutGoingEdge[to[i]])
+          noOutGoingEdgeNodes.insert(to[i]);
+      }
+
+      assert(noOutGoingEdgeNodes.size() == 1);
+
+      return *noOutGoingEdgeNodes.begin();
+    } else {
+      auto nodeBeforeChain = lastDependencies[0];
+      size_t numDependentNodes;
+      checkCudaErrors(cudaGraphNodeGetDependentNodes(nodeBeforeChain, nullptr, &numDependentNodes));
+
+      assert(numDependentNodes > 0);
+
+      auto dependentNodes = std::make_unique<cudaGraphNode_t[]>(numDependentNodes);
+      checkCudaErrors(cudaGraphNodeGetDependentNodes(nodeBeforeChain, dependentNodes.get(), &numDependentNodes));
+
+      cudaGraphNode_t chainBeginningNode;
+      for (int i = 0; i < numDependentNodes; i++) {
+        if (!visited[dependentNodes[i]]) {
+          chainBeginningNode = dependentNodes[i];
+          break;
+        }
+      }
+
+      auto u = chainBeginningNode;
+      while (true) {
+        visited[u] = true;
+        checkCudaErrors(cudaGraphNodeGetDependentNodes(u, nullptr, &numDependentNodes));
+        if (numDependentNodes == 0) break;
+
+        assert(numDependentNodes == 1);
+
+        cudaGraphNode_t v;
+        checkCudaErrors(cudaGraphNodeGetDependentNodes(u, &v, &numDependentNodes));
+        u = v;
+      }
+
+      return u;
+    }
+  }
+};
+
 void tiledCholesky() {
   // Initialize data
   auto originalMatrix = std::make_unique<double[]>(N * N);  // Column-major
@@ -219,18 +329,24 @@ void tiledCholesky() {
   checkCudaErrors(cudaMallocManaged(&d_workspace, workspaceInBytesOnDevice));
   checkCudaErrors(cudaMallocManaged(&d_info, sizeof(int)));
 
+  cudaGraph_t graph;
+  checkCudaErrors(cudaGraphCreate(&graph, 0));
+
   cudaStream_t s;
   checkCudaErrors(cudaStreamCreate(&s));
 
   checkCudaErrors(cusolverDnSetStream(cusolverDnHandle, s));
   checkCudaErrors(cublasSetStream(cublasHandle, s));
 
-  checkCudaErrors(cudaStreamBeginCapture(s, cudaStreamCaptureModeGlobal));
+  auto tiledCholeskyGraphCreator = std::make_unique<TiledCholeskyGraphCreator>(s, graph);
 
   for (int k = 0; k < T; k++) {
     // A[k][k] = POTRF(A[k][k])
     // L[k][k] = POTRF(A[k][k])
-    annotateNextKernel({},{},s);
+    tiledCholeskyGraphCreator->beginCaptureOperation(
+      std::make_pair(k, k),
+      {std::make_pair(k, k)}
+    );
     checkCudaErrors(cusolverDnXpotrf(
       cusolverDnHandle,
       cusolverDnParams,
@@ -246,11 +362,15 @@ void tiledCholesky() {
       workspaceInBytesOnHost,
       d_info
     ));
-    annotateNextKernel({},{},s);
+    tiledCholeskyGraphCreator->endCaptureOperation();
 
     for (int i = k + 1; i < T; i++) {
       // A[i][k] = TRSM(A[k][k], A[i][k])
       // L[i][k] * L[k][k]^T = A[i][k]
+      tiledCholeskyGraphCreator->beginCaptureOperation(
+        std::make_pair(i, k),
+        {std::make_pair(k, k), std::make_pair(i, k)}
+      );
       checkCudaErrors(cublasDtrsm(
         cublasHandle,
         CUBLAS_SIDE_RIGHT,
@@ -262,11 +382,16 @@ void tiledCholesky() {
         getMatrixBlock(k, k), N,
         getMatrixBlock(i, k), N
       ));
+      tiledCholeskyGraphCreator->endCaptureOperation();
     }
 
     for (int i = k + 1; i < T; i++) {
       // A[i][i] = SYRK(A[i][k], A[i][i])
       // A[i][i] = A[i][i] - L[i][k] * L[i][k]^T
+      tiledCholeskyGraphCreator->beginCaptureOperation(
+        std::make_pair(i, i),
+        {std::make_pair(i, i), std::make_pair(i, k)}
+      );
       checkCudaErrors(cublasDsyrk(
         cublasHandle,
         CUBLAS_FILL_MODE_LOWER,
@@ -275,10 +400,15 @@ void tiledCholesky() {
         minusOne, getMatrixBlock(i, k), N,
         one, getMatrixBlock(i, i), N
       ));
+      tiledCholeskyGraphCreator->endCaptureOperation();
 
       for (int j = i + 1; j < T; j++) {
         // A[j][i] = GEMM(A[j][k], A[i][k])
         // A[j][i] = A[j][i] - L[j][k] * L[i][k]^T
+        tiledCholeskyGraphCreator->beginCaptureOperation(
+          std::make_pair(j, i),
+          {std::make_pair(j, i), std::make_pair(j, k), std::make_pair(i, k)}
+        );
         checkCudaErrors(cublasGemmEx(
           cublasHandle,
           CUBLAS_OP_N,
@@ -292,14 +422,12 @@ void tiledCholesky() {
           CUBLAS_COMPUTE_64F,
           CUBLAS_GEMM_DEFAULT
         ));
+        tiledCholeskyGraphCreator->endCaptureOperation();
       }
     }
   }
 
-  cudaGraph_t graph;
-  checkCudaErrors(cudaStreamEndCapture(s, &graph));
-
-  checkCudaErrors(cudaGraphDebugDotPrint(graph, "./graph.dot", cudaGraphDebugDotFlagsVerbose));
+  checkCudaErrors(cudaGraphDebugDotPrint(graph, "./graph.dot", 0));
 
   cudaGraphExec_t graphExec;
   checkCudaErrors(cudaGraphInstantiate(&graphExec, graph, nullptr, nullptr, 0));
