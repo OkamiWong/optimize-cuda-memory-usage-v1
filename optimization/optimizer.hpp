@@ -4,14 +4,13 @@
 #include <vector>
 
 #include "customGraph.hpp"
+#include "optimizationInput.hpp"
 
 class Optimizer {
  public:
   static Optimizer *getInstance();
   Optimizer(Optimizer &other) = delete;
   void operator=(const Optimizer &) = delete;
-
-  typedef std::map<CUgraphNode, float> CuGraphNodeToKernelDurationMap;
 
   CustomGraph profileAndOptimize(cudaGraph_t originalGraph);
 
@@ -21,8 +20,8 @@ class Optimizer {
 
  private:
   template <typename Strategy>
-  CustomGraph optimize(cudaGraph_t originalGraph, CuGraphNodeToKernelDurationMap cuGraphNodeToKernelDurationMap) {
+  CustomGraph optimize(cudaGraph_t originalGraph, OptimizationInput optimizationInput) {
     Strategy strategyInstance;
-    return strategyInstance.run(originalGraph, cuGraphNodeToKernelDurationMap);
+    return strategyInstance.run(originalGraph, optimizationInput);
   }
 };
