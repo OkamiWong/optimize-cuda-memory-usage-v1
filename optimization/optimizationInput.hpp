@@ -4,6 +4,7 @@
 #include <vector>
 
 struct OptimizationInput {
+  // The domain of NodeId is [0, the total number of nodes).
   typedef int NodeId;
 
   struct LogicalVertex {
@@ -13,7 +14,7 @@ struct OptimizationInput {
 
   NodeId nextNodeId = 0;
 
-  std::vector<NodeId> nodes;
+  std::vector<LogicalVertex> nodes;
   std::map<NodeId, std::vector<NodeId>> edges;
   std::map<NodeId, float> logicalNodeToDurationMap;
 
