@@ -12,6 +12,7 @@ class Optimizer {
   Optimizer(Optimizer &other) = delete;
   void operator=(const Optimizer &) = delete;
 
+  // Warning: the graph is executed once during profiling.
   CustomGraph profileAndOptimize(cudaGraph_t originalGraph);
 
  protected:
@@ -20,8 +21,8 @@ class Optimizer {
 
  private:
   template <typename Strategy>
-  CustomGraph optimize(cudaGraph_t originalGraph, OptimizationInput optimizationInput) {
+  CustomGraph optimize(OptimizationInput optimizationInput) {
     Strategy strategyInstance;
-    return strategyInstance.run(originalGraph, optimizationInput);
+    return strategyInstance.run(optimizationInput);
   }
 };

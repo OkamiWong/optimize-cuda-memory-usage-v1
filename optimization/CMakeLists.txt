@@ -10,6 +10,7 @@ target_link_libraries(
   strategies
   cudaUtilities
   cudaGraphUtilities
+  cudaGraphExecutionTimelineProfiler
   logger
   -lcuda
 )

@@ -25,6 +25,7 @@ TaskManager *TaskManager::getInstance() {
   return instance;
 }
 
+// Take the only root node in the graph as the dummy kernel.
 void TaskManager::registerDummyKernelHandle(cudaGraph_t graph) {
   auto rootNode = getRootNode(graph);
 
@@ -40,14 +41,6 @@ void TaskManager::registerDummyKernelHandle(cudaGraph_t graph) {
 CUfunction TaskManager::getDummyKernelHandle() {
   assert(this->dummyKernelHandle != nullptr);
   return this->dummyKernelHandle;
-}
-
-void TaskManager::initializeSequentialExecutionEnvironment() {
-  checkCudaErrors(cudaStreamCreate(&(this->sequentialStream)));
-}
-
-void TaskManager::finalizeSequentialExecutionEnvironment() {
-  checkCudaErrors(cudaStreamDestroy(this->sequentialStream));
 }
 
 void TaskManager::queueKernelToStream(CUgraphNode node, cudaStream_t stream) {
@@ -86,75 +79,6 @@ void TaskManager::queueKernelToStream(CUgraphNode node, cudaStream_t stream) {
     LOG_TRACE_WITH_INFO("Currently only support params.func != NULL or params.kernel != NULL");
     exit(-1);
   }
-}
-
-bool TaskManager::executeNodeSequentially(CUgraphNode node) {
-  CUgraphNodeType nodeType;
-  checkCudaErrors(cuGraphNodeGetType(node, &nodeType));
-  if (nodeType == CU_GRAPH_NODE_TYPE_KERNEL) {
-    CUDA_KERNEL_NODE_PARAMS params;
-    checkCudaErrors(cuGraphKernelNodeGetParams(node, &params));
-
-    if (params.func == this->dummyKernelHandle) {
-      return false;
-    }
-
-    this->queueKernelToStream(node, this->sequentialStream);
-  } else {
-    LOG_TRACE_WITH_INFO("Unsupported node type: %d", nodeType);
-    exit(-1);
-  }
-
-  return true;
-}
-
-Optimizer::CuGraphNodeToKernelDurationMap TaskManager::getCuGraphNodeToKernelDurationMap(cudaGraph_t graph) {
-  std::vector<CUgraphNode> nodes;
-  std::map<CUgraphNode, std::vector<CUgraphNode>> edges;
-  extractGraphNodesAndEdges(graph, nodes, edges);
-
-  std::map<CUgraphNode, int> inDegrees;
-  for (auto &[u, outEdges] : edges) {
-    for (auto &v : outEdges) {
-      inDegrees[v] += 1;
-    }
-  }
-
-  std::queue<CUgraphNode> nodesToExecute;
-  for (auto &u : nodes) {
-    if (inDegrees[u] == 0) {
-      nodesToExecute.push(u);
-    }
-  }
-
-  this->initializeSequentialExecutionEnvironment();
-
-  // Kahn Algorithm
-  Optimizer::CuGraphNodeToKernelDurationMap kernelRunningTimes;
-  CudaEventClock clock;
-  while (!nodesToExecute.empty()) {
-    auto u = nodesToExecute.front();
-    nodesToExecute.pop();
-
-    clock.start(this->sequentialStream);
-    auto isExecuted = this->executeNodeSequentially(u);
-    clock.end(this->sequentialStream);
-    checkCudaErrors(cudaStreamSynchronize(this->sequentialStream));
-    if (isExecuted) {
-      kernelRunningTimes[u] = clock.getTimeInSeconds();
-    }
-
-    for (auto &v : edges[u]) {
-      inDegrees[v]--;
-      if (inDegrees[v] == 0) {
-        nodesToExecute.push(v);
-      }
-    }
-  }
-
-  this->finalizeSequentialExecutionEnvironment();
-
-  return kernelRunningTimes;
 }
 
 std::map<CustomGraph::NodeId, TaskManager::StreamId> TaskManager::getStreamAssignment(

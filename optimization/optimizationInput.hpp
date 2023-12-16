@@ -18,4 +18,4 @@ struct OptimizationInput {
   std::map<NodeId, float> logicalNodeToDurationMap;
 
   cudaGraph_t originalGraph;
-}
+};
