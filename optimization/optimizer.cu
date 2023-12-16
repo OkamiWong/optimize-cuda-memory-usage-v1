@@ -1,10 +1,11 @@
-#include <type_traits>
+#include <cassert>
 
+#include "../utilities/cudaGraphExecutionTimelineProfiler.hpp"
+#include "../utilities/cudaUtilities.hpp"
+#include "../utilities/disjointSet.hpp"
 #include "optimizer.hpp"
 #include "strategies/strategies.hpp"
 #include "taskManager.hpp"
-#include "../utilities/cudaGraphExecutionTimelineProfiler.hpp"
-#include "../utilities/cudaUtilities.hpp"
 
 Optimizer *Optimizer::instance = nullptr;
 
@@ -15,9 +16,7 @@ Optimizer *Optimizer::getInstance() {
   return instance;
 }
 
-typedef std::map<cudaGraphNode_t, cudaGraphNode_t> CudaGraphNodeDisjointSet;
-
-CudaGraphExecutionTimeline getCudaGraphExecutionTimeline(cudaGraph_t graph){
+CudaGraphExecutionTimeline getCudaGraphExecutionTimeline(cudaGraph_t graph) {
   auto profiler = CudaGraphExecutionTimelineProfiler::getInstance();
   profiler->initialize(graph);
 
@@ -38,16 +37,34 @@ CudaGraphExecutionTimeline getCudaGraphExecutionTimeline(cudaGraph_t graph){
 }
 
 void mergeConcurrentCudaGraphNodes(
-  cudaGraph_t originalGraph,
   const CudaGraphExecutionTimeline &timeline,
-  CudaGraphNodeDisjointSet &disjointSet
+  DisjointSet<cudaGraphNode_t> &disjointSet
 ) {
+  std::map<CudaGraphNodeLifetime, cudaGraphNode_t> lifetimeToCudaGraphNodeMap;
+  for (auto &[node, lifetime] : timeline) {
+    lifetimeToCudaGraphNodeMap[lifetime] = node;
+  }
+
+  uint64_t currentWindowEnd = 0;
+  cudaGraphNode_t currentWindowRepresentativeNode = nullptr;
+  for (auto &[lifetime, node] : lifetimeToCudaGraphNodeMap) {
+    assert(lifetime.first != 0 && lifetime.second != 0);
+
+    if (currentWindowRepresentativeNode != nullptr && lifetime.first <= currentWindowEnd) {
+      disjointSet.unionUnderlyingSets(currentWindowRepresentativeNode, node);
+      currentWindowEnd = std::max(currentWindowEnd, lifetime.second);
+    } else {
+      currentWindowRepresentativeNode = node;
+      currentWindowEnd = lifetime.second;
+    }
+  }
 }
 
-void mergeCudaGraphNodesWithSameAnnotation(cudaGraph_t originalGraph, CudaGraphNodeDisjointSet &disjointSet) {
+void mergeCudaGraphNodesWithSameAnnotation(cudaGraph_t originalGraph, DisjointSet<cudaGraphNode_t> &disjointSet) {
+
 }
 
-OptimizationInput constructOptimizationInput(cudaGraph_t originalGraph, const CudaGraphExecutionTimeline &timeline, const CudaGraphNodeDisjointSet &disjointSet) {
+OptimizationInput constructOptimizationInput(cudaGraph_t originalGraph, const CudaGraphExecutionTimeline &timeline, const DisjointSet<cudaGraphNode_t> &disjointSet) {
 }
 
 CustomGraph Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
@@ -57,8 +74,8 @@ CustomGraph Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
 
   auto timeline = getCudaGraphExecutionTimeline(originalGraph);
 
-  CudaGraphNodeDisjointSet disjointSet;
-  mergeConcurrentCudaGraphNodes(originalGraph, timeline, disjointSet);
+  DisjointSet<cudaGraphNode_t> disjointSet;
+  mergeConcurrentCudaGraphNodes(timeline, disjointSet);
   mergeCudaGraphNodesWithSameAnnotation(originalGraph, disjointSet);
 
   auto optimizationInput = constructOptimizationInput(originalGraph, timeline, disjointSet);
