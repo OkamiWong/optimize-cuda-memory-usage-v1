@@ -11,6 +11,7 @@ target_link_libraries(
   cudaUtilities
   cudaGraphUtilities
   cudaGraphExecutionTimelineProfiler
+  memoryManager
   logger
   -lcuda
 )
