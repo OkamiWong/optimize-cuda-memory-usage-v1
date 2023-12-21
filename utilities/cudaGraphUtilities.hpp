@@ -1,13 +1,12 @@
 #pragma once
 
-#include <cuda.h>
 #include <vector>
 #include <map>
 
 void extractGraphNodesAndEdges(
   cudaGraph_t graph,
-  std::vector<CUgraphNode> &nodes,
-  std::map<CUgraphNode, std::vector<CUgraphNode>> &edges
+  std::vector<cudaGraphNode_t> &nodes,
+  std::map<cudaGraphNode_t, std::vector<cudaGraphNode_t>> &edges
 );
 
-CUgraphNode getRootNode(cudaGraph_t graph);
+cudaGraphNode_t getRootNode(cudaGraph_t graph);
