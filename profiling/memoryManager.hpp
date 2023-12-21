@@ -3,8 +3,6 @@
 #include <initializer_list>
 #include <map>
 #include <set>
-#include <utility>
-#include <vector>
 
 struct MemoryManager {
   typedef std::tuple<void *, size_t> ArrayInfo;
@@ -19,12 +17,6 @@ __host__ cudaError_t wrappedCudaMallocManaged(T **devPtr, size_t size) {
   return err;
 }
 
-void markMemorySpaceInitiallyOnDevice(void *devPtr) {
-  MemoryManager::managedMemorySpacesInitiallyOnDevice.insert(devPtr);
-}
+void markMemorySpaceInitiallyOnDevice(void *devPtr);
 
-void markMemorySpaceInitiallyOnDevice(std::initializer_list<void *> devPtrs) {
-  for (auto &devPtr : devPtrs) {
-    markMemorySpaceInitiallyOnDevice(devPtr);
-  }
-}
+void markMemorySpaceInitiallyOnDevice(std::initializer_list<void *> devPtrs);

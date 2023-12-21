@@ -6,5 +6,6 @@ target_link_libraries(
   cudaUtilities
   profiling
   optimization
+  memoryManager
   logger
 )
