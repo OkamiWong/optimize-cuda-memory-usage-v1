@@ -1,6 +1,7 @@
 #include <cassert>
 
 #include "../utilities/cudaGraphExecutionTimelineProfiler.hpp"
+#include "../utilities/cudaGraphUtilities.hpp"
 #include "../utilities/cudaUtilities.hpp"
 #include "../utilities/disjointSet.hpp"
 #include "optimizer.hpp"
@@ -60,8 +61,44 @@ void mergeConcurrentCudaGraphNodes(
   }
 }
 
-void mergeCudaGraphNodesWithSameAnnotation(cudaGraph_t originalGraph, DisjointSet<cudaGraphNode_t> &disjointSet) {
+void dfs(
+  cudaGraphNode_t currentNode,
+  cudaGraphNode_t parent,
+  const std::map<cudaGraphNode_t, std::vector<cudaGraphNode_t>> &edges,
+  DisjointSet<cudaGraphNode_t> &disjointSet
+) {
+  bool isAnnotationNode = false;
 
+  if (!parent) {
+    isAnnotationNode = true;
+  } else {
+    cudaGraphNodeType nodeType;
+    checkCudaErrors(cudaGraphNodeGetType(currentNode, &nodeType));
+    if (nodeType == cudaGraphNodeTypeKernel) {
+      cudaKernelNodeParams nodeParams;
+      checkCudaErrors(cudaGraphKernelNodeGetParams(currentNode, &nodeParams));
+      if (nodeParams.func == TaskManager::getInstance()->getDummyKernelHandle()) {
+        isAnnotationNode = true;
+      }
+    }
+  }
+
+  if (!isAnnotationNode) {
+    disjointSet.unionUnderlyingSets(currentNode, parent);
+  }
+
+  for (auto nextNode : edges[currentNode]) {
+    dfs(nextNode, currentNode, edges, disjointSet);
+  }
+}
+
+void mergeCudaGraphNodesWithSameAnnotation(
+  cudaGraphNode_t rootNode,
+  const std::vector<std::vector<size_t>> &edges,
+  DisjointSet<cudaGraphNode_t> &disjointSet
+) {
+  auto rootNode = getRootNode(originalGraph);
+  dfs(rootNode, nullptr, edges, disjointSet);
 }
 
 OptimizationInput constructOptimizationInput(cudaGraph_t originalGraph, const CudaGraphExecutionTimeline &timeline, const DisjointSet<cudaGraphNode_t> &disjointSet) {
@@ -76,8 +113,12 @@ CustomGraph Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
 
   DisjointSet<cudaGraphNode_t> disjointSet;
   mergeConcurrentCudaGraphNodes(timeline, disjointSet);
-  mergeCudaGraphNodesWithSameAnnotation(originalGraph, disjointSet);
 
+  std::vector<cudaGraphNode_t> nodes;
+  std::map<cudaGraphNode_t, std::vector<cudaGraphNode_t>> edges;
+  extractGraphNodesAndEdges(originalGraph, nodes, edges);
+
+  mergeCudaGraphNodesWithSameAnnotation(getRootNode(originalGraph), edges, disjointSet);
   auto optimizationInput = constructOptimizationInput(originalGraph, timeline, disjointSet);
 
   // Optimize
