@@ -94,7 +94,7 @@ void dfs(
 
 void mergeCudaGraphNodesWithSameAnnotation(
   cudaGraphNode_t rootNode,
-  const std::vector<std::vector<size_t>> &edges,
+  const std::map<cudaGraphNode_t, std::vector<cudaGraphNode_t>> &edges,
   DisjointSet<cudaGraphNode_t> &disjointSet
 ) {
   auto rootNode = getRootNode(originalGraph);
