@@ -17,9 +17,9 @@ void printEdges(OptimizationInput &input) {
 }
 
 void printLogicalNode(int index, OptimizationInput::LogicalNode &node) {
-  fmt::print("subgraph {} {\n", getLogicalNodeName(index));
+  fmt::print("subgraph {} {{\n", getLogicalNodeName(index));
   fmt::print("label=\"{}\"\n", getLogicalNodeName(index));
-  fmt::print("}\n");
+  fmt::print("}}\n");
 }
 
 void printLogicalNodes(OptimizationInput &input) {
@@ -29,11 +29,11 @@ void printLogicalNodes(OptimizationInput &input) {
 }
 
 void printOptimizationInput(OptimizationInput &input) {
-  fmt::print("graph G {\n");
+  fmt::print("graph G {{\n");
 
   printLogicalNodes(input);
 
   printEdges(input);
 
-  fmt::print("}\n");
+  fmt::print("}}\n");
 }
