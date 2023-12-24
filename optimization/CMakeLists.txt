@@ -8,6 +8,7 @@ add_library(
 target_link_libraries(
   optimization
   strategies
+  annotation
   cudaUtilities
   cudaGraphUtilities
   cudaGraphExecutionTimelineProfiler

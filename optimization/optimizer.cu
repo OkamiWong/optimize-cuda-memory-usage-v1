@@ -1,5 +1,8 @@
 #include <cassert>
+#include <limits>
+#include <utility>
 
+#include "../profiling/annotation.hpp"
 #include "../utilities/cudaGraphExecutionTimelineProfiler.hpp"
 #include "../utilities/cudaGraphUtilities.hpp"
 #include "../utilities/cudaUtilities.hpp"
@@ -38,7 +41,7 @@ CudaGraphExecutionTimeline getCudaGraphExecutionTimeline(cudaGraph_t graph) {
 }
 
 void mergeConcurrentCudaGraphNodes(
-  const CudaGraphExecutionTimeline &timeline,
+  CudaGraphExecutionTimeline &timeline,
   DisjointSet<cudaGraphNode_t> &disjointSet
 ) {
   std::map<CudaGraphNodeLifetime, cudaGraphNode_t> lifetimeToCudaGraphNodeMap;
@@ -63,13 +66,13 @@ void mergeConcurrentCudaGraphNodes(
 
 void dfs(
   cudaGraphNode_t currentNode,
-  cudaGraphNode_t parent,
-  const std::map<cudaGraphNode_t, std::vector<cudaGraphNode_t>> &edges,
-  DisjointSet<cudaGraphNode_t> &disjointSet
+  cudaGraphNode_t currentAnnotationNode,
+  std::map<cudaGraphNode_t, std::vector<cudaGraphNode_t>> &edges,
+  std::map<cudaGraphNode_t, cudaGraphNode_t> &nodeToAnnotationMap
 ) {
   bool isAnnotationNode = false;
 
-  if (!parent) {
+  if (!currentAnnotationNode) {
     isAnnotationNode = true;
   } else {
     cudaGraphNodeType nodeType;
@@ -83,25 +86,116 @@ void dfs(
     }
   }
 
-  if (!isAnnotationNode) {
-    disjointSet.unionUnderlyingSets(currentNode, parent);
+  if (isAnnotationNode) {
+    currentAnnotationNode = currentNode;
+  } else {
+    nodeToAnnotationMap[currentNode] = currentAnnotationNode;
   }
 
   for (auto nextNode : edges[currentNode]) {
-    dfs(nextNode, currentNode, edges, disjointSet);
+    dfs(nextNode, currentAnnotationNode, edges, nodeToAnnotationMap);
   }
 }
 
-void mergeCudaGraphNodesWithSameAnnotation(
-  cudaGraphNode_t rootNode,
-  const std::map<cudaGraphNode_t, std::vector<cudaGraphNode_t>> &edges,
-  DisjointSet<cudaGraphNode_t> &disjointSet
+void mapNodeToAnnotation(
+  cudaGraph_t originalGraph,
+  std::map<cudaGraphNode_t, std::vector<cudaGraphNode_t>> &edges,
+  std::map<cudaGraphNode_t, cudaGraphNode_t> &nodeToAnnotationMap
 ) {
   auto rootNode = getRootNode(originalGraph);
-  dfs(rootNode, nullptr, edges, disjointSet);
+  dfs(rootNode, nullptr, edges, nodeToAnnotationMap);
 }
 
-OptimizationInput constructOptimizationInput(cudaGraph_t originalGraph, const CudaGraphExecutionTimeline &timeline, const DisjointSet<cudaGraphNode_t> &disjointSet) {
+OptimizationInput::LogicalNode::DataDependency convertKernelIOToKernelDataDependency(const KernelIO &kernelIO) {
+  OptimizationInput::LogicalNode::DataDependency dep;
+  for (int i = 0; i < KernelIO::MAX_NUM_PTR; i++) {
+    void *ptr = kernelIO.inputs[i];
+    if (ptr == nullptr) break;
+    dep.inputs.insert(std::make_tuple(ptr, MemoryManager::managedMemoryAddressToSizeMap[ptr]));
+  }
+  for (int i = 0; i < KernelIO::MAX_NUM_PTR; i++) {
+    void *ptr = kernelIO.outputs[i];
+    if (ptr == nullptr) break;
+    dep.outputs.insert(std::make_tuple(ptr, MemoryManager::managedMemoryAddressToSizeMap[ptr]));
+  }
+  return dep;
+}
+
+void mergeDataDependency(OptimizationInput::LogicalNode &logicalNode, cudaGraphNode_t annotationNode) {
+  cudaGraphNodeType nodeType;
+  checkCudaErrors(cudaGraphNodeGetType(annotationNode, &nodeType));
+  assert(nodeType == cudaGraphNodeTypeKernel);
+  cudaKernelNodeParams nodeParams;
+  checkCudaErrors(cudaGraphKernelNodeGetParams(annotationNode, &nodeParams));
+  assert(nodeParams.func == TaskManager::getInstance()->getDummyKernelHandle());
+
+  auto kernelIOPtr = reinterpret_cast<KernelIO *>(nodeParams.kernelParams[0]);
+  auto dataDependencyByAnnotation = convertKernelIOToKernelDataDependency(*kernelIOPtr);
+
+  logicalNode.dataDependency.inputs.insert(dataDependencyByAnnotation.inputs.begin(), dataDependencyByAnnotation.inputs.end());
+  logicalNode.dataDependency.outputs.insert(dataDependencyByAnnotation.outputs.begin(), dataDependencyByAnnotation.outputs.end());
+}
+
+OptimizationInput constructOptimizationInput(
+  cudaGraph_t originalGraph,
+  std::map<cudaGraphNode_t, std::vector<cudaGraphNode_t>> &edges,
+  CudaGraphExecutionTimeline &timeline,
+  DisjointSet<cudaGraphNode_t> &disjointSet,
+  std::map<cudaGraphNode_t, cudaGraphNode_t> &nodeToAnnotationMap
+) {
+  OptimizationInput optimizationInput;
+
+  std::map<cudaGraphNode_t, OptimizationInput::NodeId> disjointSetRootToLogicalNodeIndexMap;
+
+  auto getLogicalNodeId = [&](cudaGraphNode_t u) {
+    auto uRoot = disjointSet.findRoot(u);
+
+    size_t uLogicalNodeId;
+    if (disjointSetRootToLogicalNodeIndexMap.find(uRoot) == disjointSetRootToLogicalNodeIndexMap.end()) {
+      optimizationInput.nodes.emplace_back();
+      uLogicalNodeId = optimizationInput.nodes.size() - 1;
+      disjointSetRootToLogicalNodeIndexMap[uRoot] = uLogicalNodeId;
+    } else {
+      uLogicalNodeId = disjointSetRootToLogicalNodeIndexMap[uRoot];
+    }
+
+    optimizationInput.nodes[uLogicalNodeId].nodes.insert(u);
+
+    return uLogicalNodeId;
+  };
+
+  // Add nodes and edges, both logical nodes and actual nodes
+  for (const auto &[u, destinations] : edges) {
+    auto uLogicalNodeId = getLogicalNodeId(u);
+
+    for (auto v : destinations) {
+      auto vLogicalNodeId = getLogicalNodeId(v);
+      if (uLogicalNodeId == vLogicalNodeId) {
+        optimizationInput.nodes[uLogicalNodeId].edges[u].push_back(v);
+      } else {
+        optimizationInput.edges[uLogicalNodeId].push_back(vLogicalNodeId);
+      }
+    }
+  }
+
+  // Add duration and data dependency
+  for (auto &logicalNode : optimizationInput.nodes) {
+    uint64_t minStart = std::numeric_limits<uint64_t>::max(), maxEnd = 0;
+
+    for (auto node : logicalNode.nodes) {
+      const auto isAnnotationNode = nodeToAnnotationMap.find(node) == nodeToAnnotationMap.end();
+      if (isAnnotationNode) continue;
+
+      minStart = std::min(minStart, timeline[node].first);
+      maxEnd = std::max(maxEnd, timeline[node].second);
+
+      mergeDataDependency(logicalNode, nodeToAnnotationMap[node]);
+    }
+
+    logicalNode.duration = static_cast<float>(maxEnd - minStart) * 1e-9f;
+  }
+
+  return optimizationInput;
 }
 
 CustomGraph Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
@@ -118,8 +212,10 @@ CustomGraph Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
   std::map<cudaGraphNode_t, std::vector<cudaGraphNode_t>> edges;
   extractGraphNodesAndEdges(originalGraph, nodes, edges);
 
-  mergeCudaGraphNodesWithSameAnnotation(getRootNode(originalGraph), edges, disjointSet);
-  auto optimizationInput = constructOptimizationInput(originalGraph, timeline, disjointSet);
+  std::map<cudaGraphNode_t, cudaGraphNode_t> nodeToAnnotationMap;
+  mapNodeToAnnotation(originalGraph, edges, nodeToAnnotationMap);
+
+  auto optimizationInput = constructOptimizationInput(originalGraph, edges, timeline, disjointSet, nodeToAnnotationMap);
 
   // Optimize
   auto customGraph = this->optimize<TwoStepOptimizationStrategy>(optimizationInput);
