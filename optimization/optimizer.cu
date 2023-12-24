@@ -1,6 +1,7 @@
 #include <cassert>
 #include <limits>
 #include <utility>
+#include <cuda.h>
 
 #include "../profiling/annotation.hpp"
 #include "../utilities/cudaGraphExecutionTimelineProfiler.hpp"
@@ -83,8 +84,11 @@ void dfs(
     cudaGraphNodeType nodeType;
     checkCudaErrors(cudaGraphNodeGetType(currentNode, &nodeType));
     if (nodeType == cudaGraphNodeTypeKernel) {
-      cudaKernelNodeParams nodeParams;
-      checkCudaErrors(cudaGraphKernelNodeGetParams(currentNode, &nodeParams));
+      // Why switch to driver API:
+      // https://forums.developer.nvidia.com/t/cuda-runtime-api-error-for-cuda-graph-and-opencv/215408/13
+      CUDA_KERNEL_NODE_PARAMS nodeParams;
+      checkCudaErrors(cuGraphKernelNodeGetParams(currentNode, &nodeParams));
+
       if (nodeParams.func == TaskManager::getInstance()->getDummyKernelHandle()) {
         isAnnotationNode = true;
       }
@@ -132,8 +136,12 @@ void mergeDataDependency(OptimizationInput::LogicalNode &logicalNode, cudaGraphN
   cudaGraphNodeType nodeType;
   checkCudaErrors(cudaGraphNodeGetType(annotationNode, &nodeType));
   assert(nodeType == cudaGraphNodeTypeKernel);
-  cudaKernelNodeParams nodeParams;
-  checkCudaErrors(cudaGraphKernelNodeGetParams(annotationNode, &nodeParams));
+
+  // Why switch to driver API:
+  // https://forums.developer.nvidia.com/t/cuda-runtime-api-error-for-cuda-graph-and-opencv/215408/13
+  CUDA_KERNEL_NODE_PARAMS nodeParams;
+  checkCudaErrors(cuGraphKernelNodeGetParams(annotationNode, &nodeParams));
+
   assert(nodeParams.func == TaskManager::getInstance()->getDummyKernelHandle());
 
   auto kernelIOPtr = reinterpret_cast<KernelIO *>(nodeParams.kernelParams[0]);
