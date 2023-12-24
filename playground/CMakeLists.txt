@@ -15,7 +15,7 @@ add_executable(tiledCholesky tiledCholesky.cu)
 target_link_libraries(
   tiledCholesky
   cudaUtilities
-  profiling
+  annotation
   ${CUDA_cublas_LIBRARY}
   ${CUDA_cusolver_LIBRARY}
   fmt::fmt

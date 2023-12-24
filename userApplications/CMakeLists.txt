@@ -4,7 +4,7 @@ target_link_libraries(
   artificialApplication
   utilities
   cudaUtilities
-  profiling
+  annotation
   optimization
   memoryManager
   logger
