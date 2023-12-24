@@ -4,5 +4,5 @@
 
 class TwoStepOptimizationStrategy {
   public:
-    CustomGraph run(OptimizationInput optimizationInput);
+    CustomGraph run(OptimizationInput &optimizationInput);
 };

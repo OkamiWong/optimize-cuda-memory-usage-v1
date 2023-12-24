@@ -21,7 +21,7 @@ class Optimizer {
 
  private:
   template <typename Strategy>
-  CustomGraph optimize(OptimizationInput optimizationInput) {
+  CustomGraph optimize(OptimizationInput &optimizationInput) {
     Strategy strategyInstance;
     return strategyInstance.run(optimizationInput);
   }
