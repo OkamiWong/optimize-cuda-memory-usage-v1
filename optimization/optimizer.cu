@@ -7,6 +7,7 @@
 #include "../utilities/cudaGraphUtilities.hpp"
 #include "../utilities/cudaUtilities.hpp"
 #include "../utilities/disjointSet.hpp"
+#include "../utilities/logger.hpp"
 #include "optimizer.hpp"
 #include "strategies/strategies.hpp"
 #include "taskManager.hpp"
@@ -21,6 +22,8 @@ Optimizer *Optimizer::getInstance() {
 }
 
 CudaGraphExecutionTimeline getCudaGraphExecutionTimeline(cudaGraph_t graph) {
+  LOG_TRACE();
+
   auto profiler = CudaGraphExecutionTimelineProfiler::getInstance();
   profiler->initialize(graph);
 
@@ -44,6 +47,8 @@ void mergeConcurrentCudaGraphNodes(
   CudaGraphExecutionTimeline &timeline,
   DisjointSet<cudaGraphNode_t> &disjointSet
 ) {
+  LOG_TRACE();
+
   std::map<CudaGraphNodeLifetime, cudaGraphNode_t> lifetimeToCudaGraphNodeMap;
   for (auto &[node, lifetime] : timeline) {
     lifetimeToCudaGraphNodeMap[lifetime] = node;
@@ -102,6 +107,8 @@ void mapNodeToAnnotation(
   std::map<cudaGraphNode_t, std::vector<cudaGraphNode_t>> &edges,
   std::map<cudaGraphNode_t, cudaGraphNode_t> &nodeToAnnotationMap
 ) {
+  LOG_TRACE();
+
   auto rootNode = getRootNode(originalGraph);
   dfs(rootNode, nullptr, edges, nodeToAnnotationMap);
 }
@@ -143,6 +150,8 @@ OptimizationInput constructOptimizationInput(
   DisjointSet<cudaGraphNode_t> &disjointSet,
   std::map<cudaGraphNode_t, cudaGraphNode_t> &nodeToAnnotationMap
 ) {
+  LOG_TRACE();
+
   OptimizationInput optimizationInput;
 
   std::map<cudaGraphNode_t, OptimizationInput::NodeId> disjointSetRootToLogicalNodeIndexMap;

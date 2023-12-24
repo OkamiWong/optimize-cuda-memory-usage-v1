@@ -8,4 +8,5 @@ add_library(strategies SHARED twoStepOptimizationStrategy.cu)
 target_link_libraries(
   strategies
   strategyUtilities
+  logger
 )
