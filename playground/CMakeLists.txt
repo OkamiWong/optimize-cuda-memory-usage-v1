@@ -11,9 +11,9 @@ target_link_libraries(z3Playground z3::libz3 fmt::fmt)
 add_executable(orToolsPlayground orToolsPlayground.cpp)
 target_link_libraries(orToolsPlayground ortools::ortools fmt::fmt)
 
-add_executable(tiledCholesky tiledCholesky.cu)
+add_executable(tiledCholeskyPlayground tiledCholesky.cu)
 target_link_libraries(
-  tiledCholesky
+  tiledCholeskyPlayground
   cudaUtilities
   annotation
   ${CUDA_cublas_LIBRARY}
