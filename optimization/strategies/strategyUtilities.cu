@@ -1,5 +1,6 @@
 #include <fmt/core.h>
 
+#include <cstdio>
 #include <string>
 
 #include "strategyUtilities.hpp"
@@ -8,32 +9,35 @@ inline std::string getLogicalNodeName(OptimizationInput::NodeId index) {
   return fmt::format("logical_node_{}", index);
 }
 
-void printEdges(OptimizationInput &input) {
+void printEdges(FILE *fp, OptimizationInput &input) {
   for (const auto &[u, destinations] : input.edges) {
     for (auto v : destinations) {
-      fmt::print("{} -> {}\n", getLogicalNodeName(u), getLogicalNodeName(v));
+      fmt::print(fp, "{} -> {}\n", getLogicalNodeName(u), getLogicalNodeName(v));
     }
   }
 }
 
-void printLogicalNode(int index, OptimizationInput::LogicalNode &node) {
-  fmt::print("subgraph {} {{\n", getLogicalNodeName(index));
-  fmt::print("label=\"{}\"\n", getLogicalNodeName(index));
-  fmt::print("}}\n");
+void printLogicalNode(FILE *fp, int index, OptimizationInput::LogicalNode &node) {
+  fmt::print(fp, "subgraph {} {{\n", getLogicalNodeName(index));
+  fmt::print(fp, "label=\"{}\"\n", getLogicalNodeName(index));
+  fmt::print(fp, "}}\n");
 }
 
-void printLogicalNodes(OptimizationInput &input) {
+void printLogicalNodes(FILE *fp, OptimizationInput &input) {
   for (int i = 0; i < input.nodes.size(); i++) {
-    printLogicalNode(i, input.nodes[i]);
+    printLogicalNode(fp, i, input.nodes[i]);
   }
 }
 
 void printOptimizationInput(OptimizationInput &input) {
-  fmt::print("graph G {{\n");
+  auto fp = fopen("optimizationInput.dot", "w");
 
-  printLogicalNodes(input);
+  fmt::print(fp, "digraph G {{\n");
 
-  printEdges(input);
+  printLogicalNodes(fp, input);
+  printEdges(fp, input);
 
-  fmt::print("}}\n");
+  fmt::print(fp, "}}\n");
+
+  fclose(fp);
 }
