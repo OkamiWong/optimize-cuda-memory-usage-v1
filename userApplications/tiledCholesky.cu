@@ -227,7 +227,9 @@ void initializeDeviceData(double *h_originalMatrix, double *d_matrix) {
   constexpr size_t NUM_THREADS = 1024;
   constexpr size_t NUM_BLOCKS = (N * N + NUM_THREADS) / NUM_THREADS;
   storeBlockMatrixInContiguousSpace<<<NUM_BLOCKS, NUM_THREADS>>>(d_matrix, d_originalMatrix);
+
   checkCudaErrors(cudaDeviceSynchronize());
+
   checkCudaErrors(cudaFree(d_originalMatrix));
 }
 
