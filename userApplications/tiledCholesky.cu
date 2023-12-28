@@ -18,9 +18,9 @@
 #include <tuple>
 #include <vector>
 
+#include "../optimization/optimization.hpp"
 #include "../profiling/annotation.hpp"
 #include "../utilities/cudaUtilities.hpp"
-#include "../optimization/optimization.hpp"
 
 constexpr size_t N = 8;
 constexpr size_t B = 2;
@@ -201,15 +201,52 @@ class TiledCholeskyGraphCreator {
   }
 };
 
+void initializeHostData(double *h_originalMatrix) {
+  generateRandomSymmetricPositiveDefiniteMatrix(h_originalMatrix, N);
+}
+
+__global__ void storeBlockMatrixInContiguousSpace(double *d_matrix, double *d_originalMatrix) {
+  size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+  size_t i = (idx % N) / B;
+  size_t k = (idx % N) - (i * B);
+  size_t j = (idx / N) / B;
+  size_t l = (idx / N) - (j * B);
+
+  if (i >= N || j >= N || k >= B || l >= B) return;
+
+  d_matrix[(B * B) * (i + j * T) + k + l * B] = d_originalMatrix[(i * B + k) + (j * B * N + l * N)];
+}
+
+void initializeDeviceData(double *h_originalMatrix, double *d_matrix) {
+  double *d_originalMatrix;
+  checkCudaErrors(cudaMalloc(&d_originalMatrix, N * N * sizeof(double)));
+  checkCudaErrors(cudaMemcpy(d_originalMatrix, h_originalMatrix, N * N * sizeof(double), cudaMemcpyHostToDevice));
+
+  // Reorder elements in d_matrix, such that each block matrix is stored in a contiguous space
+  constexpr size_t NUM_THREADS = 1024;
+  constexpr size_t NUM_BLOCKS = (N * N + NUM_THREADS) / NUM_THREADS;
+  storeBlockMatrixInContiguousSpace<<<NUM_BLOCKS, NUM_THREADS>>>(d_matrix, d_originalMatrix);
+  checkCudaErrors(cudaDeviceSynchronize());
+  checkCudaErrors(cudaFree(d_originalMatrix));
+}
+
 void tiledCholesky() {
   // Initialize data
-  auto originalMatrix = std::make_unique<double[]>(N * N);  // Column-major
-  generateRandomSymmetricPositiveDefiniteMatrix(originalMatrix.get(), N);
+  auto h_originalMatrix = std::make_unique<double[]>(N * N);  // Column-major
+  initializeHostData(h_originalMatrix.get());
 
-  // Copy to device
+  // Initialize device data
   double *d_matrix;
   checkCudaErrors(cudaMallocManaged(&d_matrix, N * N * sizeof(double)));
-  checkCudaErrors(cudaMemcpy(d_matrix, originalMatrix.get(), N * N * sizeof(double), cudaMemcpyHostToDevice));
+  initializeDeviceData(h_originalMatrix.get(), d_matrix);
+
+  fmt::print("h_originalMatrix:\n");
+  printSquareMatrix(h_originalMatrix.get(), N);
+  fmt::print("\nd_matrix:\n");
+  printSquareMatrix(d_matrix, N);
+
+  return;
 
   auto getMatrixBlock = [&](int i, int j) {
     return d_matrix + i * B + j * B * N;
@@ -357,7 +394,7 @@ void tiledCholesky() {
   checkCudaErrors(cudaDeviceSynchronize());
 
   cleanCusolverCholeskyDecompositionResult(d_matrix, N);
-  fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(originalMatrix.get(), d_matrix, N));
+  fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(h_originalMatrix.get(), d_matrix, N));
 
   free(h_workspace);
   cudaFree(d_matrix);
