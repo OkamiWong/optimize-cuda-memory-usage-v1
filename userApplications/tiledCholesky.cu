@@ -20,6 +20,7 @@
 
 #include "../optimization/optimization.hpp"
 #include "../profiling/annotation.hpp"
+#include "../profiling/memoryManager.hpp"
 #include "../utilities/cudaUtilities.hpp"
 
 constexpr size_t N = 8;
@@ -254,6 +255,11 @@ void tiledCholesky() {
   checkCudaErrors(cudaMallocManaged(&d_matrix, N * N * sizeof(double)));
   initializeDeviceData(h_originalMatrix.get(), d_matrix);
 
+  // Register matrix block sizes
+  for (int i = 0; i < T; i++)
+    for (int j = 0; j < T; j++)
+      registerManagedMemoryAddress(d_matrix + (B * B) * (i + j * T), B * B * sizeof(double));
+
   auto getMatrixBlock = [&](int i, int j) {
     return d_matrix + (B * B) * (i + j * T);
   };
@@ -311,6 +317,7 @@ void tiledCholesky() {
       std::make_pair(k, k),
       {std::make_pair(k, k)}
     );
+    annotateNextKernel({getMatrixBlock(k, k)}, {getMatrixBlock(k, k)}, s);
     checkCudaErrors(cusolverDnXpotrf(
       cusolverDnHandle,
       cusolverDnParams,
@@ -335,6 +342,7 @@ void tiledCholesky() {
         std::make_pair(i, k),
         {std::make_pair(k, k), std::make_pair(i, k)}
       );
+      annotateNextKernel({getMatrixBlock(i, k), getMatrixBlock(k, k)}, {getMatrixBlock(i, k)}, s);
       checkCudaErrors(cublasDtrsm(
         cublasHandle,
         CUBLAS_SIDE_RIGHT,
@@ -356,6 +364,7 @@ void tiledCholesky() {
         std::make_pair(i, i),
         {std::make_pair(i, i), std::make_pair(i, k)}
       );
+      annotateNextKernel({getMatrixBlock(i, i), getMatrixBlock(i, k)}, {getMatrixBlock(i, i)}, s);
       checkCudaErrors(cublasDsyrk(
         cublasHandle,
         CUBLAS_FILL_MODE_LOWER,
@@ -373,6 +382,7 @@ void tiledCholesky() {
           std::make_pair(j, i),
           {std::make_pair(j, i), std::make_pair(j, k), std::make_pair(i, k)}
         );
+        annotateNextKernel({getMatrixBlock(j, i), getMatrixBlock(j, k), getMatrixBlock(i, k)}, {getMatrixBlock(j, i)}, s);
         checkCudaErrors(cublasGemmEx(
           cublasHandle,
           CUBLAS_OP_N,
