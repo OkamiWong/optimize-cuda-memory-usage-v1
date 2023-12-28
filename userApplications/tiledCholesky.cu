@@ -54,9 +54,20 @@ void printSquareMatrix(double *h_A, const size_t n) {
   }
 }
 
+// Restore the element order before blocks were moved to contiguous spaces.
 // Set upper triangle entries (excluding diagonal entries) in column-major order to zero.
-// Then, transpose to row-major order.
-void cleanCusolverCholeskyDecompositionResult(double *L, const int n) {
+// Transpose to row-major order.
+void cleanTiledCholeskyDecompositionResult(double *L, const int n, const int b) {
+  auto L_copy = std::make_unique<double[]>(N * N);
+  memcpy(L_copy.get(), L, N * N * sizeof(double));
+
+  const int t = n / b;
+  for (int i = 0; i < t; i++)
+    for (int j = 0; j < t; j++)
+      for (int k = 0; k < b; k++)
+        for (int l = 0; l < b; l++)
+          L[(i * b + k) + (j * b * n + l * n)] = L_copy[(b * b) * (i + j * t) + k + l * b];
+
   for (int i = 0; i < n; i++) {
     for (int j = i + 1; j < n; j++) {
       L[i + j * n] = 0;
@@ -243,15 +254,8 @@ void tiledCholesky() {
   checkCudaErrors(cudaMallocManaged(&d_matrix, N * N * sizeof(double)));
   initializeDeviceData(h_originalMatrix.get(), d_matrix);
 
-  fmt::print("h_originalMatrix:\n");
-  printSquareMatrix(h_originalMatrix.get(), N);
-  fmt::print("\nd_matrix:\n");
-  printSquareMatrix(d_matrix, N);
-
-  return;
-
   auto getMatrixBlock = [&](int i, int j) {
-    return d_matrix + i * B + j * B * N;
+    return d_matrix + (B * B) * (i + j * T);
   };
 
   // Initialize libraries
@@ -278,7 +282,7 @@ void tiledCholesky() {
     B,
     CUDA_R_64F,
     d_matrix,
-    N,
+    B,
     CUDA_R_64F,
     &workspaceInBytesOnDevice,
     &workspaceInBytesOnHost
@@ -314,7 +318,7 @@ void tiledCholesky() {
       B,
       CUDA_R_64F,
       getMatrixBlock(k, k),
-      N,
+      B,
       CUDA_R_64F,
       d_workspace,
       workspaceInBytesOnDevice,
@@ -339,8 +343,8 @@ void tiledCholesky() {
         CUBLAS_DIAG_NON_UNIT,
         B, B,
         one,
-        getMatrixBlock(k, k), N,
-        getMatrixBlock(i, k), N
+        getMatrixBlock(k, k), B,
+        getMatrixBlock(i, k), B
       ));
       tiledCholeskyGraphCreator->endCaptureOperation();
     }
@@ -357,8 +361,8 @@ void tiledCholesky() {
         CUBLAS_FILL_MODE_LOWER,
         CUBLAS_OP_N,
         B, B,
-        minusOne, getMatrixBlock(i, k), N,
-        one, getMatrixBlock(i, i), N
+        minusOne, getMatrixBlock(i, k), B,
+        one, getMatrixBlock(i, i), B
       ));
       tiledCholeskyGraphCreator->endCaptureOperation();
 
@@ -375,10 +379,10 @@ void tiledCholesky() {
           CUBLAS_OP_T,
           B, B, B,
           minusOne,
-          getMatrixBlock(j, k), CUDA_R_64F, N,
-          getMatrixBlock(i, k), CUDA_R_64F, N,
+          getMatrixBlock(j, k), CUDA_R_64F, B,
+          getMatrixBlock(i, k), CUDA_R_64F, B,
           one,
-          getMatrixBlock(j, i), CUDA_R_64F, N,
+          getMatrixBlock(j, i), CUDA_R_64F, B,
           CUBLAS_COMPUTE_64F,
           CUBLAS_GEMM_DEFAULT
         ));
@@ -395,7 +399,7 @@ void tiledCholesky() {
 
   checkCudaErrors(cudaDeviceSynchronize());
 
-  cleanCusolverCholeskyDecompositionResult(d_matrix, N);
+  cleanTiledCholeskyDecompositionResult(d_matrix, N, B);
   fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(h_originalMatrix.get(), d_matrix, N));
 
   free(h_workspace);
