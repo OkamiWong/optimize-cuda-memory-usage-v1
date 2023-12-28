@@ -401,16 +401,18 @@ void tiledCholesky() {
     }
   }
 
-  checkCudaErrors(cudaGraphDebugDotPrint(graph, "./graph.dot", 0));
+  auto optimizedGraph = profileAndOptimize(graph);
 
-  cudaGraphExec_t graphExec;
-  checkCudaErrors(cudaGraphInstantiate(&graphExec, graph, nullptr, nullptr, 0));
-  checkCudaErrors(cudaGraphLaunch(graphExec, s));
+  // checkCudaErrors(cudaGraphDebugDotPrint(graph, "./graph.dot", 0));
 
-  checkCudaErrors(cudaDeviceSynchronize());
+  // cudaGraphExec_t graphExec;
+  // checkCudaErrors(cudaGraphInstantiate(&graphExec, graph, nullptr, nullptr, 0));
+  // checkCudaErrors(cudaGraphLaunch(graphExec, s));
 
-  cleanTiledCholeskyDecompositionResult(d_matrix, N, B);
-  fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(h_originalMatrix.get(), d_matrix, N));
+  // checkCudaErrors(cudaDeviceSynchronize());
+
+  // cleanTiledCholeskyDecompositionResult(d_matrix, N, B);
+  // fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(h_originalMatrix.get(), d_matrix, N));
 
   free(h_workspace);
   cudaFree(d_matrix);
