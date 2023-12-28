@@ -11,9 +11,14 @@ struct MemoryManager {
 };
 
 template <typename T>
+__host__ void registerManagedMemoryAddress(T *devPtr, size_t size) {
+  MemoryManager::managedMemoryAddressToSizeMap[static_cast<void *>(devPtr)] = size;
+}
+
+template <typename T>
 __host__ cudaError_t wrappedCudaMallocManaged(T **devPtr, size_t size) {
   auto err = cudaMallocManaged(devPtr, size);
-  MemoryManager::managedMemoryAddressToSizeMap[(void *)*devPtr] = size;
+  registerManagedMemoryAddress(*devPtr, size);
   return err;
 }
 
