@@ -245,7 +245,7 @@ void initializeDeviceData(double *h_originalMatrix, double *d_matrix) {
   checkCudaErrors(cudaFree(d_originalMatrix));
 }
 
-void tiledCholesky() {
+void tiledCholesky(bool optimized) {
   // Initialize data
   auto h_originalMatrix = std::make_unique<double[]>(N * N);  // Column-major
   initializeHostData(h_originalMatrix.get());
@@ -401,18 +401,20 @@ void tiledCholesky() {
     }
   }
 
-  auto optimizedGraph = profileAndOptimize(graph);
+  if (optimized) {
+    auto optimizedGraph = profileAndOptimize(graph);
+  } else {
+    checkCudaErrors(cudaGraphDebugDotPrint(graph, "./graph.dot", 0));
 
-  // checkCudaErrors(cudaGraphDebugDotPrint(graph, "./graph.dot", 0));
+    cudaGraphExec_t graphExec;
+    checkCudaErrors(cudaGraphInstantiate(&graphExec, graph, nullptr, nullptr, 0));
+    checkCudaErrors(cudaGraphLaunch(graphExec, s));
 
-  // cudaGraphExec_t graphExec;
-  // checkCudaErrors(cudaGraphInstantiate(&graphExec, graph, nullptr, nullptr, 0));
-  // checkCudaErrors(cudaGraphLaunch(graphExec, s));
+    checkCudaErrors(cudaDeviceSynchronize());
 
-  // checkCudaErrors(cudaDeviceSynchronize());
-
-  // cleanTiledCholeskyDecompositionResult(d_matrix, N, B);
-  // fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(h_originalMatrix.get(), d_matrix, N));
+    cleanTiledCholeskyDecompositionResult(d_matrix, N, B);
+    fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(h_originalMatrix.get(), d_matrix, N));
+  }
 
   free(h_workspace);
   cudaFree(d_matrix);
@@ -420,7 +422,7 @@ void tiledCholesky() {
 }
 
 int main() {
-  tiledCholesky();
+  tiledCholesky(true);
 
   return 0;
 }
