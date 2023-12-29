@@ -43,7 +43,7 @@ CUfunction TaskManager::getDummyKernelHandle() {
   return this->dummyKernelHandle;
 }
 
-void TaskManager::queueKernelToStream(cudaGraphNode_t node, cudaStream_t stream) {
+void TaskManager::queueCudaKernelToStream(cudaGraphNode_t node, cudaStream_t stream) {
   CUDA_KERNEL_NODE_PARAMS params;
   checkCudaErrors(cuGraphKernelNodeGetParams(node, &params));
 
@@ -77,6 +77,31 @@ void TaskManager::queueKernelToStream(cudaGraphNode_t node, cudaStream_t stream)
     ));
   } else {
     LOG_TRACE_WITH_INFO("Currently only support params.func != NULL or params.kernel != NULL");
+    exit(-1);
+  }
+}
+
+void TaskManager::queueCudaMemsetToStream(cudaGraphNode_t node, cudaStream_t stream) {
+  CUDA_MEMSET_NODE_PARAMS params;
+  checkCudaErrors(cuGraphMemsetNodeGetParams(node, &params));
+  if (params.elementSize == 1) {
+    cuMemsetD2D8Async(params.dst, params.pitch, params.value, params.width, params.height, stream);
+  } else if (params.elementSize == 2) {
+    cuMemsetD2D16Async(params.dst, params.pitch, params.value, params.width, params.height, stream);
+  } else if (params.elementSize == 4) {
+    cuMemsetD2D32Async(params.dst, params.pitch, params.value, params.width, params.height, stream);
+  }
+}
+
+void TaskManager::queueCudaNodeToStream(cudaGraphNode_t node, cudaStream_t stream) {
+  CUgraphNodeType nodeType;
+  checkCudaErrors(cuGraphNodeGetType(node, &nodeType));
+  if (nodeType == CU_GRAPH_NODE_TYPE_KERNEL) {
+    this->queueCudaKernelToStream(node, stream);
+  } else if (nodeType == CU_GRAPH_NODE_TYPE_MEMSET) {
+    this->queueCudaMemsetToStream(node, stream);
+  } else {
+    LOG_TRACE_WITH_INFO("Currently only support executing kernel or memset");
     exit(-1);
   }
 }
@@ -154,7 +179,7 @@ void TaskManager::executeOptimizedGraph(CustomGraph &optimizedGraph) {
         uStream
       ));
     } else if (nodeType == CustomGraph::NodeType::kernel) {
-      this->queueKernelToStream(optimizedGraph.nodeIdToCuGraphNodeMap[u], uStream);
+      this->queueCudaNodeToStream(optimizedGraph.nodeIdToCuGraphNodeMap[u], uStream);
     } else if (nodeType == CustomGraph::NodeType::empty) {
       // Pass
     } else {

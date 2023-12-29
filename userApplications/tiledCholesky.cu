@@ -18,6 +18,7 @@
 #include <tuple>
 #include <vector>
 
+#include "../include/argh.h"
 #include "../optimization/optimization.hpp"
 #include "../profiling/annotation.hpp"
 #include "../profiling/memoryManager.hpp"
@@ -401,19 +402,35 @@ void tiledCholesky(bool optimized) {
     }
   }
 
+  CudaEventClock clock;
+
   if (optimized) {
     auto optimizedGraph = profileAndOptimize(graph);
+
+    initializeDeviceData(h_originalMatrix.get(), d_matrix);
+
+    clock.start();
+    executeOptimizedGraph(optimizedGraph);
+    clock.end();
+
+    cleanTiledCholeskyDecompositionResult(d_matrix, N, B);
+    fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(h_originalMatrix.get(), d_matrix, N));
+    fmt::print("Total time used (s): {}\n", clock.getTimeInSeconds());
   } else {
     checkCudaErrors(cudaGraphDebugDotPrint(graph, "./graph.dot", 0));
 
     cudaGraphExec_t graphExec;
     checkCudaErrors(cudaGraphInstantiate(&graphExec, graph, nullptr, nullptr, 0));
+
+    clock.start();
     checkCudaErrors(cudaGraphLaunch(graphExec, s));
+    clock.end();
 
     checkCudaErrors(cudaDeviceSynchronize());
 
     cleanTiledCholeskyDecompositionResult(d_matrix, N, B);
     fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(h_originalMatrix.get(), d_matrix, N));
+    fmt::print("Total time used (s): {}\n", clock.getTimeInSeconds());
   }
 
   free(h_workspace);
@@ -421,8 +438,10 @@ void tiledCholesky(bool optimized) {
   cudaFree(d_workspace);
 }
 
-int main() {
-  tiledCholesky(true);
+int main(int argc, char **argv) {
+  auto cmdl = argh::parser(argc, argv);
+
+  tiledCholesky(cmdl["optimized"]);
 
   return 0;
 }

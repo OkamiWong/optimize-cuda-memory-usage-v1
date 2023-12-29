@@ -28,7 +28,9 @@ class TaskManager {
 
   cudaStream_t sequentialStream;
 
-  void queueKernelToStream(CUgraphNode node, cudaStream_t stream);
+  void queueCudaNodeToStream(CUgraphNode node, cudaStream_t stream);
+  void queueCudaKernelToStream(CUgraphNode node, cudaStream_t stream);
+  void queueCudaMemsetToStream(CUgraphNode node, cudaStream_t stream);
 
   // Calculate the stream assignment by bipartite matching
   std::map<CustomGraph::NodeId, StreamId> getStreamAssignment(CustomGraph &optimizedGraph);
