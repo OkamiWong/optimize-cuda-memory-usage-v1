@@ -18,6 +18,7 @@
 #include <tuple>
 #include <vector>
 
+#include "../include/argh.h"
 #include "../profiling/annotation.hpp"
 #include "../utilities/cudaUtilities.hpp"
 
@@ -443,10 +444,18 @@ void tiledCholesky() {
   cudaFree(d_workspace);
 }
 
-int main() {
-  // trivialCholesky();
+void cholesky(bool tiled) {
+  if (tiled) {
+    tiledCholesky();
+  } else {
+    trivialCholesky();
+  }
+}
 
-  tiledCholesky();
+int main(int argc, char **argv) {
+  auto cmdl = argh::parser(argc, argv);
+
+  cholesky(cmdl["tiled"]);
 
   return 0;
 }
