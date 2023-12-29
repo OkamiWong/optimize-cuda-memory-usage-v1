@@ -16,7 +16,7 @@ CustomGraph NoOptimizationStrategy::run(OptimizationInput &input) {
   }
 
   // Add edges between logical ndoes
-  for (const auto &[u, destinations] : optimizedGraph.edges) {
+  for (const auto &[u, destinations] : input.edges) {
     for (auto v : destinations) {
       optimizedGraph.addEdge(logicalNodeEnds[u], logicalNodeStarts[v]);
     }
