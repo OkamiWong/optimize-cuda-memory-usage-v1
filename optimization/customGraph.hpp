@@ -31,7 +31,7 @@ struct CustomGraph {
   std::vector<NodeId> nodes;
   std::map<NodeId, std::vector<NodeId>> edges;
   std::map<NodeId, NodeType> nodeIdToNodeTypeMap;
-  std::map<NodeId, CUgraphNode> nodeIdToCuGraphNodeMap;
+  std::map<NodeId, cudaGraphNode_t> nodeIdToCuGraphNodeMap;
   std::map<NodeId, DataMovement> nodeIdToDataMovementMap;
 
   NodeId addEmptyNode() {
@@ -41,7 +41,7 @@ struct CustomGraph {
     return u;
   }
 
-  NodeId addKernelNode(CUgraphNode nodeInOriginalGraph) {
+  NodeId addKernelNode(cudaGraphNode_t nodeInOriginalGraph) {
     auto u = this->addEmptyNode();
     this->nodeIdToNodeTypeMap[u] = NodeType::kernel;
     this->nodeIdToCuGraphNodeMap[u] = nodeInOriginalGraph;

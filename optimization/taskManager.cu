@@ -43,7 +43,7 @@ CUfunction TaskManager::getDummyKernelHandle() {
   return this->dummyKernelHandle;
 }
 
-void TaskManager::queueKernelToStream(CUgraphNode node, cudaStream_t stream) {
+void TaskManager::queueKernelToStream(cudaGraphNode_t node, cudaStream_t stream) {
   CUDA_KERNEL_NODE_PARAMS params;
   checkCudaErrors(cuGraphKernelNodeGetParams(node, &params));
 
