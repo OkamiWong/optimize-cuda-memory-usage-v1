@@ -24,8 +24,8 @@
 #include "../profiling/memoryManager.hpp"
 #include "../utilities/cudaUtilities.hpp"
 
-constexpr size_t N = 8;
-constexpr size_t B = 2;
+constexpr size_t N = 512;
+constexpr size_t B = 128;
 
 constexpr size_t T = N / B;
 
@@ -78,7 +78,7 @@ void cleanTiledCholeskyDecompositionResult(double *L, const int n, const int b) 
   }
 }
 
-bool verifyCholeskyDecomposition(double *A, double *L, const int n) {
+bool verifyCholeskyDecomposition(double *A, double *L, const int n, bool verbose = false) {
   auto newA = std::make_unique<double[]>(n * n);
   memset(newA.get(), 0, n * n * sizeof(double));
   for (int i = 0; i < n; i++) {
@@ -96,17 +96,19 @@ bool verifyCholeskyDecomposition(double *A, double *L, const int n) {
     }
   }
 
-  fmt::print("A:\n");
-  printSquareMatrix(A, n);
+  if (verbose) {
+    fmt::print("A:\n");
+    printSquareMatrix(A, n);
 
-  fmt::print("\nnewA:\n");
-  printSquareMatrix(newA.get(), n);
+    fmt::print("\nnewA:\n");
+    printSquareMatrix(newA.get(), n);
 
-  fmt::print("\nL:\n");
-  printSquareMatrix(L, n);
-  fmt::print("\n");
+    fmt::print("\nL:\n");
+    printSquareMatrix(L, n);
+    fmt::print("\n");
 
-  fmt::print("error = {:.6f}\n", error);
+    fmt::print("error = {:.6f}\n", error);
+  }
 
   return error <= 1e-6;
 }
@@ -226,7 +228,7 @@ __global__ void storeBlockMatrixInContiguousSpace(double *d_matrix, double *d_or
   size_t j = (idx / N) / B;
   size_t l = (idx / N) - (j * B);
 
-  if (i >= N || j >= N || k >= B || l >= B) return;
+  if (i >= T || j >= T || k >= B || l >= B) return;
 
   d_matrix[(B * B) * (i + j * T) + k + l * B] = d_originalMatrix[(i * B + k) + (j * B * N + l * N)];
 }
