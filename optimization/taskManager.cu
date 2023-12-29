@@ -62,6 +62,7 @@ void TaskManager::queueCudaKernelToStream(cudaGraphNode_t node, cudaStream_t str
   config.numAttrs = 0;
 
   if (params.func != nullptr) {
+    if (params.func == this->dummyKernelHandle) return;
     checkCudaErrors(cuLaunchKernelEx(
       &config,
       params.func,
@@ -69,9 +70,11 @@ void TaskManager::queueCudaKernelToStream(cudaGraphNode_t node, cudaStream_t str
       params.extra
     ));
   } else if (params.kern != nullptr) {
+    auto func = reinterpret_cast<CUfunction>(params.kern);
+    if (func == this->dummyKernelHandle) return;
     checkCudaErrors(cuLaunchKernelEx(
       &config,
-      reinterpret_cast<CUfunction>(params.kern),
+      func,
       params.kernelParams,
       params.extra
     ));
