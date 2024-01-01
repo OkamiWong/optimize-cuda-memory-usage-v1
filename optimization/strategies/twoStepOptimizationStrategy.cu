@@ -5,7 +5,7 @@
 CustomGraph TwoStepOptimizationStrategy::run(OptimizationInput &input) {
   LOG_TRACE();
 
-  printOptimizationInput(input);
+  
 
   CustomGraph optimizedGraph;
   return optimizedGraph;
