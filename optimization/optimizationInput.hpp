@@ -4,7 +4,7 @@
 #include <set>
 #include <vector>
 
-#include "../profiling/memoryManager.hpp"
+typedef std::tuple<void *, size_t> ArrayInfo;
 
 struct OptimizationInput {
   // The domain of NodeId is [0, the total number of nodes).
@@ -12,7 +12,7 @@ struct OptimizationInput {
 
   struct LogicalNode {
     struct DataDependency {
-      std::set<MemoryManager::ArrayInfo> inputs, outputs;
+      std::set<ArrayInfo> inputs, outputs;
     };
 
     std::set<cudaGraphNode_t> nodes;

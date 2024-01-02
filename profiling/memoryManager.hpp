@@ -5,7 +5,6 @@
 #include <set>
 
 struct MemoryManager {
-  typedef std::tuple<void *, size_t> ArrayInfo;
   inline static std::map<void *, size_t> managedMemoryAddressToSizeMap;
   inline static std::set<void *> managedMemorySpacesInitiallyOnDevice;
 };
