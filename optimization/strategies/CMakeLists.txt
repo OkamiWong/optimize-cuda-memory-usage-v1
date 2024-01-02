@@ -12,8 +12,9 @@ target_link_libraries(
   logger
 )
 
-add_library(integerProgrammingSolver SHARED integerProgrammingSolver.cu)
+add_library(integerProgrammingSolver SHARED integerProgrammingSolver.cpp)
 target_link_libraries(
   integerProgrammingSolver
   ortools::ortools
+  logger
 )
