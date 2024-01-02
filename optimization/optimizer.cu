@@ -1,9 +1,11 @@
+#include <cuda.h>
+
 #include <cassert>
 #include <limits>
 #include <utility>
-#include <cuda.h>
 
 #include "../profiling/annotation.hpp"
+#include "../profiling/memoryManager.hpp"
 #include "../utilities/cudaGraphExecutionTimelineProfiler.hpp"
 #include "../utilities/cudaGraphUtilities.hpp"
 #include "../utilities/cudaUtilities.hpp"
