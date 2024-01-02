@@ -11,6 +11,9 @@ target_link_libraries(z3Playground z3::libz3 fmt::fmt)
 add_executable(orToolsPlayground orToolsPlayground.cpp)
 target_link_libraries(orToolsPlayground ortools::ortools fmt::fmt)
 
+add_executable(orToolsRoutingPlayground orToolsRoutingPlayground.cpp)
+target_link_libraries(orToolsRoutingPlayground ortools::ortools fmt::fmt)
+
 add_executable(tiledCholeskyPlayground tiledCholesky.cu)
 target_link_libraries(
   tiledCholeskyPlayground
