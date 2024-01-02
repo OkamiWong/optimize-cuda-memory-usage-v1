@@ -1,28 +1,22 @@
 #pragma once
 
 #include <vector>
-#include "../optimizationInput.hpp"
 
 class FirstStepSolver {
  public:
   struct Input {
+    int n;
     std::vector<std::vector<size_t>> dataDependencyOverlapInBytes;
     std::vector<std::vector<bool>> canPrecedeInTopologicalSort;
   };
 
   struct Output {
+    std::vector<int> nodeExecutionOrder;
   };
 
-  static Input constructInput(OptimizationInput optimizationInput);
-};
+  FirstStepSolver(Input &&input);
+  Output solve();
 
-class SecondStepSolver {
- public:
-  struct Input {
-  };
-
-  struct Output {
-  };
-
-  static Input constructInput();
+ private:
+  Input input;
 };
