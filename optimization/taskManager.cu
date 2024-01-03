@@ -177,7 +177,7 @@ void TaskManager::executeOptimizedGraph(CustomGraph &optimizedGraph) {
         dataMovement.address,
         dataMovement.size,
         dataMovement.direction == CustomGraph::DataMovement::Direction::hostToDevice
-          ? CudaConstants::DEVICE_ID
+          ? Constants::DEVICE_ID
           : cudaCpuDeviceId,
         uStream
       ));

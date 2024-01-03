@@ -13,12 +13,12 @@ void warmUpCudaDevice() {
 }
 
 void initializeCudaDevice(bool displayDeviceInfo) {
-  checkCudaErrors(cudaSetDevice(CudaConstants::DEVICE_ID));
+  checkCudaErrors(cudaSetDevice(Constants::DEVICE_ID));
 
   if (displayDeviceInfo) {
     cudaDeviceProp deviceProp;
-    checkCudaErrors(cudaGetDeviceProperties(&deviceProp, CudaConstants::DEVICE_ID));
-    printf("GPU Device %d: %s\n", CudaConstants::DEVICE_ID, deviceProp.name);
+    checkCudaErrors(cudaGetDeviceProperties(&deviceProp, Constants::DEVICE_ID));
+    printf("GPU Device %d: %s\n", Constants::DEVICE_ID, deviceProp.name);
     printf("Compute Capability: %d.%d\n\n", deviceProp.major, deviceProp.minor);
   }
 

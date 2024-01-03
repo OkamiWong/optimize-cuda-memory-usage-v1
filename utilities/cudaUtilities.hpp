@@ -3,11 +3,7 @@
 #include <cstdio>
 #include <cstdlib>
 
-struct CudaConstants {
-  static constexpr int DEVICE_ID = 0;
-  static constexpr float PREFETCHING_BANDWIDTH_IN_GBPS = 15;
-  static constexpr float PREFETCHING_BANDWIDTH = PREFETCHING_BANDWIDTH_IN_GBPS * 1e9;
-};
+#include "constants.hpp"
 
 template <typename T>
 void __check(T result, char const *const func, const char *const file, int const line) {
