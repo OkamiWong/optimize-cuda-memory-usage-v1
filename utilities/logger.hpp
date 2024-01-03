@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstring>
+
 int __log_trace(const char* file, const char* function, const char* fmt, ...);
 
 #define __FILENAME__ (strrchr("/" __FILE__, '/') + 1)
