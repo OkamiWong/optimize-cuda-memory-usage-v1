@@ -99,9 +99,9 @@ void dfs(
 
   if (isAnnotationNode) {
     currentAnnotationNode = currentNode;
-  } else {
-    nodeToAnnotationMap[currentNode] = currentAnnotationNode;
   }
+
+  nodeToAnnotationMap[currentNode] = currentAnnotationNode;
 
   for (auto nextNode : edges[currentNode]) {
     dfs(nextNode, currentAnnotationNode, edges, nodeToAnnotationMap);
@@ -119,7 +119,18 @@ void mapNodeToAnnotation(
   dfs(rootNode, nullptr, edges, nodeToAnnotationMap);
 }
 
-OptimizationInput::LogicalNode::DataDependency convertKernelIOToKernelDataDependency(const KernelIO &kernelIO) {
+void mergeNodesWithSameAnnotation(
+  std::vector<cudaGraphNode_t> &nodes,
+  std::map<cudaGraphNode_t, cudaGraphNode_t> &nodeToAnnotationMap,
+  DisjointSet<cudaGraphNode_t> &disjointSet
+) {
+  for (auto u : nodes) {
+    disjointSet.unionUnderlyingSets(u, nodeToAnnotationMap[u]);
+  }
+}
+
+OptimizationInput::LogicalNode::DataDependency
+convertKernelIOToKernelDataDependency(const KernelIO &kernelIO) {
   OptimizationInput::LogicalNode::DataDependency dep;
   for (int i = 0; i < KernelIO::MAX_NUM_PTR; i++) {
     void *ptr = kernelIO.inputs[i];
@@ -202,7 +213,7 @@ OptimizationInput constructOptimizationInput(
     uint64_t minStart = std::numeric_limits<uint64_t>::max(), maxEnd = 0;
 
     for (auto node : logicalNode.nodes) {
-      const auto isAnnotationNode = nodeToAnnotationMap.find(node) == nodeToAnnotationMap.end();
+      const auto isAnnotationNode = nodeToAnnotationMap[node] == node;
       if (isAnnotationNode) continue;
 
       minStart = std::min(minStart, timeline[node].first);
@@ -233,6 +244,8 @@ CustomGraph Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
 
   std::map<cudaGraphNode_t, cudaGraphNode_t> nodeToAnnotationMap;
   mapNodeToAnnotation(originalGraph, edges, nodeToAnnotationMap);
+
+  mergeNodesWithSameAnnotation(nodes, nodeToAnnotationMap, disjointSet);
 
   auto optimizationInput = constructOptimizationInput(originalGraph, edges, timeline, disjointSet, nodeToAnnotationMap);
 
