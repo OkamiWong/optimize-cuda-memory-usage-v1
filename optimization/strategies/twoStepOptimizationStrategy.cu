@@ -1,46 +1,31 @@
+#include <fmt/core.h>
+
 #include <algorithm>
 #include <iterator>
 #include <numeric>
 #include <utility>
 
 #include "../../utilities/logger.hpp"
-#include "integerProgrammingSolver.hpp"
+#include "firstStepSolver.hpp"
 #include "strategies.hpp"
 #include "strategyUtilities.hpp"
 
 FirstStepSolver::Input convertToFirstStepInput(OptimizationInput &optimizationInput) {
-  const auto n = optimizationInput.nodes.size();
+  const auto numLogicalNodes = optimizationInput.nodes.size();
 
   FirstStepSolver::Input firstStepInput;
 
-  // Plus one for one extra sentinel node
-  firstStepInput.n = n + 1;
-  firstStepInput.dataDependencyOverlapInBytes.resize(n + 1, std::vector<size_t>(n + 1, 0));
-  firstStepInput.canPrecedeInTopologicalSort.resize(n + 1, std::vector<bool>(n + 1, true));
+  firstStepInput.n = numLogicalNodes;
+  firstStepInput.edges.resize(numLogicalNodes);
+  firstStepInput.dataDependencyOverlapInBytes.resize(numLogicalNodes, std::vector<size_t>(numLogicalNodes, 0));
 
-  // Calculate canPrecedeInTopologicalSort by Floyd Algorithm
-  for (int i = 0; i < n; i++) {
-    firstStepInput.canPrecedeInTopologicalSort[i][i] = false;
-  }
-
-  for (const auto &[u, destinations] : optimizationInput.edges) {
-    for (auto v : destinations) {
-      firstStepInput.canPrecedeInTopologicalSort[v][u] = false;
-    }
-  }
-
-  for (int k = 0; k < n; k++) {
-    for (int i = 0; i < n; i++) {
-      for (int j = 0; j < n; j++) {
-        firstStepInput.canPrecedeInTopologicalSort[i][j] =
-          firstStepInput.canPrecedeInTopologicalSort[i][j] &&
-          (firstStepInput.canPrecedeInTopologicalSort[i][k] || firstStepInput.canPrecedeInTopologicalSort[k][j]);
-      }
-    }
+  // Copy edges
+  for (int i = 0; i < numLogicalNodes; i++) {
+    firstStepInput.edges[i] = optimizationInput.edges[i];
   }
 
   // Calculate data dependency overlaps
-  for (int i = 0; i < n; i++) {
+  for (int i = 0; i < numLogicalNodes; i++) {
     const auto &u = optimizationInput.nodes[i];
     std::set<ArrayInfo> uTotalDataDependency;
     std::set_union(
@@ -51,10 +36,8 @@ FirstStepSolver::Input convertToFirstStepInput(OptimizationInput &optimizationIn
       std::inserter(uTotalDataDependency, uTotalDataDependency.begin())
     );
 
-    for (int j = i + 1; j < n; j++) {
+    for (int j = i + 1; j < numLogicalNodes; j++) {
       const auto &v = optimizationInput.nodes[j];
-
-      if (!firstStepInput.canPrecedeInTopologicalSort[i][j]) continue;
 
       std::set<ArrayInfo> vTotalDataDependency;
       std::set_union(
@@ -87,27 +70,13 @@ FirstStepSolver::Input convertToFirstStepInput(OptimizationInput &optimizationIn
     }
   }
 
-  // Add one sentinel to convert the problem into Traveling Salesman Problem
-  // {Node without outgoing edge} -> Sentinel -> {Node without incoming edge}
-  std::vector<bool> hasIncomingEdge(n, false);
-  for (const auto &[u, destinations] : optimizationInput.edges) {
-    for (auto v : destinations) {
-      hasIncomingEdge[v] = true;
-    }
-  }
-
-  for (int i = 0; i < n; i++) {
-    firstStepInput.canPrecedeInTopologicalSort[n][i] = !hasIncomingEdge[i];
-    firstStepInput.canPrecedeInTopologicalSort[i][n] = optimizationInput.edges[i].size() == 0;
-  }
-
-  firstStepInput.canPrecedeInTopologicalSort[n][n] = false;
-
   return firstStepInput;
 }
 
 CustomGraph TwoStepOptimizationStrategy::run(OptimizationInput &input) {
   LOG_TRACE();
+
+  printOptimizationInput(input);
 
   auto firstStepInput = convertToFirstStepInput(input);
   FirstStepSolver firstStepSolver(std::move(firstStepInput));

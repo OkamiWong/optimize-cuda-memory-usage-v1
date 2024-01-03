@@ -6,8 +6,8 @@ class FirstStepSolver {
  public:
   struct Input {
     int n;
+    std::vector<std::vector<int>> edges;
     std::vector<std::vector<size_t>> dataDependencyOverlapInBytes;
-    std::vector<std::vector<bool>> canPrecedeInTopologicalSort;
   };
 
   struct Output {
@@ -19,4 +19,11 @@ class FirstStepSolver {
 
  private:
   Input input;
+  Output output;
+  size_t maxTotalOverlap;
+  std::vector<bool> visited;
+  std::vector<int> inDegree;
+  std::vector<int> currentTopologicalSort;
+
+  void dfs(size_t currentTotalOverlap);
 };

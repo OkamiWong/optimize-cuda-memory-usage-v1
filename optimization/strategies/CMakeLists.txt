@@ -8,13 +8,12 @@ add_library(strategies SHARED noOptimizationStrategy.cu twoStepOptimizationStrat
 target_link_libraries(
   strategies
   strategyUtilities
-  integerProgrammingSolver
+  firstStepSolver
   logger
 )
 
-add_library(integerProgrammingSolver SHARED integerProgrammingSolver.cpp)
+add_library(firstStepSolver SHARED firstStepSolver.cpp)
 target_link_libraries(
-  integerProgrammingSolver
-  ortools::ortools
+  firstStepSolver
   logger
 )
