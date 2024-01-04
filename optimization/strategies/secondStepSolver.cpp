@@ -433,25 +433,11 @@ struct IntegerProgrammingSolver {
 
       fmt::print("Optimal peak memory usage (Byte): {:.2f}\n", optimizedPeakMemoryUsage);
 
+      fmt::print("Original total running time (s): {:.6f}\n", originalTotalTime);
       fmt::print("Total running time (s): {:.6f}\n", totalRunningTime);
       fmt::print("Total running time / original: {:.6f}%\n", totalRunningTime / originalTotalTime * 100.0);
 
-      fmt::print("---\nSolution:\n");
-
-      for (int i = 0; i < numberOfKernels; i++) {
-        fmt::print("K_{{{}}}\n", i);
-        for (int j = 0; j < 3; j++) {
-          const int arrayIndex = i * 3 + j;
-          fmt::print(
-            "  I_{{{}}} = {} {}\n",
-            arrayIndex,
-            initiallyAllocatedOnDevice[arrayIndex]->solution_value(),
-            arrayIndex % 3 == 2 ? "(Output)" : ""
-          );
-        }
-      }
-
-      fmt::print("\n");
+      fmt::print("Solution:\n");
 
       for (int i = 0; i < numberOfKernels; i++) {
         for (int j = 0; j < numberOfArrays; j++) {
