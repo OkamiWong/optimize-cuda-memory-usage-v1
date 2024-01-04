@@ -267,6 +267,14 @@ void tiledCholesky(bool optimized) {
     for (int j = 0; j < T; j++)
       registerManagedMemoryAddress(getMatrixBlock(i, j), B * B * sizeof(double));
 
+  // Register application inputs and outputs
+  for (int i = 0; i < T; i++) {
+    for (int j = 0; j <= i; j++) {
+      registerApplicationInput(getMatrixBlock(i, j));
+      registerApplicationOutput(getMatrixBlock(i, j));
+    }
+  }
+
   // Initialize libraries
   cusolverDnHandle_t cusolverDnHandle;
   cusolverDnParams_t cusolverDnParams;
