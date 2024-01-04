@@ -86,6 +86,7 @@ SecondStepSolver::Input convertToSecondStepInput(OptimizationInput &optimization
   secondStepInput.nodeDurations.resize(optimizationInput.nodes.size());
   secondStepInput.nodeInputArrays.resize(optimizationInput.nodes.size());
   secondStepInput.nodeOutputArrays.resize(optimizationInput.nodes.size());
+
   for (int i = 0; i < optimizationInput.nodes.size(); i++) {
     auto &node = optimizationInput.nodes[i];
 
@@ -110,6 +111,8 @@ SecondStepSolver::Input convertToSecondStepInput(OptimizationInput &optimization
   for (auto ptr : MemoryManager::applicationOutputs) {
     secondStepInput.applicationOutputArrays.insert(MemoryManager::managedMemoryAddressToIndexMap[ptr]);
   }
+
+  return secondStepInput;
 }
 
 CustomGraph TwoStepOptimizationStrategy::run(OptimizationInput &input) {
