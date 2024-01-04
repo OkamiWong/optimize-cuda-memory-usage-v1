@@ -4,6 +4,8 @@
 #include <set>
 #include <vector>
 
+// Technical debt: The array size can be removed from ArrayInfo,
+// because it can be inferred from MemoryManager.
 typedef std::tuple<void *, size_t> ArrayInfo;
 
 struct OptimizationInput {
