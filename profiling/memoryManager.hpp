@@ -13,8 +13,11 @@ struct MemoryManager {
 
 template <typename T>
 __host__ void registerManagedMemoryAddress(T *devPtr, size_t size) {
-  MemoryManager::managedMemoryAddressToSizeMap[static_cast<void *>(devPtr)] = size;
-  MemoryManager::managedMemoryAddressToIndexMap[static_cast<void *>(devPtr)] = MemoryManager::managedMemoryAddressCount++;
+  auto ptr = static_cast<void *>(devPtr);
+  if (MemoryManager::managedMemoryAddressToIndexMap.find(ptr) == MemoryManager::managedMemoryAddressToIndexMap.end()) {
+    MemoryManager::managedMemoryAddressToIndexMap[ptr] = MemoryManager::managedMemoryAddressCount++;
+    MemoryManager::managedMemoryAddressToSizeMap[ptr] = size;
+  }
 }
 
 template <typename T>
