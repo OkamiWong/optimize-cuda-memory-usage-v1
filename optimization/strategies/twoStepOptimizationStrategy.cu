@@ -5,8 +5,11 @@
 #include <numeric>
 #include <utility>
 
+#include "../../profiling/memoryManager.hpp"
+#include "../../utilities/constants.hpp"
 #include "../../utilities/logger.hpp"
 #include "firstStepSolver.hpp"
+#include "secondStepSolver.hpp"
 #include "strategies.hpp"
 #include "strategyUtilities.hpp"
 
@@ -73,6 +76,42 @@ FirstStepSolver::Input convertToFirstStepInput(OptimizationInput &optimizationIn
   return firstStepInput;
 }
 
+SecondStepSolver::Input convertToSecondStepInput(OptimizationInput &optimizationInput, FirstStepSolver::Output &firstStepOutput) {
+  SecondStepSolver::Input secondStepInput;
+  secondStepInput.prefetchingBandwidth = Constants::PREFETCHING_BANDWIDTH;
+  secondStepInput.offloadingBandwidth = Constants::OFFLOADING_BANDWIDTH;
+
+  secondStepInput.nodeExecutionOrder = firstStepOutput.nodeExecutionOrder;
+
+  secondStepInput.nodeDurations.resize(optimizationInput.nodes.size());
+  secondStepInput.kernelInputArrays.resize(optimizationInput.nodes.size());
+  secondStepInput.kernelOutputArrays.resize(optimizationInput.nodes.size());
+  for (int i = 0; i < optimizationInput.nodes.size(); i++) {
+    auto &node = optimizationInput.nodes[i];
+
+    secondStepInput.nodeDurations[i] = node.duration;
+
+    for (auto arrayInfo : node.dataDependency.inputs) {
+      secondStepInput.kernelInputArrays[i].insert(MemoryManager::managedMemoryAddressToIndexMap[std::get<0>(arrayInfo)]);
+    }
+    for (auto arrayInfo : node.dataDependency.outputs) {
+      secondStepInput.kernelOutputArrays[i].insert(MemoryManager::managedMemoryAddressToIndexMap[std::get<0>(arrayInfo)]);
+    }
+  }
+
+  secondStepInput.arraySizes.resize(MemoryManager::managedMemoryAddressCount);
+  for (const auto &[ptr, index] : MemoryManager::managedMemoryAddressToIndexMap) {
+    secondStepInput[index] = MemoryManager::managedMemoryAddressToSizeMap[ptr];
+  }
+
+  for (auto ptr : MemoryManager::applicationInputs) {
+    secondStepInput.applicationInputArrays.insert(MemoryManager::managedMemoryAddressToIndexMap[ptr]);
+  }
+  for (auto ptr : MemoryManager::applicationOutputs) {
+    secondStepInput.applicationOutputArrays.insert(MemoryManager::managedMemoryAddressToIndexMap[ptr]);
+  }
+}
+
 CustomGraph TwoStepOptimizationStrategy::run(OptimizationInput &input) {
   LOG_TRACE();
 
@@ -81,6 +120,10 @@ CustomGraph TwoStepOptimizationStrategy::run(OptimizationInput &input) {
   auto firstStepInput = convertToFirstStepInput(input);
   FirstStepSolver firstStepSolver(std::move(firstStepInput));
   auto firstStepOutput = firstStepSolver.solve();
+
+  auto secondStepInput = convertToSecondStepInput(input, firstStepOutput);
+  SecondStepSolver secondStepSolver(std::move(secondStepInput));
+  auto secondStepOutput = secondStepSolver.solve();
 
   CustomGraph optimizedGraph;
   return optimizedGraph;
