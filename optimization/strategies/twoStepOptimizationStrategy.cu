@@ -84,24 +84,24 @@ SecondStepSolver::Input convertToSecondStepInput(OptimizationInput &optimization
   secondStepInput.nodeExecutionOrder = firstStepOutput.nodeExecutionOrder;
 
   secondStepInput.nodeDurations.resize(optimizationInput.nodes.size());
-  secondStepInput.kernelInputArrays.resize(optimizationInput.nodes.size());
-  secondStepInput.kernelOutputArrays.resize(optimizationInput.nodes.size());
+  secondStepInput.nodeInputArrays.resize(optimizationInput.nodes.size());
+  secondStepInput.nodeOutputArrays.resize(optimizationInput.nodes.size());
   for (int i = 0; i < optimizationInput.nodes.size(); i++) {
     auto &node = optimizationInput.nodes[i];
 
     secondStepInput.nodeDurations[i] = node.duration;
 
     for (auto arrayInfo : node.dataDependency.inputs) {
-      secondStepInput.kernelInputArrays[i].insert(MemoryManager::managedMemoryAddressToIndexMap[std::get<0>(arrayInfo)]);
+      secondStepInput.nodeInputArrays[i].insert(MemoryManager::managedMemoryAddressToIndexMap[std::get<0>(arrayInfo)]);
     }
     for (auto arrayInfo : node.dataDependency.outputs) {
-      secondStepInput.kernelOutputArrays[i].insert(MemoryManager::managedMemoryAddressToIndexMap[std::get<0>(arrayInfo)]);
+      secondStepInput.nodeOutputArrays[i].insert(MemoryManager::managedMemoryAddressToIndexMap[std::get<0>(arrayInfo)]);
     }
   }
 
   secondStepInput.arraySizes.resize(MemoryManager::managedMemoryAddressCount);
   for (const auto &[ptr, index] : MemoryManager::managedMemoryAddressToIndexMap) {
-    secondStepInput[index] = MemoryManager::managedMemoryAddressToSizeMap[ptr];
+    secondStepInput.arraySizes[index] = MemoryManager::managedMemoryAddressToSizeMap[ptr];
   }
 
   for (auto ptr : MemoryManager::applicationInputs) {
@@ -122,8 +122,8 @@ CustomGraph TwoStepOptimizationStrategy::run(OptimizationInput &input) {
   auto firstStepOutput = firstStepSolver.solve();
 
   auto secondStepInput = convertToSecondStepInput(input, firstStepOutput);
-  SecondStepSolver secondStepSolver(std::move(secondStepInput));
-  auto secondStepOutput = secondStepSolver.solve();
+  SecondStepSolver secondStepSolver;
+  auto secondStepOutput = secondStepSolver.solve(std::move(secondStepInput));
 
   CustomGraph optimizedGraph;
   return optimizedGraph;

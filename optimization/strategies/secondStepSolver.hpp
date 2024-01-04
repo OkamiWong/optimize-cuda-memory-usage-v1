@@ -12,16 +12,16 @@ class SecondStepSolver {
 
     std::vector<size_t> arraySizes;
     std::set<int> applicationInputArrays, applicationOutputArrays;
-    std::vector<std::set<int>> kernelInputArrays, kernelOutputArrays;
+    std::vector<std::set<int>> nodeInputArrays, nodeOutputArrays;
 
     float prefetchingBandwidth, offloadingBandwidth;
   };
 
   struct Output {
-    // (Kernel Index, Array Index)
+    // (Node Index, Array Index)
     typedef std::tuple<int, int> Prefetch;
 
-    // (Starting Kernel Index, Array Index, Ending Kernel Index)
+    // (Starting Node Index, Array Index, Ending Node Index)
     typedef std::tuple<int, int, int> Offload;
 
     std::vector<bool> initiallyOnDevice;
@@ -29,10 +29,5 @@ class SecondStepSolver {
     std::vector<Offload> offloads;
   };
 
-  SecondStepSolver(Input &&input);
-  Output solve();
-
- private:
-  Input input;
-  Output output;
+  Output solve(Input &&input);
 };
