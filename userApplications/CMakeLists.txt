@@ -5,7 +5,6 @@ target_link_libraries(
   cudaUtilities
   annotation
   optimization
-  memoryManager
   logger
 )
 
@@ -16,7 +15,6 @@ target_link_libraries(
   cudaUtilities
   annotation
   optimization
-  memoryManager
   logger
   ${CUDA_cublas_LIBRARY}
   ${CUDA_cusolver_LIBRARY}
