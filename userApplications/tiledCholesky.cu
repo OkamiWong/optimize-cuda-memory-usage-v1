@@ -258,7 +258,7 @@ void tiledCholesky(bool optimized) {
   checkCudaErrors(cudaMallocManaged(&d_matrix, N * N * sizeof(double)));
   initializeDeviceData(h_originalMatrix.get(), d_matrix);
 
-  // Register matrix block sizes
+  // Register matrix block addresses
   for (int i = 0; i < T; i++)
     for (int j = 0; j < T; j++)
       registerManagedMemoryAddress(d_matrix + (B * B) * (i + j * T), B * B * sizeof(double));
