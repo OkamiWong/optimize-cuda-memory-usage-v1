@@ -481,6 +481,8 @@ struct IntegerProgrammingSolver {
 };
 
 SecondStepSolver::Output SecondStepSolver::solve(SecondStepSolver::Input &&input) {
+  LOG_TRACE();
+
   IntegerProgrammingSolver solver;
   return solver.solve(std::move(input));
 }
