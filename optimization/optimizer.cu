@@ -195,6 +195,7 @@ OptimizationInput constructOptimizationInput(
   };
 
   // Add nodes and edges, both logical nodes and actual nodes
+  std::set<std::pair<OptimizationInput::NodeId, OptimizationInput::NodeId>> existingEdges;
   for (const auto &[u, destinations] : edges) {
     auto uLogicalNodeId = getLogicalNodeId(u);
 
@@ -203,7 +204,11 @@ OptimizationInput constructOptimizationInput(
       if (uLogicalNodeId == vLogicalNodeId) {
         optimizationInput.nodes[uLogicalNodeId].edges[u].push_back(v);
       } else {
-        optimizationInput.edges[uLogicalNodeId].push_back(vLogicalNodeId);
+        // Logical node edges needs deduping
+        if (existingEdges.count(std::make_pair(uLogicalNodeId, vLogicalNodeId)) == 0) {
+          existingEdges.insert(std::make_pair(uLogicalNodeId, vLogicalNodeId));
+          optimizationInput.edges[uLogicalNodeId].push_back(vLogicalNodeId);
+        }
       }
     }
   }
