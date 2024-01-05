@@ -17,6 +17,7 @@ class CudaGraphExecutionTimelineProfiler {
   void initialize(cudaGraph_t graph);
   void finalize();
   void consumeActivityRecord(CUpti_Activity *record);
+  void graphNodeClonedCallback(CUpti_GraphData *graphData);
   CudaGraphExecutionTimeline getTimeline();
 
  protected:
@@ -27,4 +28,6 @@ class CudaGraphExecutionTimelineProfiler {
   bool finalized = false;
   cudaGraph_t graph;
   std::map<uint64_t, CudaGraphNodeLifetime> graphNodeIdToLifetimeMap;
+  std::map<uint64_t, uint64_t> originalNodeIdToClonedNodeIdMap;
+  CUpti_SubscriberHandle subscriberHandle;
 };

@@ -19,7 +19,7 @@ void CudaGraphExecutionTimelineProfiler::consumeActivityRecord(CUpti_Activity *r
   switch (record->kind) {
     case CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL: {
       auto kernelActivityRecord = reinterpret_cast<CUpti_ActivityKernel9 *>(record);
-      this->graphNodeIdToLifetimeMap[kernelActivityRecord->graphNodeId] =
+      this->graphNodeIdToLifetimeMap[static_cast<uint64_t>(kernelActivityRecord->graphNodeId)] =
         std::make_pair(
           static_cast<uint64_t>(kernelActivityRecord->start),
           static_cast<uint64_t>(kernelActivityRecord->end)
@@ -28,7 +28,7 @@ void CudaGraphExecutionTimelineProfiler::consumeActivityRecord(CUpti_Activity *r
     }
     case CUPTI_ACTIVITY_KIND_MEMSET: {
       auto memsetActivityRecord = reinterpret_cast<CUpti_ActivityMemset4 *>(record);
-      this->graphNodeIdToLifetimeMap[memsetActivityRecord->graphNodeId] =
+      this->graphNodeIdToLifetimeMap[static_cast<uint64_t>(memsetActivityRecord->graphNodeId)] =
         std::make_pair(
           static_cast<uint64_t>(memsetActivityRecord->start),
           static_cast<uint64_t>(memsetActivityRecord->end)
@@ -79,24 +79,67 @@ void CUPTIAPI bufferCompleted(CUcontext ctx, uint32_t streamId, uint8_t *buffer,
   free(buffer);
 }
 
-void CudaGraphExecutionTimelineProfiler::initialize(cudaGraph_t graph) {
-  CUPTI_CALL(cuptiActivityRegisterCallbacks(bufferRequested, bufferCompleted));
+void CudaGraphExecutionTimelineProfiler::graphNodeClonedCallback(CUpti_GraphData *graphData) {
+  uint64_t clonedNodeId, originalNodeId;
+  CUPTI_CALL(cuptiGetGraphNodeId(graphData->node, &clonedNodeId));
+  CUPTI_CALL(cuptiGetGraphNodeId(graphData->originalNode, &originalNodeId));
+  this->originalNodeIdToClonedNodeIdMap[originalNodeId] = clonedNodeId;
+}
 
+void CUPTIAPI
+callbackHandler(
+  void *pUserData,
+  CUpti_CallbackDomain domain,
+  CUpti_CallbackId callbackId,
+  const CUpti_CallbackData *pCallbackInfo
+) {
+  CUPTI_CALL(cuptiGetLastError());
+
+  switch (domain) {
+    case CUPTI_CB_DOMAIN_RESOURCE: {
+      CUpti_ResourceData *pResourceData = (CUpti_ResourceData *)(pCallbackInfo);
+      switch (callbackId) {
+        case CUPTI_CBID_RESOURCE_GRAPHNODE_CLONED: {
+          CUpti_GraphData *callbackData = (CUpti_GraphData *)(pResourceData->resourceDescriptor);
+          CudaGraphExecutionTimelineProfiler::getInstance()->graphNodeClonedCallback(callbackData);
+          break;
+        }
+        default:
+          break;
+      }
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+void CudaGraphExecutionTimelineProfiler::initialize(cudaGraph_t graph) {
+  // CUPTI Activity API
+  CUPTI_CALL(cuptiActivityRegisterCallbacks(bufferRequested, bufferCompleted));
   CUPTI_CALL(cuptiActivityEnable(CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL));
   CUPTI_CALL(cuptiActivityEnable(CUPTI_ACTIVITY_KIND_MEMSET));
+
+  // CUPTI Callback API
+  CUPTI_CALL(cuptiSubscribe(&this->subscriberHandle, (CUpti_CallbackFunc)(callbackHandler), nullptr));
+  CUPTI_CALL(cuptiEnableCallback(1, this->subscriberHandle, CUPTI_CB_DOMAIN_RESOURCE, CUPTI_CBID_RESOURCE_GRAPHNODE_CLONED));
 
   this->finalized = false;
   this->graph = graph;
   this->graphNodeIdToLifetimeMap.clear();
+  this->originalNodeIdToClonedNodeIdMap.clear();
 }
 
 void CudaGraphExecutionTimelineProfiler::finalize() {
   CUPTI_CALL(cuptiGetLastError());
 
+  // CUPTI Activity API
   CUPTI_CALL(cuptiActivityFlushAll(1));
-
   CUPTI_CALL(cuptiActivityDisable(CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL));
   CUPTI_CALL(cuptiActivityDisable(CUPTI_ACTIVITY_KIND_MEMSET));
+
+  // CUPTI Callback API
+  CUPTI_CALL(cuptiUnsubscribe(this->subscriberHandle));
 
   this->finalized = true;
 }
@@ -111,10 +154,10 @@ CudaGraphExecutionTimeline CudaGraphExecutionTimelineProfiler::getTimeline() {
 
   CudaGraphExecutionTimeline timeline;
 
-  uint64_t tempNodeId;
+  uint64_t originalNodeId;
   for (int i = 0; i < numNodes; i++) {
-    CUPTI_CALL(cuptiGetGraphNodeId(nodes[i], &tempNodeId));
-    timeline[nodes[i]] = this->graphNodeIdToLifetimeMap[tempNodeId];
+    CUPTI_CALL(cuptiGetGraphNodeId(nodes[i], &originalNodeId));
+    timeline[nodes[i]] = this->graphNodeIdToLifetimeMap[originalNodeIdToClonedNodeIdMap[originalNodeId]];
   }
 
   return timeline;
