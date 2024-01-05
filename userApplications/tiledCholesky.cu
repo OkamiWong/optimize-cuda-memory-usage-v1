@@ -412,6 +412,8 @@ void tiledCholesky(bool optimized) {
     }
   }
 
+  checkCudaErrors(cudaGraphDebugDotPrint(graph, "./graph.dot", 0));
+
   CudaEventClock clock;
 
   if (optimized) {
@@ -427,8 +429,6 @@ void tiledCholesky(bool optimized) {
     fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(h_originalMatrix.get(), d_matrix, N));
     fmt::print("Total time used (s): {}\n", clock.getTimeInSeconds());
   } else {
-    checkCudaErrors(cudaGraphDebugDotPrint(graph, "./graph.dot", 0));
-
     cudaGraphExec_t graphExec;
     checkCudaErrors(cudaGraphInstantiate(&graphExec, graph, nullptr, nullptr, 0));
 
