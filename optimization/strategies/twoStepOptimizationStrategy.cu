@@ -86,7 +86,7 @@ SecondStepSolver::Input convertToSecondStepInput(OptimizationInput &optimization
   secondStepInput.nodeOutputArrays.resize(optimizationInput.nodes.size());
 
   for (int i = 0; i < optimizationInput.nodes.size(); i++) {
-    auto &node = optimizationInput.nodes[i];
+    auto &node = optimizationInput.nodes[firstStepOutput.nodeExecutionOrder[i]];
 
     secondStepInput.nodeDurations[i] = node.duration;
 
