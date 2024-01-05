@@ -389,6 +389,7 @@ struct IntegerProgrammingSolver {
         auto constraint = solver->MakeRowConstraint(1, 1);
         constraint->SetCoefficient(y[i][arr], 1);
       }
+      fmt::print("{}: nodeInputOutputUnion.size() = {}\n", i, nodeInputOutputUnion.size());
     }
   }
 
@@ -440,6 +441,21 @@ struct IntegerProgrammingSolver {
       fmt::print("Total running time / original: {:.6f}%\n", totalRunningTime / originalTotalTime * 100.0);
 
       fmt::print("Solution:\n");
+
+      fmt::print("{}", this->input.nodeExecutionOrder[0]);
+      for (int i = 1; i < numberOfKernels; i++) {
+        fmt::print(" -> {}", this->input.nodeExecutionOrder[i]);
+      }
+
+      fmt::print("\n\n");
+
+      for (int i = 0; i < numberOfArrays; i++) {
+        if (initiallyAllocatedOnDevice[i]->solution_value() > 0) {
+          fmt::print("I_{{{}}} = 1\n", i);
+        }
+      }
+
+      fmt::print("\n");
 
       for (int i = 0; i < numberOfKernels; i++) {
         for (int j = 0; j < numberOfArrays; j++) {
