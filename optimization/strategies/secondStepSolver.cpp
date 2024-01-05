@@ -414,11 +414,6 @@ struct IntegerProgrammingSolver {
       }
     }
 
-    // Objectives:
-    // 1. Minimize the peak memory usage
-    // 2. Minimize the total running time
-    // Objectives are in Lexicographic Combination.
-    // Z3 solves the first for the objective that is declared first.
     auto obj1 = solver->MutableObjective();
     obj1->SetCoefficient(peakMemoryUsage, 1);
     obj1->SetMinimization();
