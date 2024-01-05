@@ -61,7 +61,7 @@ struct IntegerProgrammingSolver {
     originalTotalTime = std::accumulate(
       input.nodeDurations.begin(),
       input.nodeDurations.end(),
-      0,
+      0.0f,
       [](float a, float b) {
         return a + b;
       }
