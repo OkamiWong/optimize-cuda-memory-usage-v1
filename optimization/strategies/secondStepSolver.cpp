@@ -3,6 +3,8 @@
 #include <fmt/core.h>
 #include <ortools/linear_solver/linear_solver.h>
 
+#include <algorithm>
+#include <iterator>
 #include <numeric>
 
 #include "../../utilities/constants.hpp"
@@ -54,7 +56,7 @@ struct IntegerProgrammingSolver {
   }
 
   void preprocessSecondStepInput() {
-    numberOfKernels = input.nodeExecutionOrder.size();
+    numberOfKernels = input.nodeDurations.size();
     numberOfArrays = input.arraySizes.size();
     numberOfVertices = numberOfKernels * 2 + numberOfKernels * numberOfArrays * 2;
 
@@ -373,12 +375,17 @@ struct IntegerProgrammingSolver {
   }
 
   void addKernelDataDependencyConstraints() {
+    std::set<int> nodeInputOutputUnion;
     for (int i = 0; i < numberOfKernels; i++) {
-      for (auto &arr : input.nodeInputArrays[i]) {
-        auto constraint = solver->MakeRowConstraint(1, 1);
-        constraint->SetCoefficient(y[i][arr], 1);
-      }
-      for (auto &arr : input.nodeOutputArrays[i]) {
+      nodeInputOutputUnion.clear();
+      std::set_union(
+        input.nodeInputArrays[i].begin(),
+        input.nodeInputArrays[i].end(),
+        input.nodeOutputArrays[i].begin(),
+        input.nodeOutputArrays[i].end(),
+        std::inserter(nodeInputOutputUnion, nodeInputOutputUnion.begin())
+      );
+      for (auto &arr : nodeInputOutputUnion) {
         auto constraint = solver->MakeRowConstraint(1, 1);
         constraint->SetCoefficient(y[i][arr], 1);
       }
