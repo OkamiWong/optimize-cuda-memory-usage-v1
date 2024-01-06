@@ -17,6 +17,7 @@ using namespace operations_research;
 struct IntegerProgrammingSolver {
   // States of the solver
   SecondStepSolver::Input input;
+  size_t originalPeakMemoryUsage;
   float originalTotalTime;
   int numberOfLogicalNodes, numberOfArrays, numberOfVertices;
   std::map<std::pair<int, int>, bool> shouldAllocate, shouldDeallocate;
@@ -66,6 +67,34 @@ struct IntegerProgrammingSolver {
       0.0f,
       [](float a, float b) {
         return a + b;
+      }
+    );
+
+    std::set<int> allDependencies, currentDependencies;
+    originalPeakMemoryUsage = 0;
+    for (int i = 0; i < numberOfLogicalNodes; i++) {
+      currentDependencies.clear();
+      std::set_union(
+        input.nodeInputArrays[i].begin(),
+        input.nodeInputArrays[i].end(),
+        input.nodeOutputArrays[i].begin(),
+        input.nodeOutputArrays[i].end(),
+        std::inserter(currentDependencies, currentDependencies.begin())
+      );
+      std::set_union(
+        currentDependencies.begin(),
+        currentDependencies.end(),
+        allDependencies.begin(),
+        allDependencies.end(),
+        std::inserter(allDependencies, allDependencies.begin())
+      );
+    }
+    originalPeakMemoryUsage = std::accumulate(
+      allDependencies.begin(),
+      allDependencies.end(),
+      static_cast<size_t>(0),
+      [&](size_t a, int b) {
+        return a + input.arraySizes[b];
       }
     );
 
@@ -434,7 +463,9 @@ struct IntegerProgrammingSolver {
       auto optimizedPeakMemoryUsage = obj1->Value();
       auto totalRunningTime = z[getLogicalNodeVertexIndex(numberOfLogicalNodes - 1)]->solution_value();
 
-      fmt::print("Optimal peak memory usage (Byte): {:.2f}\n", optimizedPeakMemoryUsage);
+      fmt::print("Original peak memory usage (MByte): {:.6f}\n", originalPeakMemoryUsage * 1e-6);
+      fmt::print("Optimal peak memory usage (MByte): {:.6f}\n", optimizedPeakMemoryUsage * 1e-6);
+      fmt::print("Optimal peak memory usage  / Original peak memory usage: {:.6f}%\n", optimizedPeakMemoryUsage / originalPeakMemoryUsage * 100.0);
 
       fmt::print("Original total running time (s): {:.6f}\n", originalTotalTime);
       fmt::print("Total running time (s): {:.6f}\n", totalRunningTime);
