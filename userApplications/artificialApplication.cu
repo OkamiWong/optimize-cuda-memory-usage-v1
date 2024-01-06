@@ -79,9 +79,6 @@ void runChainOfStreams(bool optimized = true) {
 
     auto optimizedGraph = profileAndOptimize(graph);
 
-    // Skip execution for now
-    return;
-
     // Initialize data again, because the kernels are executed during profiling
     for (int i = 0; i < CHAIN_LEN; i++) {
       initializeArraysKernel<<<GRID_SIZE, BLOCK_SIZE>>>(a[i], b[i], c[i], initA, initB, initC);
