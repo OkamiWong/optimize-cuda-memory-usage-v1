@@ -18,7 +18,7 @@ struct IntegerProgrammingSolver {
   // States of the solver
   SecondStepSolver::Input input;
   float originalTotalTime;
-  int numberOfKernels, numberOfArrays, numberOfVertices;
+  int numberOfLogicalNodes, numberOfArrays, numberOfVertices;
   std::map<std::pair<int, int>, bool> shouldAllocate, shouldDeallocate;
 
   std::unique_ptr<MPSolver> solver;
@@ -48,17 +48,17 @@ struct IntegerProgrammingSolver {
   }
 
   int getPrefetchVertexIndex(int i, int j) {
-    return numberOfKernels * 2 + i * numberOfArrays + j;
+    return numberOfLogicalNodes * 2 + i * numberOfArrays + j;
   }
 
   int getOffloadVertexIndex(int i, int j) {
-    return numberOfKernels * 2 + numberOfKernels * numberOfArrays + i * numberOfArrays + j;
+    return numberOfLogicalNodes * 2 + numberOfLogicalNodes * numberOfArrays + i * numberOfArrays + j;
   }
 
   void preprocessSecondStepInput() {
-    numberOfKernels = input.nodeDurations.size();
+    numberOfLogicalNodes = input.nodeDurations.size();
     numberOfArrays = input.arraySizes.size();
-    numberOfVertices = numberOfKernels * 2 + numberOfKernels * numberOfArrays * 2;
+    numberOfVertices = numberOfLogicalNodes * 2 + numberOfLogicalNodes * numberOfArrays * 2;
 
     originalTotalTime = std::accumulate(
       input.nodeDurations.begin(),
@@ -76,7 +76,7 @@ struct IntegerProgrammingSolver {
       arrayFirstWritingKernel[arr] = -1;
     }
 
-    for (int i = 0; i < numberOfKernels; i++) {
+    for (int i = 0; i < numberOfLogicalNodes; i++) {
       for (auto arr : input.nodeOutputArrays[i]) {
         if (i < arrayFirstWritingKernel[arr]) {
           arrayFirstWritingKernel[arr] = i;
@@ -89,10 +89,10 @@ struct IntegerProgrammingSolver {
     std::vector<int> arrayLastReadingKernel(numberOfArrays, -1);
 
     for (auto arr : input.applicationOutputArrays) {
-      arrayLastReadingKernel[arr] = numberOfKernels;
+      arrayLastReadingKernel[arr] = numberOfLogicalNodes;
     }
 
-    for (int i = numberOfKernels - 1; i >= 0; i--) {
+    for (int i = numberOfLogicalNodes - 1; i >= 0; i--) {
       for (auto arr : input.nodeInputArrays[i]) {
         if (i > arrayLastReadingKernel[arr]) {
           arrayLastReadingKernel[arr] = i;
@@ -125,7 +125,7 @@ struct IntegerProgrammingSolver {
 
     // Add decision variables for prefetching
     p.clear();
-    for (int i = 0; i < numberOfKernels; i++) {
+    for (int i = 0; i < numberOfLogicalNodes; i++) {
       p.push_back({});
       for (int j = 0; j < numberOfArrays; j++) {
         p[i].push_back(solver->MakeBoolVar(fmt::format("p_{{{}, {}}}", i, j)));
@@ -137,7 +137,7 @@ struct IntegerProgrammingSolver {
 
     // Add decision variables for offloading
     o.clear();
-    for (int i = 0; i < numberOfKernels; i++) {
+    for (int i = 0; i < numberOfLogicalNodes; i++) {
       o.push_back({});
       for (int j = 0; j < numberOfArrays; j++) {
         o[i].push_back({});
@@ -146,7 +146,7 @@ struct IntegerProgrammingSolver {
 
         sumLessThanOneConstraint->SetCoefficient(p[i][j], 1);
 
-        for (int k = 0; k < numberOfKernels; k++) {
+        for (int k = 0; k < numberOfLogicalNodes; k++) {
           o[i][j].push_back(solver->MakeBoolVar(fmt::format("o_{{{},{},{}}}", i, j, k)));
 
           sumLessThanOneConstraint->SetCoefficient(o[i][j][k], 1);
@@ -170,7 +170,7 @@ struct IntegerProgrammingSolver {
   void defineXAndY() {
     // Define the variables representing whether the memory for an array is allocated on the device
     x.clear();
-    for (int i = 0; i < numberOfKernels; i++) {
+    for (int i = 0; i < numberOfLogicalNodes; i++) {
       x.push_back({});
       for (int j = 0; j < numberOfArrays; j++) {
         x[i].push_back(solver->MakeBoolVar(fmt::format("x_{{{}, {}}}", i, j)));
@@ -191,7 +191,7 @@ struct IntegerProgrammingSolver {
 
     // Define the variables representing whether an array is available
     y.clear();
-    for (int i = 0; i < numberOfKernels; i++) {
+    for (int i = 0; i < numberOfLogicalNodes; i++) {
       y.push_back({});
       for (int j = 0; j < numberOfArrays; j++) {
         y[i].push_back(solver->MakeBoolVar(fmt::format("y_{{{}, {}}}", i, j)));
@@ -203,14 +203,14 @@ struct IntegerProgrammingSolver {
           constraint->SetCoefficient(p[u][j], 1);
         }
         for (int u = 0; u <= i - 1; u++) {
-          for (int v = u + 1; v < numberOfKernels; v++) {
+          for (int v = u + 1; v < numberOfLogicalNodes; v++) {
             constraint->SetCoefficient(o[u][j][v], -1);
           }
         }
 
         auto offloadingConstraint = solver->MakeRowConstraint(0, 1);
         offloadingConstraint->SetCoefficient(y[i][j], 1);
-        for (int k = i + 1; k < numberOfKernels; k++) {
+        for (int k = i + 1; k < numberOfLogicalNodes; k++) {
           offloadingConstraint->SetCoefficient(o[i][j][k], -1);
         }
       }
@@ -222,7 +222,7 @@ struct IntegerProgrammingSolver {
     w.resize(numberOfVertices);
 
     // Add weights for kernel vertices
-    for (int i = 0; i < numberOfKernels; i++) {
+    for (int i = 0; i < numberOfLogicalNodes; i++) {
       w[getLogicalNodeStartVertexIndex(i)] = solver->MakeNumVar(0, 0, fmt::format("w_{{{}}}", getLogicalNodeStartVertexIndex(i)));
       w[getLogicalNodeVertexIndex(i)] = solver->MakeNumVar(
         input.nodeDurations[i],
@@ -240,7 +240,7 @@ struct IntegerProgrammingSolver {
     }
 
     // Add weights for prefetches
-    for (int i = 0; i < numberOfKernels; i++) {
+    for (int i = 0; i < numberOfLogicalNodes; i++) {
       for (int j = 0; j < numberOfArrays; j++) {
         if (shouldAllocate[std::make_pair(i, j)]) {
           w[getPrefetchVertexIndex(i, j)] = solver->MakeNumVar(0, 0, fmt::format("w_{{{}}}", getPrefetchVertexIndex(i, j)));
@@ -254,7 +254,7 @@ struct IntegerProgrammingSolver {
     }
 
     // Add weights for offloadings
-    for (int i = 0; i < numberOfKernels; i++) {
+    for (int i = 0; i < numberOfLogicalNodes; i++) {
       for (int j = 0; j < numberOfArrays; j++) {
         if (shouldDeallocate[std::make_pair(i, j)]) {
           w[getOffloadVertexIndex(i, j)] = solver->MakeNumVar(0, 0, fmt::format("w_{{{}}}", getOffloadVertexIndex(i, j)));
@@ -263,7 +263,7 @@ struct IntegerProgrammingSolver {
 
           auto constraint = solver->MakeRowConstraint(0, 0);
           constraint->SetCoefficient(w[getOffloadVertexIndex(i, j)], -1);
-          for (int k = 0; k < numberOfKernels; k++) {
+          for (int k = 0; k < numberOfLogicalNodes; k++) {
             constraint->SetCoefficient(o[i][j][k], arrayOffloadingTimes[j]);
           }
         }
@@ -279,7 +279,7 @@ struct IntegerProgrammingSolver {
     e.resize(numberOfVertices, std::vector<MPVariable *>(numberOfVertices, zeroConstant));
 
     // Add edges between kernel and kernel start vertices
-    for (int i = 0; i < numberOfKernels; i++) {
+    for (int i = 0; i < numberOfLogicalNodes; i++) {
       e[getLogicalNodeStartVertexIndex(i)][getLogicalNodeVertexIndex(i)] = oneConstant;
       if (i > 0) {
         e[getLogicalNodeVertexIndex(i - 1)][getLogicalNodeStartVertexIndex(i)] = oneConstant;
@@ -287,10 +287,10 @@ struct IntegerProgrammingSolver {
     }
 
     // Add edges for prefetching vertices
-    for (int i = 0; i < numberOfKernels; i++) {
+    for (int i = 0; i < numberOfLogicalNodes; i++) {
       for (int j = 0; j < numberOfArrays; j++) {
         e[getLogicalNodeStartVertexIndex(i)][getPrefetchVertexIndex(i, j)] = p[i][j];
-        for (int k = i; k < numberOfKernels; k++) {
+        for (int k = i; k < numberOfLogicalNodes; k++) {
           if (input.nodeInputArrays[k].count(j) != 0 || input.nodeOutputArrays[k].count(j) != 0) {
             e[getPrefetchVertexIndex(i, j)][getLogicalNodeVertexIndex(k)] = oneConstant;
           }
@@ -299,7 +299,7 @@ struct IntegerProgrammingSolver {
     }
 
     // Serialize prefetches
-    for (int i = 0; i < numberOfKernels; i++) {
+    for (int i = 0; i < numberOfLogicalNodes; i++) {
       for (int j = 0; j < numberOfArrays; j++) {
         if (j == 0) {
           if (i != 0) {
@@ -312,24 +312,24 @@ struct IntegerProgrammingSolver {
     }
 
     // Add edges for offloading vertices
-    for (int i = 0; i < numberOfKernels; i++) {
+    for (int i = 0; i < numberOfLogicalNodes; i++) {
       for (int j = 0; j < numberOfArrays; j++) {
         e[getLogicalNodeVertexIndex(i)][getOffloadVertexIndex(i, j)] = solver->MakeBoolVar("");
 
         auto constraint = solver->MakeRowConstraint(0, 0);
         constraint->SetCoefficient(e[getLogicalNodeVertexIndex(i)][getOffloadVertexIndex(i, j)], -1);
-        for (int k = 0; k < numberOfKernels; k++) {
+        for (int k = 0; k < numberOfLogicalNodes; k++) {
           constraint->SetCoefficient(o[i][j][k], 1);
         }
 
-        for (int k = i + 1; k < numberOfKernels; k++) {
+        for (int k = i + 1; k < numberOfLogicalNodes; k++) {
           e[getOffloadVertexIndex(i, j)][getLogicalNodeStartVertexIndex(k)] = o[i][j][k];
         }
       }
     }
 
     // Serialize offloadings
-    for (int i = 0; i < numberOfKernels; i++) {
+    for (int i = 0; i < numberOfLogicalNodes; i++) {
       for (int j = 0; j < numberOfArrays; j++) {
         if (j == 0) {
           if (i != 0) {
@@ -371,12 +371,12 @@ struct IntegerProgrammingSolver {
     }
 
     auto zLastKernelConstraint = solver->MakeRowConstraint(0, originalTotalTime * Constants::ACCEPTABLE_RUNNING_TIME_FACTOR);
-    zLastKernelConstraint->SetCoefficient(z[getLogicalNodeVertexIndex(numberOfKernels - 1)], 1);
+    zLastKernelConstraint->SetCoefficient(z[getLogicalNodeVertexIndex(numberOfLogicalNodes - 1)], 1);
   }
 
   void addKernelDataDependencyConstraints() {
     std::set<int> nodeInputOutputUnion;
-    for (int i = 0; i < numberOfKernels; i++) {
+    for (int i = 0; i < numberOfLogicalNodes; i++) {
       nodeInputOutputUnion.clear();
       std::set_union(
         input.nodeInputArrays[i].begin(),
@@ -414,7 +414,7 @@ struct IntegerProgrammingSolver {
 
     // Represent the peak memory usage
     auto peakMemoryUsage = solver->MakeNumVar(0, infinity, "");
-    for (int i = 0; i < numberOfKernels; i++) {
+    for (int i = 0; i < numberOfLogicalNodes; i++) {
       auto constraint = solver->MakeRowConstraint(0, infinity);
       constraint->SetCoefficient(peakMemoryUsage, 1);
       for (int j = 0; j < numberOfArrays; j++) {
@@ -432,7 +432,7 @@ struct IntegerProgrammingSolver {
 
     if (resultStatus == MPSolver::OPTIMAL) {
       auto optimizedPeakMemoryUsage = obj1->Value();
-      auto totalRunningTime = z[getLogicalNodeVertexIndex(numberOfKernels - 1)]->solution_value();
+      auto totalRunningTime = z[getLogicalNodeVertexIndex(numberOfLogicalNodes - 1)]->solution_value();
 
       fmt::print("Optimal peak memory usage (Byte): {:.2f}\n", optimizedPeakMemoryUsage);
 
@@ -443,7 +443,7 @@ struct IntegerProgrammingSolver {
       fmt::print("Solution:\n");
 
       fmt::print("{}", this->input.nodeExecutionOrder[0]);
-      for (int i = 1; i < numberOfKernels; i++) {
+      for (int i = 1; i < numberOfLogicalNodes; i++) {
         fmt::print(" -> {}", this->input.nodeExecutionOrder[i]);
       }
 
@@ -457,7 +457,7 @@ struct IntegerProgrammingSolver {
 
       fmt::print("\n");
 
-      for (int i = 0; i < numberOfKernels; i++) {
+      for (int i = 0; i < numberOfLogicalNodes; i++) {
         for (int j = 0; j < numberOfArrays; j++) {
           if (p[i][j]->solution_value() > 0) {
             fmt::print("p_{{{}, {}}} = {}; w = {}; z = {}\n", i, j, true, w[getPrefetchVertexIndex(i, j)]->solution_value(), z[getPrefetchVertexIndex(i, j)]->solution_value());
@@ -467,9 +467,9 @@ struct IntegerProgrammingSolver {
 
       fmt::print("\n");
 
-      for (int i = 0; i < numberOfKernels; i++) {
+      for (int i = 0; i < numberOfLogicalNodes; i++) {
         for (int j = 0; j < numberOfArrays; j++) {
-          for (int k = 0; k < numberOfKernels; k++) {
+          for (int k = 0; k < numberOfLogicalNodes; k++) {
             if (o[i][j][k]->solution_value() > 0) {
               fmt::print("o_{{{}, {}, {}}} = {}; w = {}; z = {}\n", i, j, k, true, w[getOffloadVertexIndex(i, j)]->solution_value(), z[getOffloadVertexIndex(i, j)]->solution_value());
             }
