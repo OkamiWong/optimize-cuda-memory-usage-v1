@@ -534,7 +534,7 @@ struct IntegerProgrammingSolver {
         for (int j = 0; j < numberOfArrays; j++) {
           for (int k = 0; k < numberOfLogicalNodes; k++) {
             if (o[i][j][k]->solution_value() > 0) {
-              output.offloads.push_back(std::make_tuple(i, j, k));
+              output.offloadings.push_back(std::make_tuple(i, j, k));
             }
           }
         }

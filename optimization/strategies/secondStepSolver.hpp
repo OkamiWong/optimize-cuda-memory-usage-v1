@@ -26,7 +26,7 @@ class SecondStepSolver {
 
     std::vector<int> indicesOfArraysInitiallyOnDevice;
     std::vector<Prefetch> prefetches;
-    std::vector<Offload> offloads;
+    std::vector<Offload> offloadings;
   };
 
   Output solve(Input &&input);
