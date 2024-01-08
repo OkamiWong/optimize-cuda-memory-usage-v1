@@ -4,6 +4,7 @@
 #include <ortools/linear_solver/linear_solver.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <iterator>
 #include <numeric>
 
@@ -418,11 +419,62 @@ struct IntegerProgrammingSolver {
         auto constraint = solver->MakeRowConstraint(1, 1);
         constraint->SetCoefficient(y[i][arr], 1);
       }
-      fmt::print("{}: nodeInputOutputUnion.size() = {}\n", i, nodeInputOutputUnion.size());
     }
   }
 
-  SecondStepSolver::Output solve(SecondStepSolver::Input &&input) {
+  void printSolution(MPObjective *objective) {
+    auto fp = fopen("secondStepSolver.out", "w");
+
+    auto optimizedPeakMemoryUsage = objective->Value();
+    auto totalRunningTime = z[getLogicalNodeVertexIndex(numberOfLogicalNodes - 1)]->solution_value();
+
+    fmt::print(fp, "Original peak memory usage (MByte): {:.6f}\n", originalPeakMemoryUsage * 1e-6);
+    fmt::print(fp, "Optimal peak memory usage (MByte): {:.6f}\n", optimizedPeakMemoryUsage * 1e-6);
+    fmt::print(fp, "Optimal peak memory usage  / Original peak memory usage: {:.6f}%\n", optimizedPeakMemoryUsage / originalPeakMemoryUsage * 100.0);
+
+    fmt::print(fp, "Original total running time (s): {:.6f}\n", originalTotalTime);
+    fmt::print(fp, "Total running time (s): {:.6f}\n", totalRunningTime);
+    fmt::print(fp, "Total running time / original: {:.6f}%\n", totalRunningTime / originalTotalTime * 100.0);
+
+    fmt::print(fp, "Solution:\n");
+
+    fmt::print(fp, "{}", this->input.nodeExecutionOrder[0]);
+    for (int i = 1; i < numberOfLogicalNodes; i++) {
+      fmt::print(fp, " -> {}", this->input.nodeExecutionOrder[i]);
+    }
+
+    fmt::print(fp, "\n\n");
+
+    for (int i = 0; i < numberOfArrays; i++) {
+      if (initiallyAllocatedOnDevice[i]->solution_value() > 0) {
+        fmt::print(fp, "I_{{{}}} = 1\n", i);
+      }
+    }
+
+    fmt::print(fp, "\n");
+
+    for (int i = 0; i < numberOfLogicalNodes; i++) {
+      for (int j = 0; j < numberOfArrays; j++) {
+        if (p[i][j]->solution_value() > 0) {
+          fmt::print(fp, "p_{{{}, {}}} = {}; w = {}; z = {}\n", i, j, true, w[getPrefetchVertexIndex(i, j)]->solution_value(), z[getPrefetchVertexIndex(i, j)]->solution_value());
+        }
+      }
+    }
+
+    fmt::print(fp, "\n");
+
+    for (int i = 0; i < numberOfLogicalNodes; i++) {
+      for (int j = 0; j < numberOfArrays; j++) {
+        for (int k = 0; k < numberOfLogicalNodes; k++) {
+          if (o[i][j][k]->solution_value() > 0) {
+            fmt::print(fp, "o_{{{}, {}, {}}} = {}; w = {}; z = {}\n", i, j, k, true, w[getOffloadVertexIndex(i, j)]->solution_value(), z[getOffloadVertexIndex(i, j)]->solution_value());
+          }
+        }
+      }
+    }
+  }
+
+  SecondStepSolver::Output solve(SecondStepSolver::Input &&input, bool verbose = false) {
     this->input = std::move(input);
 
     initialize();
@@ -451,64 +503,19 @@ struct IntegerProgrammingSolver {
       }
     }
 
-    auto obj1 = solver->MutableObjective();
-    obj1->SetCoefficient(peakMemoryUsage, 1);
-    obj1->SetMinimization();
+    auto objective = solver->MutableObjective();
+    objective->SetCoefficient(peakMemoryUsage, 1);
+    objective->SetMinimization();
 
     auto resultStatus = solver->Solve();
 
     SecondStepSolver::Output output;
 
     if (resultStatus == MPSolver::OPTIMAL) {
-      auto optimizedPeakMemoryUsage = obj1->Value();
-      auto totalRunningTime = z[getLogicalNodeVertexIndex(numberOfLogicalNodes - 1)]->solution_value();
-
-      fmt::print("Original peak memory usage (MByte): {:.6f}\n", originalPeakMemoryUsage * 1e-6);
-      fmt::print("Optimal peak memory usage (MByte): {:.6f}\n", optimizedPeakMemoryUsage * 1e-6);
-      fmt::print("Optimal peak memory usage  / Original peak memory usage: {:.6f}%\n", optimizedPeakMemoryUsage / originalPeakMemoryUsage * 100.0);
-
-      fmt::print("Original total running time (s): {:.6f}\n", originalTotalTime);
-      fmt::print("Total running time (s): {:.6f}\n", totalRunningTime);
-      fmt::print("Total running time / original: {:.6f}%\n", totalRunningTime / originalTotalTime * 100.0);
-
-      fmt::print("Solution:\n");
-
-      fmt::print("{}", this->input.nodeExecutionOrder[0]);
-      for (int i = 1; i < numberOfLogicalNodes; i++) {
-        fmt::print(" -> {}", this->input.nodeExecutionOrder[i]);
-      }
-
-      fmt::print("\n\n");
-
-      for (int i = 0; i < numberOfArrays; i++) {
-        if (initiallyAllocatedOnDevice[i]->solution_value() > 0) {
-          fmt::print("I_{{{}}} = 1\n", i);
-        }
-      }
-
-      fmt::print("\n");
-
-      for (int i = 0; i < numberOfLogicalNodes; i++) {
-        for (int j = 0; j < numberOfArrays; j++) {
-          if (p[i][j]->solution_value() > 0) {
-            fmt::print("p_{{{}, {}}} = {}; w = {}; z = {}\n", i, j, true, w[getPrefetchVertexIndex(i, j)]->solution_value(), z[getPrefetchVertexIndex(i, j)]->solution_value());
-          }
-        }
-      }
-
-      fmt::print("\n");
-
-      for (int i = 0; i < numberOfLogicalNodes; i++) {
-        for (int j = 0; j < numberOfArrays; j++) {
-          for (int k = 0; k < numberOfLogicalNodes; k++) {
-            if (o[i][j][k]->solution_value() > 0) {
-              fmt::print("o_{{{}, {}, {}}} = {}; w = {}; z = {}\n", i, j, k, true, w[getOffloadVertexIndex(i, j)]->solution_value(), z[getOffloadVertexIndex(i, j)]->solution_value());
-            }
-          }
-        }
-      }
+      printSolution(objective);
     } else {
-      fmt::print("No solution found.\n");
+      LOG_TRACE_WITH_INFO("No solution found");
+      exit(-1);
     }
 
     return output;
