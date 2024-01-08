@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <string>
 
+#include "../../utilities/logger.hpp"
 #include "strategyUtilities.hpp"
 
 inline std::string getLogicalNodeName(OptimizationInput::NodeId index) {
@@ -30,6 +31,8 @@ void printLogicalNodes(FILE *fp, OptimizationInput &input) {
 }
 
 void printOptimizationInput(OptimizationInput &input) {
+  LOG_TRACE_WITH_INFO("Printing OptimizationInput to optimizationInput.dot");
+
   auto fp = fopen("optimizationInput.dot", "w");
 
   fmt::print(fp, "digraph G {{\n");

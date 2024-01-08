@@ -23,6 +23,7 @@
 #include "../profiling/annotation.hpp"
 #include "../profiling/memoryManager.hpp"
 #include "../utilities/cudaUtilities.hpp"
+#include "../utilities/logger.hpp"
 
 constexpr size_t N = 512;
 constexpr size_t B = 128;
@@ -412,6 +413,7 @@ void tiledCholesky(bool optimized) {
     }
   }
 
+  LOG_TRACE_WITH_INFO("Printing original graph to graph.dot");
   checkCudaErrors(cudaGraphDebugDotPrint(graph, "./graph.dot", 0));
 
   CudaEventClock clock;

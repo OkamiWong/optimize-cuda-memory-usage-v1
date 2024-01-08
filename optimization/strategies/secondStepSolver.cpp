@@ -423,6 +423,8 @@ struct IntegerProgrammingSolver {
   }
 
   void printSolution(MPObjective *objective) {
+    LOG_TRACE_WITH_INFO("Printing solution to secondStepSolver.out");
+
     auto fp = fopen("secondStepSolver.out", "w");
 
     auto optimizedPeakMemoryUsage = objective->Value();

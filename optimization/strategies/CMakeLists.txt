@@ -1,6 +1,7 @@
 add_library(strategyUtilities SHARED strategyUtilities.cu)
 target_link_libraries(
   strategyUtilities
+  logger
   fmt::fmt
 )
 
