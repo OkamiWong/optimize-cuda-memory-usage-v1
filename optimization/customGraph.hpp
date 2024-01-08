@@ -3,6 +3,7 @@
 #include <cuda.h>
 
 #include <map>
+#include <utility>
 #include <vector>
 
 struct CustomGraph {
@@ -31,6 +32,8 @@ struct CustomGraph {
   std::map<NodeId, NodeType> nodeIdToNodeTypeMap;
   std::map<NodeId, cudaGraphNode_t> nodeIdToCuGraphNodeMap;
   std::map<NodeId, DataMovement> nodeIdToDataMovementMap;
+
+  std::vector<std::pair<void*, size_t>> arraysInitiallyAllocatedOnDevice;
 
   NodeId addEmptyNode() {
     auto u = this->nodes.size();
