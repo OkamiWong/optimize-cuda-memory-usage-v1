@@ -28,7 +28,7 @@ FirstStepSolver::Input convertToFirstStepInput(OptimizationInput &optimizationIn
   // Calculate data dependency overlaps
   for (int i = 0; i < numLogicalNodes; i++) {
     const auto &u = optimizationInput.nodes[i];
-    std::set<ArrayInfo> uTotalDataDependency;
+    std::set<void *> uTotalDataDependency;
     std::set_union(
       u.dataDependency.inputs.begin(),
       u.dataDependency.inputs.end(),
@@ -40,7 +40,7 @@ FirstStepSolver::Input convertToFirstStepInput(OptimizationInput &optimizationIn
     for (int j = i + 1; j < numLogicalNodes; j++) {
       const auto &v = optimizationInput.nodes[j];
 
-      std::set<ArrayInfo> vTotalDataDependency;
+      std::set<void *> vTotalDataDependency;
       std::set_union(
         v.dataDependency.inputs.begin(),
         v.dataDependency.inputs.end(),
@@ -49,7 +49,7 @@ FirstStepSolver::Input convertToFirstStepInput(OptimizationInput &optimizationIn
         std::inserter(vTotalDataDependency, vTotalDataDependency.begin())
       );
 
-      std::set<ArrayInfo> dataDependencyIntersection;
+      std::set<void *> dataDependencyIntersection;
       std::set_intersection(
         uTotalDataDependency.begin(),
         uTotalDataDependency.end(),
@@ -64,8 +64,8 @@ FirstStepSolver::Input convertToFirstStepInput(OptimizationInput &optimizationIn
             dataDependencyIntersection.begin(),
             dataDependencyIntersection.end(),
             static_cast<size_t>(0),
-            [](size_t a, ArrayInfo b) {
-              return a + std::get<1>(b);
+            [](size_t a, void *b) {
+              return a + MemoryManager::managedMemoryAddressToSizeMap[b];
             }
           );
     }
@@ -90,11 +90,11 @@ SecondStepSolver::Input convertToSecondStepInput(OptimizationInput &optimization
 
     secondStepInput.nodeDurations[i] = node.duration;
 
-    for (auto arrayInfo : node.dataDependency.inputs) {
-      secondStepInput.nodeInputArrays[i].insert(MemoryManager::managedMemoryAddressToIndexMap[std::get<0>(arrayInfo)]);
+    for (auto arrayAddress : node.dataDependency.inputs) {
+      secondStepInput.nodeInputArrays[i].insert(MemoryManager::managedMemoryAddressToIndexMap[arrayAddress]);
     }
-    for (auto arrayInfo : node.dataDependency.outputs) {
-      secondStepInput.nodeOutputArrays[i].insert(MemoryManager::managedMemoryAddressToIndexMap[std::get<0>(arrayInfo)]);
+    for (auto arrayAddress : node.dataDependency.outputs) {
+      secondStepInput.nodeOutputArrays[i].insert(MemoryManager::managedMemoryAddressToIndexMap[arrayAddress]);
     }
   }
 

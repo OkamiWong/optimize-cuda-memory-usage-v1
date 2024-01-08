@@ -135,12 +135,12 @@ convertKernelIOToKernelDataDependency(const KernelIO &kernelIO) {
   for (int i = 0; i < KernelIO::MAX_NUM_PTR; i++) {
     void *ptr = kernelIO.inputs[i];
     if (ptr == nullptr) break;
-    dep.inputs.insert(std::make_tuple(ptr, MemoryManager::managedMemoryAddressToSizeMap[ptr]));
+    dep.inputs.insert(ptr);
   }
   for (int i = 0; i < KernelIO::MAX_NUM_PTR; i++) {
     void *ptr = kernelIO.outputs[i];
     if (ptr == nullptr) break;
-    dep.outputs.insert(std::make_tuple(ptr, MemoryManager::managedMemoryAddressToSizeMap[ptr]));
+    dep.outputs.insert(ptr);
   }
   return dep;
 }
