@@ -185,12 +185,17 @@ CustomGraph convertToCustomGraph(
     size_t arraySize = MemoryManager::managedMemoryAddressToSizeMap[arrayAddress];
 
     int endingNodeIndex = startingNodeIndex;
-    while (true) {
+    while (endingNodeIndex < firstStepOutput.nodeExecutionOrder.size()) {
       auto &logicalNode = optimizationInput.nodes[firstStepOutput.nodeExecutionOrder[endingNodeIndex]];
       if (logicalNode.dataDependency.inputs.count(arrayAddress) > 0 || logicalNode.dataDependency.outputs.count(arrayAddress) > 0) {
         break;
       }
       endingNodeIndex++;
+    }
+
+    // Ignore unnecessary prefetch, which has no dependent kernels after it.
+    if (endingNodeIndex == firstStepOutput.nodeExecutionOrder.size()) {
+      continue;
     }
 
     optimizedGraph.addDataMovementNode(
