@@ -15,6 +15,7 @@ target_link_libraries(
   cudaUtilities
   annotation
   optimization
+  peakMemoryProfiler
   logger
   ${CUDA_cublas_LIBRARY}
   ${CUDA_cusolver_LIBRARY}

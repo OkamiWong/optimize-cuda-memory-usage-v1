@@ -24,6 +24,7 @@
 #include "../profiling/memoryManager.hpp"
 #include "../utilities/cudaUtilities.hpp"
 #include "../utilities/logger.hpp"
+#include "../utilities/peakMemoryProfiler.hpp"
 
 constexpr size_t N = 512;
 constexpr size_t B = 128;
@@ -249,7 +250,7 @@ void initializeDeviceData(double *h_originalMatrix, double *d_matrix) {
   checkCudaErrors(cudaFree(d_originalMatrix));
 }
 
-void tiledCholesky(bool optimized) {
+void tiledCholesky(bool optimized, bool profileMemory) {
   // Initialize data
   auto h_originalMatrix = std::make_unique<double[]>(N * N);  // Column-major
   initializeHostData(h_originalMatrix.get());
@@ -433,6 +434,10 @@ void tiledCholesky(bool optimized) {
     fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(h_originalMatrix.get(), d_matrix, N));
     fmt::print("Total time used (s): {}\n", clock.getTimeInSeconds());
   } else {
+    if (profileMemory) {
+      PeakMemoryProfiler::getInstance()->initialize();
+    }
+
     cudaGraphExec_t graphExec;
     checkCudaErrors(cudaGraphInstantiate(&graphExec, graph, nullptr, nullptr, 0));
 
@@ -442,9 +447,20 @@ void tiledCholesky(bool optimized) {
 
     checkCudaErrors(cudaDeviceSynchronize());
 
+    if (profileMemory) {
+      PeakMemoryProfiler::getInstance()->finalize();
+    }
+
     cleanTiledCholeskyDecompositionResult(d_matrix, N, B);
     fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(h_originalMatrix.get(), d_matrix, N));
     fmt::print("Total time used (s): {}\n", clock.getTimeInSeconds());
+
+    if (profileMemory) {
+      fmt::print(
+        "Peak memory usage (MB): {:.6f}\n",
+        static_cast<double>(PeakMemoryProfiler::getInstance()->getPeakMemoryUsage()) * 1e-6
+      );
+    }
   }
 
   free(h_workspace);
@@ -455,7 +471,7 @@ void tiledCholesky(bool optimized) {
 int main(int argc, char **argv) {
   auto cmdl = argh::parser(argc, argv);
 
-  tiledCholesky(cmdl["optimized"]);
+  tiledCholesky(cmdl["optimized"], cmdl["profileMemory"]);
 
   return 0;
 }
