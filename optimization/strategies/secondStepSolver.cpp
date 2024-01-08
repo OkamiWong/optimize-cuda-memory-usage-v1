@@ -515,6 +515,30 @@ struct IntegerProgrammingSolver {
 
     if (resultStatus == MPSolver::OPTIMAL) {
       printSolution(objective);
+
+      for (int i = 0; i < numberOfArrays; i++) {
+        if (initiallyAllocatedOnDevice[i]->solution_value() > 0) {
+          output.indicesOfArraysInitiallyOnDevice.push_back(i);
+        }
+      }
+
+      for (int i = 0; i < numberOfLogicalNodes; i++) {
+        for (int j = 0; j < numberOfArrays; j++) {
+          if (p[i][j]->solution_value() > 0) {
+            output.prefetches.push_back(std::make_tuple(i, j));
+          }
+        }
+      }
+
+      for (int i = 0; i < numberOfLogicalNodes; i++) {
+        for (int j = 0; j < numberOfArrays; j++) {
+          for (int k = 0; k < numberOfLogicalNodes; k++) {
+            if (o[i][j][k]->solution_value() > 0) {
+              output.offloads.push_back(std::make_tuple(i, j, k));
+            }
+          }
+        }
+      }
     } else {
       LOG_TRACE_WITH_INFO("No solution found");
       exit(-1);
