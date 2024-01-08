@@ -423,6 +423,8 @@ void tiledCholesky(bool optimized) {
 
     initializeDeviceData(h_originalMatrix.get(), d_matrix);
 
+    distributeInitialData(optimizedGraph);
+
     clock.start();
     executeOptimizedGraph(optimizedGraph);
     clock.end();
