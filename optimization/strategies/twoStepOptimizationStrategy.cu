@@ -86,6 +86,7 @@ SecondStepSolver::Input convertToSecondStepInput(OptimizationInput &optimization
   secondStepInput.nodeOutputArrays.resize(optimizationInput.nodes.size());
 
   for (int i = 0; i < optimizationInput.nodes.size(); i++) {
+    // Second step assumes logical nodes are sorted in execution order.
     auto &node = optimizationInput.nodes[firstStepOutput.nodeExecutionOrder[i]];
 
     secondStepInput.nodeDurations[i] = node.duration;
@@ -113,6 +114,111 @@ SecondStepSolver::Input convertToSecondStepInput(OptimizationInput &optimization
   return secondStepInput;
 }
 
+CustomGraph convertToCustomGraph(
+  OptimizationInput &optimizationInput,
+  FirstStepSolver::Output &firstStepOutput,
+  SecondStepSolver::Output &secondStepOutput
+) {
+  CustomGraph optimizedGraph;
+  optimizedGraph.originalGraph = optimizationInput.originalGraph;
+
+  // Add arrays that should be on device initially
+  for (auto index : secondStepOutput.indicesOfArraysInitiallyOnDevice) {
+    auto addr = MemoryManager::managedMemoryAddresses[index];
+    optimizedGraph.arraysInitiallyAllocatedOnDevice.push_back(std::make_pair(
+      addr,
+      MemoryManager::managedMemoryAddressToSizeMap[addr]
+    ));
+  }
+
+  // Add logical nodes
+  std::vector<CustomGraph::NodeId> logicalNodeStarts, logicalNodeBodies, logicalNodeEnds;
+  for (int i = 0; i < optimizationInput.nodes.size(); i++) {
+    logicalNodeStarts.push_back(optimizedGraph.addEmptyNode());
+    logicalNodeBodies.push_back(optimizedGraph.addEmptyNode());
+    logicalNodeEnds.push_back(optimizedGraph.addEmptyNode());
+  }
+
+  // Add edges between logical ndoes
+  for (int i = 1; i < firstStepOutput.nodeExecutionOrder.size(); i++) {
+    const auto previousNodeIndex = firstStepOutput.nodeExecutionOrder[i - 1];
+    const auto currentNodeIndex = firstStepOutput.nodeExecutionOrder[i];
+    optimizedGraph.addEdge(
+      logicalNodeEnds[previousNodeIndex],
+      logicalNodeStarts[currentNodeIndex]
+    );
+  }
+
+  // Add nodes and edges inside logical nodes
+  for (int i = 0; i < optimizationInput.nodes.size(); i++) {
+    auto &logicalNode = optimizationInput.nodes[i];
+
+    std::map<cudaGraphNode_t, CustomGraph::NodeId> cudaGraphNodeToCustomGraphNodeIdMap;
+    std::map<cudaGraphNode_t, bool> cudaGraphNodeHasIncomingEdgeMap;
+    for (auto u : logicalNode.nodes) {
+      cudaGraphNodeToCustomGraphNodeIdMap[u] = optimizedGraph.addKernelNode(u);
+    }
+
+    for (const auto &[u, destinations] : logicalNode.edges) {
+      for (auto v : destinations) {
+        optimizedGraph.addEdge(cudaGraphNodeToCustomGraphNodeIdMap[u], cudaGraphNodeToCustomGraphNodeIdMap[v]);
+        cudaGraphNodeHasIncomingEdgeMap[v] = true;
+      }
+    }
+
+    optimizedGraph.addEdge(logicalNodeStarts[i], logicalNodeBodies[i]);
+
+    for (auto u : logicalNode.nodes) {
+      if (!cudaGraphNodeHasIncomingEdgeMap[u]) {
+        optimizedGraph.addEdge(logicalNodeBodies[i], cudaGraphNodeToCustomGraphNodeIdMap[u]);
+      }
+
+      if (logicalNode.edges[u].size() == 0) {
+        optimizedGraph.addEdge(cudaGraphNodeToCustomGraphNodeIdMap[u], logicalNodeEnds[i]);
+      }
+    }
+  }
+
+  // Add prefetches
+  for (const auto &[startingNodeIndex, arrayIndex] : secondStepOutput.prefetches) {
+    void *arrayAddress = MemoryManager::managedMemoryAddresses[arrayIndex];
+    size_t arraySize = MemoryManager::managedMemoryAddressToSizeMap[arrayAddress];
+
+    int endingNodeIndex = startingNodeIndex;
+    while (true) {
+      auto &logicalNode = optimizationInput.nodes[firstStepOutput.nodeExecutionOrder[endingNodeIndex]];
+      if (logicalNode.dataDependency.inputs.count(arrayAddress) > 0 || logicalNode.dataDependency.outputs.count(arrayAddress) > 0) {
+        break;
+      }
+      endingNodeIndex++;
+    }
+
+    optimizedGraph.addDataMovementNode(
+      CustomGraph::DataMovement::Direction::hostToDevice,
+      arrayAddress,
+      arraySize,
+      logicalNodeStarts[firstStepOutput.nodeExecutionOrder[startingNodeIndex]],
+      logicalNodeBodies[firstStepOutput.nodeExecutionOrder[endingNodeIndex]]
+    );
+  }
+
+  // Add offloadings
+  for (const auto &[startingNodeIndex, arrayIndex, endingNodeIndex] : secondStepOutput.offloadings) {
+    void *arrayAddress = MemoryManager::managedMemoryAddresses[arrayIndex];
+    size_t arraySize = MemoryManager::managedMemoryAddressToSizeMap[arrayAddress];
+
+    optimizedGraph.addDataMovementNode(
+      CustomGraph::DataMovement::Direction::deviceToHost,
+      arrayAddress,
+      arraySize,
+      logicalNodeEnds[firstStepOutput.nodeExecutionOrder[startingNodeIndex]],
+      logicalNodeStarts[firstStepOutput.nodeExecutionOrder[endingNodeIndex]]
+    );
+  }
+
+  return optimizedGraph;
+}
+
 CustomGraph TwoStepOptimizationStrategy::run(OptimizationInput &input) {
   LOG_TRACE();
 
@@ -126,6 +232,5 @@ CustomGraph TwoStepOptimizationStrategy::run(OptimizationInput &input) {
   SecondStepSolver secondStepSolver;
   auto secondStepOutput = secondStepSolver.solve(std::move(secondStepInput));
 
-  CustomGraph optimizedGraph;
-  return optimizedGraph;
+  return convertToCustomGraph(input, firstStepOutput, secondStepOutput);
 }
