@@ -23,8 +23,6 @@ struct OptimizationInput {
     DataDependency dataDependency;
   };
 
-  NodeId nextNodeId = 0;
-
   std::vector<LogicalNode> nodes;
   std::map<NodeId, std::vector<NodeId>> edges;
 

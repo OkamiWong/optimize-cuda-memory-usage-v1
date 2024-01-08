@@ -25,8 +25,6 @@ struct CustomGraph {
     size_t size;
   };
 
-  NodeId nextNodeId = 0;
-
   cudaGraph_t originalGraph;
   std::vector<NodeId> nodes;
   std::map<NodeId, std::vector<NodeId>> edges;
@@ -35,7 +33,7 @@ struct CustomGraph {
   std::map<NodeId, DataMovement> nodeIdToDataMovementMap;
 
   NodeId addEmptyNode() {
-    auto u = nextNodeId++;
+    auto u = this->nodes.size();
     this->nodes.push_back(u);
     this->nodeIdToNodeTypeMap[u] = NodeType::empty;
     return u;
