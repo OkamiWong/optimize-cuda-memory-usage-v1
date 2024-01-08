@@ -3,11 +3,12 @@
 #include <initializer_list>
 #include <map>
 #include <set>
+#include <vector>
 
 struct MemoryManager {
-  inline static int managedMemoryAddressCount = 0;
-  inline static std::map<void *, size_t> managedMemoryAddressToSizeMap;
+  inline static std::vector<void *> managedMemoryAddresses;
   inline static std::map<void *, int> managedMemoryAddressToIndexMap;
+  inline static std::map<void *, size_t> managedMemoryAddressToSizeMap;
   inline static std::set<void *> applicationInputs, applicationOutputs;
 };
 
@@ -15,7 +16,8 @@ template <typename T>
 __host__ void registerManagedMemoryAddress(T *devPtr, size_t size) {
   auto ptr = static_cast<void *>(devPtr);
   if (MemoryManager::managedMemoryAddressToIndexMap.find(ptr) == MemoryManager::managedMemoryAddressToIndexMap.end()) {
-    MemoryManager::managedMemoryAddressToIndexMap[ptr] = MemoryManager::managedMemoryAddressCount++;
+    MemoryManager::managedMemoryAddresses.push_back(ptr);
+    MemoryManager::managedMemoryAddressToIndexMap[ptr] = MemoryManager::managedMemoryAddresses.size() - 1;
     MemoryManager::managedMemoryAddressToSizeMap[ptr] = size;
   }
 }

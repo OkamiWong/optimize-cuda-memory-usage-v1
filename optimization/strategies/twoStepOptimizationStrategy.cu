@@ -98,7 +98,7 @@ SecondStepSolver::Input convertToSecondStepInput(OptimizationInput &optimization
     }
   }
 
-  secondStepInput.arraySizes.resize(MemoryManager::managedMemoryAddressCount);
+  secondStepInput.arraySizes.resize(MemoryManager::managedMemoryAddresses.size());
   for (const auto &[ptr, index] : MemoryManager::managedMemoryAddressToIndexMap) {
     secondStepInput.arraySizes[index] = MemoryManager::managedMemoryAddressToSizeMap[ptr];
   }
