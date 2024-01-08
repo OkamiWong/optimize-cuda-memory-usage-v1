@@ -447,6 +447,24 @@ struct IntegerProgrammingSolver {
 
     fmt::print(fp, "\n\n");
 
+    for (int i = 0; i < numberOfLogicalNodes; i++) {
+      fmt::print(fp, "{}:\n", i);
+
+      fmt::print(fp, "  Inputs: ");
+      for (auto arrayIndex : input.nodeInputArrays[i]) {
+        fmt::print(fp, "{}, ", arrayIndex);
+      }
+      fmt::print(fp, "\n");
+
+      fmt::print(fp, "  Outputs: ");
+      for (auto arrayIndex : input.nodeOutputArrays[i]) {
+        fmt::print(fp, "{}, ", arrayIndex);
+      }
+      fmt::print(fp, "\n");
+    }
+
+    fmt::print(fp, "\n");
+
     for (int i = 0; i < numberOfArrays; i++) {
       if (initiallyAllocatedOnDevice[i]->solution_value() > 0) {
         fmt::print(fp, "I_{{{}}} = 1\n", i);
