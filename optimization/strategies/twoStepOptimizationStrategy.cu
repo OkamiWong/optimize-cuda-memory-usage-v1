@@ -122,6 +122,12 @@ CustomGraph convertToCustomGraph(
   CustomGraph optimizedGraph;
   optimizedGraph.originalGraph = optimizationInput.originalGraph;
 
+  optimizedGraph.optimal = secondStepOutput.optimal;
+
+  if (!secondStepOutput.optimal) {
+    return optimizedGraph;
+  }
+
   // Add arrays that should be on device initially
   for (auto index : secondStepOutput.indicesOfArraysInitiallyOnDevice) {
     auto addr = MemoryManager::managedMemoryAddresses[index];

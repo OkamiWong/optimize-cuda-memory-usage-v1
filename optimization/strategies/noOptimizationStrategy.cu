@@ -8,6 +8,8 @@ CustomGraph NoOptimizationStrategy::run(OptimizationInput &input) {
   CustomGraph optimizedGraph;
   optimizedGraph.originalGraph = input.originalGraph;
 
+  optimizedGraph.optimal = true;
+
   // Add logical nodes
   std::vector<CustomGraph::NodeId> logicalNodeStarts, logicalNodeEnds;
   for (int i = 0; i < input.nodes.size(); i++) {
