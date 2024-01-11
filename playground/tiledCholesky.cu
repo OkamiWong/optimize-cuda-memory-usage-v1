@@ -19,7 +19,6 @@
 #include <vector>
 
 #include "../include/argh.h"
-#include "../profiling/annotation.hpp"
 #include "../utilities/cudaUtilities.hpp"
 
 constexpr size_t N = 8;
