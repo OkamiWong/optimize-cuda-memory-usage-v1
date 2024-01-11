@@ -16,7 +16,7 @@ target_link_libraries(
   annotation
   optimization
   logger
-  ${CUDA_cublas_LIBRARY}
-  ${CUDA_cusolver_LIBRARY}
+  CUDA::cublas
+  CUDA::cusolver
   fmt::fmt
 )

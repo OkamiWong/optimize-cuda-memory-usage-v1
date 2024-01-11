@@ -13,6 +13,7 @@ SET(CUDA_SEPARABLE_COMPILATION ON)
 enable_language(C CXX CUDA)
 
 find_package(CUDA REQUIRED)
+find_package(CUDAToolkit REQUIRED)
 find_package(Z3 REQUIRED)
 find_package(fmt REQUIRED)
 find_package(ortools REQUIRED)

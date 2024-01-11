@@ -19,7 +19,7 @@ target_link_libraries(
   tiledCholeskyPlayground
   cudaUtilities
   annotation
-  ${CUDA_cublas_LIBRARY}
-  ${CUDA_cusolver_LIBRARY}
+  CUDA::cublas
+  CUDA::cusolver
   fmt::fmt
 )
