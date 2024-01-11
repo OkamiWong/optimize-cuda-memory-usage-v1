@@ -25,8 +25,8 @@
 #include "../utilities/cudaUtilities.hpp"
 #include "../utilities/logger.hpp"
 
-constexpr size_t N = 512;
-constexpr size_t B = 128;
+constexpr size_t N = 8192;
+constexpr size_t B = N / 4;
 
 constexpr size_t T = N / B;
 
@@ -249,7 +249,7 @@ void initializeDeviceData(double *h_originalMatrix, double *d_matrix) {
   checkCudaErrors(cudaFree(d_originalMatrix));
 }
 
-void tiledCholesky(bool optimized) {
+void tiledCholesky(bool optimize, bool verify) {
   // Initialize data
   auto h_originalMatrix = std::make_unique<double[]>(N * N);  // Column-major
   initializeHostData(h_originalMatrix.get());
@@ -426,7 +426,7 @@ void tiledCholesky(bool optimized) {
 
   CudaEventClock clock;
 
-  if (optimized) {
+  if (optimize) {
     auto optimizedGraph = profileAndOptimize(graph);
 
     initializeDeviceData(h_originalMatrix.get(), d_matrix);
@@ -437,9 +437,7 @@ void tiledCholesky(bool optimized) {
     executeOptimizedGraph(optimizedGraph);
     clock.end();
 
-    cleanTiledCholeskyDecompositionResult(d_matrix, N, B);
-    fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(h_originalMatrix.get(), d_matrix, N));
-    fmt::print("Total time used (s): {}\n", clock.getTimeInSeconds());
+    checkCudaErrors(cudaDeviceSynchronize());
   } else {
     cudaGraphExec_t graphExec;
     checkCudaErrors(cudaGraphInstantiate(&graphExec, graph, nullptr, nullptr, 0));
@@ -449,11 +447,13 @@ void tiledCholesky(bool optimized) {
     clock.end();
 
     checkCudaErrors(cudaDeviceSynchronize());
+  }
 
+  if (verify) {
     cleanTiledCholeskyDecompositionResult(d_matrix, N, B);
     fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(h_originalMatrix.get(), d_matrix, N));
-    fmt::print("Total time used (s): {}\n", clock.getTimeInSeconds());
   }
+  fmt::print("Total time used (s): {}\n", clock.getTimeInSeconds());
 
   free(h_workspace);
   cudaFree(d_matrix);
@@ -463,7 +463,7 @@ void tiledCholesky(bool optimized) {
 int main(int argc, char **argv) {
   auto cmdl = argh::parser(argc, argv);
 
-  tiledCholesky(cmdl["optimized"]);
+  tiledCholesky(cmdl["optimize"], cmdl["verify"]);
 
   return 0;
 }
