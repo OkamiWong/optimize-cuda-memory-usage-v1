@@ -17,6 +17,7 @@ target_link_libraries(
   optimization
   logger
   CUDA::cublas
+  CUDA::cublasLt
   CUDA::cusolver
   fmt::fmt
 )

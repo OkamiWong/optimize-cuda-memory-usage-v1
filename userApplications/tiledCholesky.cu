@@ -1,3 +1,4 @@
+#include <cublasLt.h>
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
 #include <cuda_runtime_api.h>
@@ -25,8 +26,8 @@
 #include "../utilities/cudaUtilities.hpp"
 #include "../utilities/logger.hpp"
 
-constexpr size_t N = 512;
-constexpr size_t B = 128;
+constexpr size_t N = 1024;
+constexpr size_t B = N / 4;
 
 constexpr size_t T = N / B;
 
@@ -249,6 +250,59 @@ void initializeDeviceData(double *h_originalMatrix, double *d_matrix) {
   checkCudaErrors(cudaFree(d_originalMatrix));
 }
 
+// Ref: https://github.com/NVIDIA/CUDALibrarySamples/blob/75a16925084067cbce9e8208c13b9ddb58b33162/cuBLASLt/LtSgemm/sample_cublasLt_LtSgemm.cu
+void wrappedCublasLtDgemm(
+  cublasLtHandle_t ltHandle,
+  cublasOperation_t transa,
+  cublasOperation_t transb,
+  int m,
+  int n,
+  int k,
+  const double *alpha,
+  const double *A,
+  int lda,
+  const double *B,
+  int ldb,
+  const double *beta,
+  double *C,
+  int ldc,
+  void *workspace,
+  size_t workspaceSize,
+  cudaStream_t stream
+) {
+  cublasLtMatmulDesc_t operationDesc = nullptr;
+  cublasLtMatrixLayout_t Adesc = nullptr, Bdesc = nullptr, Cdesc = nullptr;
+  cublasLtMatmulPreference_t preference = nullptr;
+
+  int returnedResults = 0;
+  cublasLtMatmulHeuristicResult_t heuristicResult = {};
+
+  checkCudaErrors(cublasLtMatmulDescCreate(&operationDesc, CUBLAS_COMPUTE_64F, CUDA_R_64F));
+  checkCudaErrors(cublasLtMatmulDescSetAttribute(operationDesc, CUBLASLT_MATMUL_DESC_TRANSA, &transa, sizeof(transa)));
+  checkCudaErrors(cublasLtMatmulDescSetAttribute(operationDesc, CUBLASLT_MATMUL_DESC_TRANSB, &transb, sizeof(transb)));
+
+  checkCudaErrors(cublasLtMatrixLayoutCreate(&Adesc, CUDA_R_64F, transa == CUBLAS_OP_N ? m : k, transa == CUBLAS_OP_N ? k : m, lda));
+  checkCudaErrors(cublasLtMatrixLayoutCreate(&Bdesc, CUDA_R_64F, transb == CUBLAS_OP_N ? k : n, transb == CUBLAS_OP_N ? n : k, ldb));
+  checkCudaErrors(cublasLtMatrixLayoutCreate(&Cdesc, CUDA_R_64F, m, n, ldc));
+
+  checkCudaErrors(cublasLtMatmulPreferenceCreate(&preference));
+  checkCudaErrors(cublasLtMatmulPreferenceSetAttribute(preference, CUBLASLT_MATMUL_PREF_MAX_WORKSPACE_BYTES, &workspaceSize, sizeof(workspaceSize)));
+
+  checkCudaErrors(cublasLtMatmulAlgoGetHeuristic(ltHandle, operationDesc, Adesc, Bdesc, Cdesc, Cdesc, preference, 1, &heuristicResult, &returnedResults));
+
+  if (returnedResults == 0) {
+    checkCudaErrors(CUBLAS_STATUS_NOT_SUPPORTED);
+  }
+
+  checkCudaErrors(cublasLtMatmul(ltHandle, operationDesc, alpha, A, Adesc, B, Bdesc, beta, C, Cdesc, C, Cdesc, &heuristicResult.algo, workspace, workspaceSize, stream));
+
+  if (preference) checkCudaErrors(cublasLtMatmulPreferenceDestroy(preference));
+  if (Cdesc) checkCudaErrors(cublasLtMatrixLayoutDestroy(Cdesc));
+  if (Bdesc) checkCudaErrors(cublasLtMatrixLayoutDestroy(Bdesc));
+  if (Adesc) checkCudaErrors(cublasLtMatrixLayoutDestroy(Adesc));
+  if (operationDesc) checkCudaErrors(cublasLtMatmulDescDestroy(operationDesc));
+}
+
 void tiledCholesky(bool optimized) {
   // Initialize data
   auto h_originalMatrix = std::make_unique<double[]>(N * N);  // Column-major
@@ -280,9 +334,17 @@ void tiledCholesky(bool optimized) {
   cusolverDnHandle_t cusolverDnHandle;
   cusolverDnParams_t cusolverDnParams;
   cublasHandle_t cublasHandle;
+  cublasLtHandle_t cublasLtHandle;
   checkCudaErrors(cusolverDnCreate(&cusolverDnHandle));
   checkCudaErrors(cusolverDnCreateParams(&cusolverDnParams));
   checkCudaErrors(cublasCreate(&cublasHandle));
+  checkCudaErrors(cublasLtCreate(&cublasLtHandle));
+
+  // Allocate 4MiB as cuBLASLt workspace
+  // Ref: https://docs.nvidia.com/cuda/cublas/index.html#cublassetworkspace
+  constexpr size_t CUBLASLT_WORKSPACE_SIZE = 40 * 1024 * 1024;
+  void *cublasLtWorkspace;
+  checkCudaErrors(cudaMalloc(&cublasLtWorkspace, CUBLASLT_WORKSPACE_SIZE));
 
   // Prepare constants
   double *one, *minusOne;
@@ -395,19 +457,20 @@ void tiledCholesky(bool optimized) {
           {std::make_pair(j, i), std::make_pair(j, k), std::make_pair(i, k)}
         );
         annotateNextKernel({getMatrixBlock(j, i), getMatrixBlock(j, k), getMatrixBlock(i, k)}, {getMatrixBlock(j, i)}, s);
-        checkCudaErrors(cublasGemmEx(
-          cublasHandle,
+        wrappedCublasLtDgemm(
+          cublasLtHandle,
           CUBLAS_OP_N,
           CUBLAS_OP_T,
           B, B, B,
           minusOne,
-          getMatrixBlock(j, k), CUDA_R_64F, B,
-          getMatrixBlock(i, k), CUDA_R_64F, B,
+          getMatrixBlock(j, k), B,
+          getMatrixBlock(i, k), B,
           one,
-          getMatrixBlock(j, i), CUDA_R_64F, B,
-          CUBLAS_COMPUTE_64F,
-          CUBLAS_GEMM_DEFAULT
-        ));
+          getMatrixBlock(j, i), B,
+          cublasLtWorkspace,
+          CUBLASLT_WORKSPACE_SIZE,
+          s
+        );
         tiledCholeskyGraphCreator->endCaptureOperation();
       }
     }
@@ -450,6 +513,11 @@ void tiledCholesky(bool optimized) {
   free(h_workspace);
   cudaFree(d_matrix);
   cudaFree(d_workspace);
+
+  checkCudaErrors(cusolverDnDestroy(cusolverDnHandle));
+  checkCudaErrors(cusolverDnDestroyParams(cusolverDnParams));
+  checkCudaErrors(cublasDestroy(cublasHandle));
+  checkCudaErrors(cublasLtDestroy(cublasLtHandle));
 }
 
 int main(int argc, char **argv) {
