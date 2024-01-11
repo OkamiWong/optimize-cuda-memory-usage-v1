@@ -320,6 +320,14 @@ void tiledCholesky(bool optimized) {
   checkCudaErrors(cusolverDnSetStream(cusolverDnHandle, s));
   checkCudaErrors(cublasSetStream(cublasHandle, s));
 
+  // Allocate 4MiB as cuBLAS workspace
+  // Must be after setting the stream
+  // Ref: https://docs.nvidia.com/cuda/cublas/index.html#cublassetworkspace
+  constexpr size_t CUBLAS_WORKSPACE_SIZE = 40 * 1024 * 1024;
+  void *cublasWorkspace;
+  checkCudaErrors(cudaMalloc(&cublasWorkspace, CUBLAS_WORKSPACE_SIZE));
+  checkCudaErrors(cublasSetWorkspace(cublasHandle, cublasWorkspace, CUBLAS_WORKSPACE_SIZE));
+
   auto tiledCholeskyGraphCreator = std::make_unique<TiledCholeskyGraphCreator>(s, graph);
 
   for (int k = 0; k < T; k++) {
