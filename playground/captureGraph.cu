@@ -6,7 +6,7 @@ struct KernelParam {
   int a[1];
 };
 
-__global__ void foo(__grid_constant__ const KernelParam p) {
+__global__ void foo(const KernelParam p) {
   printf("Executing foo: p = %d\n", p.a[0]);
 }
 
