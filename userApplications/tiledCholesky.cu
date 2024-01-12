@@ -25,7 +25,7 @@
 #include "../utilities/cudaUtilities.hpp"
 #include "../utilities/logger.hpp"
 
-constexpr size_t N = 8192;
+constexpr size_t N = 512;
 constexpr size_t B = N / 4;
 
 constexpr size_t T = N / B;
