@@ -37,6 +37,10 @@ class DisjointSet {
     this->size[u] = this->size[u] + this->size[v];
   }
 
+  size_t getSetSize(KeyType u) {
+    return this->size[this->findRoot(u)];
+  }
+
  private:
   std::map<KeyType, KeyType> parent;
   std::map<KeyType, size_t> size;
