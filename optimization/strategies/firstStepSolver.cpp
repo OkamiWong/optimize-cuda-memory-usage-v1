@@ -1,5 +1,7 @@
 #include "firstStepSolver.hpp"
 
+#include <fmt/core.h>
+
 #include "../../utilities/logger.hpp"
 
 FirstStepSolver::FirstStepSolver(FirstStepSolver::Input &&input) {
@@ -21,7 +23,7 @@ FirstStepSolver::Output FirstStepSolver::solve() {
 
   dfs(0);
 
-  LOG_TRACE_WITH_INFO("maxTotalOverlap = %zu", this->maxTotalOverlap);
+  this->printSolution();
 
   return this->output;
 }
@@ -57,4 +59,18 @@ void FirstStepSolver::dfs(size_t currentTotalOverlap) {
       this->inDegree[v]++;
     }
   }
+}
+
+void FirstStepSolver::printSolution() {
+  LOG_TRACE_WITH_INFO("Printing solution to firstStepSolver.out");
+
+  auto fp = fopen("firstStepSolver.out", "w");
+
+  fmt::print(fp, "maxTotalOverlap = {}\n", this->maxTotalOverlap);
+
+  for (int i = 0; i < this->input.n; i++) {
+    fmt::print(fp, "nodeExecutionOrder[{}] = {}\n", i, this->output.nodeExecutionOrder[i]);
+  }
+
+  fclose(fp);
 }

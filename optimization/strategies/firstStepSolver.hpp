@@ -26,4 +26,5 @@ class FirstStepSolver {
   std::vector<int> currentTopologicalSort;
 
   void dfs(size_t currentTotalOverlap);
+  void printSolution();
 };

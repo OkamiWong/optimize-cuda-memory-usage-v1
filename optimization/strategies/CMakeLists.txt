@@ -18,6 +18,7 @@ add_library(firstStepSolver SHARED firstStepSolver.cpp)
 target_link_libraries(
   firstStepSolver
   logger
+  fmt::fmt
 )
 
 add_library(secondStepSolver SHARED secondStepSolver.cpp)
