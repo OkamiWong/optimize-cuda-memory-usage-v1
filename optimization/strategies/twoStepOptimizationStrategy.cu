@@ -79,8 +79,6 @@ SecondStepSolver::Input convertToSecondStepInput(OptimizationInput &optimization
   secondStepInput.prefetchingBandwidth = Constants::PREFETCHING_BANDWIDTH;
   secondStepInput.offloadingBandwidth = Constants::OFFLOADING_BANDWIDTH;
 
-  secondStepInput.nodeExecutionOrder = firstStepOutput.nodeExecutionOrder;
-
   secondStepInput.nodeDurations.resize(optimizationInput.nodes.size());
   secondStepInput.nodeInputArrays.resize(optimizationInput.nodes.size());
   secondStepInput.nodeOutputArrays.resize(optimizationInput.nodes.size());

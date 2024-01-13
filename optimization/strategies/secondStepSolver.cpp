@@ -440,13 +440,6 @@ struct IntegerProgrammingSolver {
 
     fmt::print(fp, "Solution:\n");
 
-    fmt::print(fp, "{}", this->input.nodeExecutionOrder[0]);
-    for (int i = 1; i < numberOfLogicalNodes; i++) {
-      fmt::print(fp, " -> {}", this->input.nodeExecutionOrder[i]);
-    }
-
-    fmt::print(fp, "\n\n");
-
     for (int i = 0; i < numberOfLogicalNodes; i++) {
       fmt::print(fp, "{}:\n", i);
 

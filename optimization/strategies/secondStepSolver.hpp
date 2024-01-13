@@ -7,7 +7,6 @@
 class SecondStepSolver {
  public:
   struct Input {
-    std::vector<int> nodeExecutionOrder;
     std::vector<float> nodeDurations;
 
     std::vector<size_t> arraySizes;
