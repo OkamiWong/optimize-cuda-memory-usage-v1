@@ -20,7 +20,7 @@ void printEdges(FILE *fp, OptimizationInput &input) {
 
 void printLogicalNode(FILE *fp, int index, OptimizationInput::LogicalNode &node) {
   fmt::print(fp, "subgraph {} {{\n", getLogicalNodeName(index));
-  fmt::print(fp, "label=\"{}\"\n", getLogicalNodeName(index));
+  fmt::print(fp, "label=\"{} (size={})\"\n", getLogicalNodeName(index), node.nodes.size());
   fmt::print(fp, "}}\n");
 }
 
