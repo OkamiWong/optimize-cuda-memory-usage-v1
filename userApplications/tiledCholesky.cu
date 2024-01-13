@@ -479,6 +479,7 @@ void tiledCholesky(bool optimize, bool verify) {
   free(h_workspace);
   cudaFree(d_matrix);
   cudaFree(d_workspace);
+  cudaFree(cublasWorkspace);
 }
 
 int main(int argc, char **argv) {
