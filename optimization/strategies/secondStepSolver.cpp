@@ -560,7 +560,7 @@ struct IntegerProgrammingSolver {
         }
       }
     } else {
-      LOG_TRACE_WITH_INFO("No solution found");
+      LOG_TRACE_WITH_INFO("No optimal solution found. (ResultStatus=%d)", resultStatus);
       exit(-1);
     }
 
