@@ -383,19 +383,16 @@ struct IntegerProgrammingSolver {
       }
     }
 
+    const float infinityForTime = 10.0 * originalTotalTime;
+
     for (int u = 0; u < numberOfVertices; u++) {
       if (u != getLogicalNodeStartVertexIndex(0)) {
         for (int v = 0; v < numberOfVertices; v++) {
-          auto oneMinusE = solver->MakeBoolVar("");
-          auto oneMinusEConstraint = solver->MakeRowConstraint(1, 1);
-          oneMinusEConstraint->SetCoefficient(oneMinusE, 1);
-          oneMinusEConstraint->SetCoefficient(e[v][u], 1);
-
-          auto constraint = solver->MakeRowConstraint(0, infinity);
+          auto constraint = solver->MakeRowConstraint(-infinityForTime, infinity);
           constraint->SetCoefficient(z[u], 1);
           constraint->SetCoefficient(z[v], -1);
           constraint->SetCoefficient(w[u], -1);
-          constraint->SetCoefficient(oneMinusE, std::numeric_limits<float>::max());
+          constraint->SetCoefficient(e[v][u], -infinityForTime);
         }
       }
     }
