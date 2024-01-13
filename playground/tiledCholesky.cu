@@ -97,7 +97,7 @@ bool verifyCholeskyDecomposition(double *A, double *L, const int n) {
   return error <= 1e-6;
 }
 
-void trivialCholesky() {
+void trivialCholesky(bool verify) {
   // Initialize libaries
   cusolverDnHandle_t cusolverDnHandle;
   checkCudaErrors(cusolverDnCreate(&cusolverDnHandle));
@@ -136,6 +136,10 @@ void trivialCholesky() {
   int *d_info;
   checkCudaErrors(cudaMalloc(&d_info, sizeof(int)));
 
+  CudaEventClock clock;
+
+  clock.start();
+
   // Calculate
   checkCudaErrors(cusolverDnXpotrf(
     cusolverDnHandle,
@@ -153,6 +157,8 @@ void trivialCholesky() {
     d_info
   ));
 
+  clock.end();
+
   // Check
   int h_info = 0;
   checkCudaErrors(cudaMemcpy(&h_info, d_info, sizeof(int), cudaMemcpyDeviceToHost));
@@ -162,15 +168,19 @@ void trivialCholesky() {
   }
 
   // Verify
-  double *h_L = (double *)malloc(N * N * sizeof(double));
-  checkCudaErrors(cudaMemcpy(h_L, d_A, N * N * sizeof(double), cudaMemcpyDeviceToHost));
-  cleanCusolverCholeskyDecompositionResult(h_L, N);
-  fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(h_A, h_L, N));
+  if (verify) {
+    double *h_L = (double *)malloc(N * N * sizeof(double));
+    checkCudaErrors(cudaMemcpy(h_L, d_A, N * N * sizeof(double), cudaMemcpyDeviceToHost));
+    cleanCusolverCholeskyDecompositionResult(h_L, N);
+    fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(h_A, h_L, N));
+    free(h_L);
+  }
+
+  fmt::print("Total time used (s): {}\n", clock.getTimeInSeconds());
 
   // Clean
   free(h_A);
   free(h_workspace);
-  free(h_L);
   checkCudaErrors(cusolverDnDestroy(cusolverDnHandle));
   checkCudaErrors(cudaFree(d_A));
   checkCudaErrors(cudaFree(d_workspace));
@@ -280,7 +290,7 @@ class TiledCholeskyGraphCreator {
   }
 };
 
-void tiledCholesky() {
+void tiledCholesky(bool verify) {
   // Initialize data
   auto originalMatrix = std::make_unique<double[]>(N * N);  // Column-major
   generateRandomSymmetricPositiveDefiniteMatrix(originalMatrix.get(), N);
@@ -431,30 +441,39 @@ void tiledCholesky() {
 
   cudaGraphExec_t graphExec;
   checkCudaErrors(cudaGraphInstantiate(&graphExec, graph, nullptr, nullptr, 0));
+
+  CudaEventClock clock;
+
+  clock.start();
   checkCudaErrors(cudaGraphLaunch(graphExec, s));
+  clock.end();
 
   checkCudaErrors(cudaDeviceSynchronize());
 
-  cleanCusolverCholeskyDecompositionResult(d_matrix, N);
-  fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(originalMatrix.get(), d_matrix, N));
+  if (verify) {
+    cleanCusolverCholeskyDecompositionResult(d_matrix, N);
+    fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(originalMatrix.get(), d_matrix, N));
+  }
+
+  fmt::print("Total time used (s): {}\n", clock.getTimeInSeconds());
 
   free(h_workspace);
   cudaFree(d_matrix);
   cudaFree(d_workspace);
 }
 
-void cholesky(bool tiled) {
+void cholesky(bool tiled, bool verify) {
   if (tiled) {
-    tiledCholesky();
+    tiledCholesky(verify);
   } else {
-    trivialCholesky();
+    trivialCholesky(verify);
   }
 }
 
 int main(int argc, char **argv) {
   auto cmdl = argh::parser(argc, argv);
 
-  cholesky(cmdl["tiled"]);
+  cholesky(cmdl["tiled"], cmdl["verify"]);
 
   return 0;
 }
