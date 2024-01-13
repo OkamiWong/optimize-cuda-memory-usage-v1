@@ -60,6 +60,13 @@ void mergeConcurrentCudaGraphNodes(
   uint64_t currentWindowEnd = 0;
   cudaGraphNode_t currentWindowRepresentativeNode = nullptr;
   for (auto &[lifetime, node] : lifetimeToCudaGraphNodeMap) {
+    // Ignore mem alloc node and mem free node
+    cudaGraphNodeType nodeType;
+    checkCudaErrors(cudaGraphNodeGetType(node, &nodeType));
+    if (nodeType == cudaGraphNodeTypeMemAlloc || nodeType == cudaGraphNodeTypeMemFree) {
+      continue;
+    }
+
     assert(lifetime.first != 0 && lifetime.second != 0);
 
     if (currentWindowRepresentativeNode != nullptr && lifetime.first <= currentWindowEnd) {
@@ -218,8 +225,16 @@ OptimizationInput constructOptimizationInput(
     uint64_t minStart = std::numeric_limits<uint64_t>::max(), maxEnd = 0;
 
     for (auto node : logicalNode.nodes) {
+      // Ignore annotation node
       const auto isAnnotationNode = nodeToAnnotationMap[node] == node;
       if (isAnnotationNode) continue;
+
+      // Ignore mem alloc node and mem free node
+      cudaGraphNodeType nodeType;
+      checkCudaErrors(cudaGraphNodeGetType(node, &nodeType));
+      if (nodeType == cudaGraphNodeTypeMemAlloc || nodeType == cudaGraphNodeTypeMemFree) {
+        continue;
+      }
 
       minStart = std::min(minStart, timeline[node].first);
       maxEnd = std::max(maxEnd, timeline[node].second);
