@@ -26,6 +26,8 @@ struct CustomGraph {
     size_t size;
   };
 
+  bool optimal;
+
   cudaGraph_t originalGraph;
   std::vector<NodeId> nodes;
   std::map<NodeId, std::vector<NodeId>> edges;

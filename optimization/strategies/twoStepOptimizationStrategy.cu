@@ -118,6 +118,13 @@ CustomGraph convertToCustomGraph(
   SecondStepSolver::Output &secondStepOutput
 ) {
   CustomGraph optimizedGraph;
+
+  if (!secondStepOutput.optimal) {
+    optimizedGraph.optimal = false;
+    return optimizedGraph;
+  }
+
+  optimizedGraph.optimal = true;
   optimizedGraph.originalGraph = optimizationInput.originalGraph;
 
   // Add arrays that should be on device initially

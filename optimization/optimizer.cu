@@ -270,6 +270,12 @@ CustomGraph Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
   auto optimizationInput = constructOptimizationInput(originalGraph, edges, timeline, disjointSet, nodeToAnnotationMap);
 
   // Optimize
-  auto customGraph = this->optimize<TwoStepOptimizationStrategy>(optimizationInput);
-  return customGraph;
+  auto optimizedGraph = this->optimize<TwoStepOptimizationStrategy>(optimizationInput);
+
+  if (!optimizedGraph.optimal) {
+    LOG_TRACE_WITH_INFO("Solution not optimal");
+    exit(-1);
+  }
+
+  return optimizedGraph;
 }

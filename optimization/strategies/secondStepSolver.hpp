@@ -23,6 +23,7 @@ class SecondStepSolver {
     // (Starting Node Index, Array Index, Ending Node Index)
     typedef std::tuple<int, int, int> Offload;
 
+    bool optimal;
     std::vector<int> indicesOfArraysInitiallyOnDevice;
     std::vector<Prefetch> prefetches;
     std::vector<Offload> offloadings;

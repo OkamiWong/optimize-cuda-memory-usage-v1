@@ -563,6 +563,8 @@ struct IntegerProgrammingSolver {
     if (resultStatus == MPSolver::OPTIMAL) {
       printSolution(objective);
 
+      output.optimal = true;
+
       for (int i = 0; i < numberOfArrays; i++) {
         if (initiallyAllocatedOnDevice[i]->solution_value() > 0) {
           output.indicesOfArraysInitiallyOnDevice.push_back(i);
@@ -588,7 +590,7 @@ struct IntegerProgrammingSolver {
       }
     } else {
       LOG_TRACE_WITH_INFO("No optimal solution found. (ResultStatus=%d)", resultStatus);
-      exit(-1);
+      output.optimal = false;
     }
 
     return output;
