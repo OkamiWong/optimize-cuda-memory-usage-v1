@@ -486,12 +486,47 @@ struct IntegerProgrammingSolver {
     fclose(fp);
   }
 
+  // For checking scale of numbers
+  void printDurationsAndSizes() {
+    LOG_TRACE_WITH_INFO("Printing input to secondStepSolverInput.out");
+
+    auto fp = fopen("secondStepSolverInput.out", "w");
+    float minDuration = std::numeric_limits<float>::max();
+    float maxDuration = 0;
+    for (int i = 0; i < numberOfLogicalNodes; i++) {
+      auto duration = input.nodeDurations[i];
+      minDuration = std::min(minDuration, duration);
+      maxDuration = std::max(maxDuration, duration);
+      fmt::print(fp, "nodeDurations[{}] = {}\n", i, duration);
+    }
+
+    size_t minSize = std::numeric_limits<size_t>::max();
+    size_t maxSize = 0;
+    for (int i = 0; i < numberOfArrays; i++) {
+      auto size = input.arraySizes[i];
+      minSize = std::min(minSize, size);
+      maxSize = std::max(maxSize, size);
+      fmt::print(fp, "arraySizes[{}] = {}\n", i, size);
+    }
+
+    fmt::print(
+      fp,
+      "minDuration = {}\nmaxDuration = {}\nminSize = {}\nmaxSize = {}\n",
+      minDuration,
+      maxDuration,
+      minSize,
+      maxSize
+    );
+  }
+
   SecondStepSolver::Output solve(SecondStepSolver::Input &&input, bool verbose = false) {
     this->input = std::move(input);
 
     initialize();
 
     preprocessSecondStepInput();
+
+    printDurationsAndSizes();
 
     defineDecisionVariables();
 
