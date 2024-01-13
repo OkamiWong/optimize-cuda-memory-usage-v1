@@ -16,6 +16,12 @@ float SystemWallClock::getTimeInSeconds() {
   return duration.count();
 }
 
+float SystemWallClock::peekCurrentTimeInSeconds() {
+  auto currentTimePoint = std::chrono::system_clock::now();
+  std::chrono::duration<float> duration = currentTimePoint - this->startTimePoint;
+  return duration.count();
+}
+
 int generateRandomInteger(int min, int max) {
   static std::random_device rd;
   static std::mt19937 gen(rd());

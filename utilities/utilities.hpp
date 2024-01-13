@@ -10,6 +10,7 @@ class SystemWallClock {
   void start();
   void end();
   float getTimeInSeconds();
+  float peekCurrentTimeInSeconds();
 
  private:
   std::chrono::time_point<std::chrono::system_clock> startTimePoint, endTimePoint;
