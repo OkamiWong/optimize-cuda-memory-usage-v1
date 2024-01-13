@@ -11,6 +11,7 @@ class SystemWallClock {
   void end();
   float getTimeInSeconds();
   float peekCurrentTimeInSeconds();
+  void logWithCurrentTime(const char *message);
 
  private:
   std::chrono::time_point<std::chrono::system_clock> startTimePoint, endTimePoint;

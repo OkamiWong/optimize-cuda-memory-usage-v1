@@ -22,6 +22,10 @@ float SystemWallClock::peekCurrentTimeInSeconds() {
   return duration.count();
 }
 
+void SystemWallClock::logWithCurrentTime(const char *message) {
+  printf("(%.6f) %s\n", this->peekCurrentTimeInSeconds(), message);
+}
+
 int generateRandomInteger(int min, int max) {
   static std::random_device rd;
   static std::mt19937 gen(rd());
