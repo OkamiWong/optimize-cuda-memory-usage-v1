@@ -517,6 +517,8 @@ struct IntegerProgrammingSolver {
       minSize,
       maxSize
     );
+
+    fclose(fp);
   }
 
   SecondStepSolver::Output solve(SecondStepSolver::Input &&input, bool verbose = false) {
