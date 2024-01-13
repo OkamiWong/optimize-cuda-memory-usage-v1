@@ -24,6 +24,7 @@
 #include "../profiling/memoryManager.hpp"
 #include "../utilities/cudaUtilities.hpp"
 #include "../utilities/logger.hpp"
+#include "../utilities/utilities.hpp"
 
 constexpr size_t N = 512;
 constexpr size_t B = N / 4;
@@ -250,14 +251,19 @@ void initializeDeviceData(double *h_originalMatrix, double *d_matrix) {
 }
 
 void tiledCholesky(bool optimize, bool verify) {
+  SystemWallClock clock;
+  clock.start();
+
   // Initialize data
   auto h_originalMatrix = std::make_unique<double[]>(N * N);  // Column-major
   initializeHostData(h_originalMatrix.get());
+  clock.logWithCurrentTime("Host data initialized");
 
   // Initialize device data
   double *d_matrix;
   checkCudaErrors(cudaMallocManaged(&d_matrix, N * N * sizeof(double)));
   initializeDeviceData(h_originalMatrix.get(), d_matrix);
+  clock.logWithCurrentTime("Device data initialized");
 
   auto getMatrixBlock = [&](int i, int j) {
     return d_matrix + (B * B) * (i + j * T);
@@ -275,6 +281,7 @@ void tiledCholesky(bool optimize, bool verify) {
       registerApplicationOutput(getMatrixBlock(i, j));
     }
   }
+  clock.logWithCurrentTime("Addresses registered");
 
   // Initialize libraries
   cusolverDnHandle_t cusolverDnHandle;
@@ -327,6 +334,8 @@ void tiledCholesky(bool optimize, bool verify) {
   void *cublasWorkspace;
   checkCudaErrors(cudaMalloc(&cublasWorkspace, CUBLAS_WORKSPACE_SIZE));
   checkCudaErrors(cublasSetWorkspace(cublasHandle, cublasWorkspace, CUBLAS_WORKSPACE_SIZE));
+
+  clock.logWithCurrentTime("Preparation done, start to record graph");
 
   auto tiledCholeskyGraphCreator = std::make_unique<TiledCholeskyGraphCreator>(s, graph);
 
@@ -421,10 +430,14 @@ void tiledCholesky(bool optimize, bool verify) {
     }
   }
 
+  clock.logWithCurrentTime("Graph recorded");
+
   LOG_TRACE_WITH_INFO("Printing original graph to graph.dot");
   checkCudaErrors(cudaGraphDebugDotPrint(graph, "./graph.dot", 0));
 
-  CudaEventClock clock;
+  clock.logWithCurrentTime("Graph printed");
+
+  CudaEventClock cudaEventClock;
 
   if (optimize) {
     auto optimizedGraph = profileAndOptimize(graph);
@@ -433,27 +446,35 @@ void tiledCholesky(bool optimize, bool verify) {
 
     distributeInitialData(optimizedGraph);
 
-    clock.start();
+    cudaEventClock.start();
     executeOptimizedGraph(optimizedGraph);
-    clock.end();
+    cudaEventClock.end();
 
     checkCudaErrors(cudaDeviceSynchronize());
   } else {
     cudaGraphExec_t graphExec;
     checkCudaErrors(cudaGraphInstantiate(&graphExec, graph, nullptr, nullptr, 0));
 
-    clock.start();
+    clock.logWithCurrentTime("Graph instantiated, start execution");
+
+    cudaEventClock.start();
     checkCudaErrors(cudaGraphLaunch(graphExec, s));
-    clock.end();
+    cudaEventClock.end();
+
+    clock.logWithCurrentTime("Graph launched, waiting for synchronization");
 
     checkCudaErrors(cudaDeviceSynchronize());
   }
+
+  clock.logWithCurrentTime("Synchronization done");
 
   if (verify) {
     cleanTiledCholeskyDecompositionResult(d_matrix, N, B);
     fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(h_originalMatrix.get(), d_matrix, N));
   }
-  fmt::print("Total time used (s): {}\n", clock.getTimeInSeconds());
+  fmt::print("Total time used (s): {}\n", cudaEventClock.getTimeInSeconds());
+
+  clock.logWithCurrentTime("All finished");
 
   free(h_workspace);
   cudaFree(d_matrix);
