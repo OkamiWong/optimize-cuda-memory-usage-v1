@@ -554,6 +554,8 @@ struct IntegerProgrammingSolver {
     objective->SetCoefficient(peakMemoryUsage, 1);
     objective->SetMinimization();
 
+    solver->set_time_limit(1000 * 30);
+
     auto resultStatus = solver->Solve();
 
     SecondStepSolver::Output output;
