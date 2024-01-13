@@ -428,8 +428,8 @@ struct IntegerProgrammingSolver {
     auto totalRunningTime = z[getLogicalNodeVertexIndex(numberOfLogicalNodes - 1)]->solution_value();
 
     fmt::print(fp, "Original peak memory usage (MByte): {:.6f}\n", originalPeakMemoryUsage * 1e-6);
-    fmt::print(fp, "Optimal peak memory usage (MByte): {:.6f}\n", optimizedPeakMemoryUsage * 1e-6);
-    fmt::print(fp, "Optimal peak memory usage  / Original peak memory usage: {:.6f}%\n", optimizedPeakMemoryUsage / originalPeakMemoryUsage * 100.0);
+    fmt::print(fp, "Optimal peak memory usage (MByte): {:.6f}\n", optimizedPeakMemoryUsage);
+    fmt::print(fp, "Optimal peak memory usage  / Original peak memory usage: {:.6f}%\n", optimizedPeakMemoryUsage * 1e6 / originalPeakMemoryUsage * 100.0);
 
     fmt::print(fp, "Original total running time (s): {:.6f}\n", originalTotalTime);
     fmt::print(fp, "Total running time (s): {:.6f}\n", totalRunningTime);
@@ -505,13 +505,13 @@ struct IntegerProgrammingSolver {
 
     addKernelDataDependencyConstraints();
 
-    // Represent the peak memory usage
+    // Represent the peak memory usage in MByte
     auto peakMemoryUsage = solver->MakeNumVar(0, infinity, "");
     for (int i = 0; i < numberOfLogicalNodes; i++) {
       auto constraint = solver->MakeRowConstraint(0, infinity);
       constraint->SetCoefficient(peakMemoryUsage, 1);
       for (int j = 0; j < numberOfArrays; j++) {
-        constraint->SetCoefficient(x[i][j], -static_cast<double>(this->input.arraySizes[j]));
+        constraint->SetCoefficient(x[i][j], -static_cast<double>(this->input.arraySizes[j]) * 1e-6);
       }
     }
 
