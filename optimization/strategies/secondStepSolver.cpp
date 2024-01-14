@@ -16,7 +16,7 @@ using namespace operations_research;
 // Need separate the or_tools reference with cu files,
 // because nvcc cannot compile or_tools
 struct IntegerProgrammingSolver {
-  static constexpr double totalRunningTimeWeight = 0.01;
+  static constexpr double totalRunningTimeWeight = 0.0001;
 
   // States of the solver
   SecondStepSolver::Input input;
