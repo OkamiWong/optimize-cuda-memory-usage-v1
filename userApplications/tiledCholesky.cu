@@ -26,7 +26,7 @@
 #include "../utilities/logger.hpp"
 #include "../utilities/utilities.hpp"
 
-constexpr size_t N = 512;
+constexpr size_t N = 1024 * 8;
 constexpr size_t B = N / 4;
 
 constexpr size_t T = N / B;
