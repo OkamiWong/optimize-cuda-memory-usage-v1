@@ -3,6 +3,9 @@ add_executable(helloWorld helloWorld.cu)
 add_executable(captureGraph captureGraph.cu)
 target_link_libraries(captureGraph cudaUtilities)
 
+add_executable(modifyKernelNodeParams modifyKernelNodeParams.cu)
+target_link_libraries(modifyKernelNodeParams cudaUtilities cudaGraphUtilities -lcuda)
+
 add_executable(assertion assertion.cu)
 
 add_executable(z3Playground z3Playground.cpp)
