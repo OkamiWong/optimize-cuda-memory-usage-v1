@@ -48,7 +48,8 @@ CudaGraphExecutionTimeline getCudaGraphExecutionTimeline(cudaGraph_t graph) {
 
 void mergeConcurrentCudaGraphNodes(
   CudaGraphExecutionTimeline &timeline,
-  DisjointSet<cudaGraphNode_t> &disjointSet
+  DisjointSet<cudaGraphNode_t> &disjointSet,
+  const int logicalNodeSizeLimit
 ) {
   LOG_TRACE();
 
@@ -69,7 +70,7 @@ void mergeConcurrentCudaGraphNodes(
 
     assert(lifetime.first != 0 && lifetime.second != 0);
 
-    if (currentWindowRepresentativeNode != nullptr && lifetime.first <= currentWindowEnd) {
+    if (currentWindowRepresentativeNode != nullptr && lifetime.first <= currentWindowEnd && disjointSet.getSetSize(currentWindowRepresentativeNode) < logicalNodeSizeLimit) {
       disjointSet.unionUnderlyingSets(currentWindowRepresentativeNode, node);
       currentWindowEnd = std::max(currentWindowEnd, lifetime.second);
     } else {
@@ -255,27 +256,48 @@ CustomGraph Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
 
   auto timeline = getCudaGraphExecutionTimeline(originalGraph);
 
-  DisjointSet<cudaGraphNode_t> disjointSet;
-  mergeConcurrentCudaGraphNodes(timeline, disjointSet);
-
   std::vector<cudaGraphNode_t> nodes;
   std::map<cudaGraphNode_t, std::vector<cudaGraphNode_t>> edges;
   extractGraphNodesAndEdges(originalGraph, nodes, edges);
 
-  std::map<cudaGraphNode_t, cudaGraphNode_t> nodeToAnnotationMap;
-  mapNodeToAnnotation(originalGraph, edges, nodeToAnnotationMap);
+  bool feasibleSolutionFound = false;
+  CustomGraph lastFeasibleGraph;
+  int logicalNodeSizeLimit = std::numeric_limits<int>::max();
+  for (;;) {
+    LOG_TRACE_WITH_INFO("logicalNodeSizeLimit = %d", logicalNodeSizeLimit);
 
-  mergeNodesWithSameAnnotation(nodes, nodeToAnnotationMap, disjointSet);
+    DisjointSet<cudaGraphNode_t> disjointSet;
+    mergeConcurrentCudaGraphNodes(timeline, disjointSet, logicalNodeSizeLimit);
 
-  auto optimizationInput = constructOptimizationInput(originalGraph, edges, timeline, disjointSet, nodeToAnnotationMap);
+    int largestLogicalNodeSize = 0;
+    for (auto node : nodes) {
+      largestLogicalNodeSize = std::max(largestLogicalNodeSize, static_cast<int>(disjointSet.getSetSize(node)));
+    }
 
-  // Optimize
-  auto optimizedGraph = this->optimize<TwoStepOptimizationStrategy>(optimizationInput);
+    std::map<cudaGraphNode_t, cudaGraphNode_t> nodeToAnnotationMap;
+    mapNodeToAnnotation(originalGraph, edges, nodeToAnnotationMap);
 
-  if (!optimizedGraph.optimal) {
-    LOG_TRACE_WITH_INFO("Solution not optimal");
-    exit(-1);
+    mergeNodesWithSameAnnotation(nodes, nodeToAnnotationMap, disjointSet);
+
+    auto optimizationInput = constructOptimizationInput(originalGraph, edges, timeline, disjointSet, nodeToAnnotationMap);
+
+    // Optimize
+    auto optimizedGraph = this->optimize<TwoStepOptimizationStrategy>(optimizationInput);
+
+    if (optimizedGraph.optimal) {
+      feasibleSolutionFound = true;
+      lastFeasibleGraph = optimizedGraph;
+
+      logicalNodeSizeLimit = (largestLogicalNodeSize + 1) / 2;
+
+      if (largestLogicalNodeSize == 2) {
+        return optimizedGraph;
+      }
+    } else {
+      if (feasibleSolutionFound) {
+        return lastFeasibleGraph;
+      }
+      exit(-1);
+    }
   }
-
-  return optimizedGraph;
 }
