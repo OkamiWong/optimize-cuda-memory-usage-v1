@@ -16,10 +16,14 @@ using namespace operations_research;
 // Need separate the or_tools reference with cu files,
 // because nvcc cannot compile or_tools
 struct IntegerProgrammingSolver {
+  static constexpr double totalRunningTimeWeight = 0.01;
+
   // States of the solver
   SecondStepSolver::Input input;
-  size_t originalPeakMemoryUsage;
+
+  double originalPeakMemoryUsage;  // In MB
   float originalTotalRunningTime;
+  double originalPeakMemoryUsageToTotalRunningTimeRatio;
   int numberOfLogicalNodes, numberOfArrays, numberOfVertices;
   std::map<std::pair<int, int>, bool> shouldAllocate, shouldDeallocate;
 
@@ -40,6 +44,8 @@ struct IntegerProgrammingSolver {
   std::vector<std::vector<MPVariable *>> e;
 
   std::vector<MPVariable *> z;
+
+  MPVariable *peakMemoryUsage;
 
   int getLogicalNodeVertexIndex(int i) {
     return i * 2 + 1;
@@ -65,7 +71,6 @@ struct IntegerProgrammingSolver {
     originalTotalRunningTime = input.originalTotalRunningTime;
 
     std::set<int> allDependencies, currentDependencies;
-    originalPeakMemoryUsage = 0;
     for (int i = 0; i < numberOfLogicalNodes; i++) {
       currentDependencies.clear();
       std::set_union(
@@ -83,14 +88,17 @@ struct IntegerProgrammingSolver {
         std::inserter(allDependencies, allDependencies.begin())
       );
     }
-    originalPeakMemoryUsage = std::accumulate(
-      allDependencies.begin(),
-      allDependencies.end(),
-      static_cast<size_t>(0),
-      [&](size_t a, int b) {
-        return a + input.arraySizes[b];
-      }
-    );
+    originalPeakMemoryUsage = 1e-6 * std::accumulate(
+                                       allDependencies.begin(),
+                                       allDependencies.end(),
+                                       static_cast<size_t>(0),
+                                       [&](size_t a, int b) {
+                                         return a + input.arraySizes[b];
+                                       }
+                                     );
+
+    originalPeakMemoryUsageToTotalRunningTimeRatio =
+      static_cast<double>(originalPeakMemoryUsage) / static_cast<double>(originalTotalRunningTime);
 
     shouldAllocate.clear();
     std::vector<int> arrayFirstWritingKernel(numberOfArrays, std::numeric_limits<int>::max());
@@ -412,17 +420,29 @@ struct IntegerProgrammingSolver {
     }
   }
 
-  void printSolution(MPObjective *objective) {
+  void definePeakMemoryUsage() {
+    // Represent the peak memory usage in MByte
+    peakMemoryUsage = solver->MakeNumVar(0, infinity, "");
+    for (int i = 0; i < numberOfLogicalNodes; i++) {
+      auto constraint = solver->MakeRowConstraint(0, infinity);
+      constraint->SetCoefficient(peakMemoryUsage, 1);
+      for (int j = 0; j < numberOfArrays; j++) {
+        constraint->SetCoefficient(x[i][j], -static_cast<double>(this->input.arraySizes[j]) * 1e-6);
+      }
+    }
+  }
+
+  void printSolution() {
     LOG_TRACE_WITH_INFO("Printing solution to secondStepSolver.out");
 
     auto fp = fopen("secondStepSolver.out", "w");
 
-    auto optimizedPeakMemoryUsage = objective->Value();
+    auto optimizedPeakMemoryUsage = peakMemoryUsage->solution_value();
     auto totalRunningTime = z[getLogicalNodeVertexIndex(numberOfLogicalNodes - 1)]->solution_value();
 
-    fmt::print(fp, "Original peak memory usage (MByte): {:.6f}\n", originalPeakMemoryUsage * 1e-6);
+    fmt::print(fp, "Original peak memory usage (MByte): {:.6f}\n", originalPeakMemoryUsage);
     fmt::print(fp, "Optimal peak memory usage (MByte): {:.6f}\n", optimizedPeakMemoryUsage);
-    fmt::print(fp, "Optimal peak memory usage  / Original peak memory usage: {:.6f}%\n", optimizedPeakMemoryUsage * 1e6 / originalPeakMemoryUsage * 100.0);
+    fmt::print(fp, "Optimal peak memory usage  / Original peak memory usage: {:.6f}%\n", optimizedPeakMemoryUsage / originalPeakMemoryUsage * 100.0);
 
     fmt::print(fp, "Original total running time (s): {:.6f}\n", originalTotalRunningTime);
     fmt::print(fp, "Total running time (s): {:.6f}\n", totalRunningTime);
@@ -535,18 +555,14 @@ struct IntegerProgrammingSolver {
 
     addKernelDataDependencyConstraints();
 
-    // Represent the peak memory usage in MByte
-    auto peakMemoryUsage = solver->MakeNumVar(0, infinity, "");
-    for (int i = 0; i < numberOfLogicalNodes; i++) {
-      auto constraint = solver->MakeRowConstraint(0, infinity);
-      constraint->SetCoefficient(peakMemoryUsage, 1);
-      for (int j = 0; j < numberOfArrays; j++) {
-        constraint->SetCoefficient(x[i][j], -static_cast<double>(this->input.arraySizes[j]) * 1e-6);
-      }
-    }
+    definePeakMemoryUsage();
 
     auto objective = solver->MutableObjective();
     objective->SetCoefficient(peakMemoryUsage, 1);
+    objective->SetCoefficient(
+      z[getLogicalNodeVertexIndex(numberOfLogicalNodes - 1)],
+      originalPeakMemoryUsageToTotalRunningTimeRatio * totalRunningTimeWeight
+    );
     objective->SetMinimization();
 
     solver->set_time_limit(1000 * 30);
@@ -556,7 +572,7 @@ struct IntegerProgrammingSolver {
     SecondStepSolver::Output output;
 
     if (resultStatus == MPSolver::OPTIMAL) {
-      printSolution(objective);
+      printSolution();
 
       output.optimal = true;
 
