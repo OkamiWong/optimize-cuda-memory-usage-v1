@@ -296,7 +296,7 @@ CustomGraph Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
 
       logicalNodeSizeLimit = (largestLogicalNodeSize + 1) / 2;
 
-      if (largestLogicalNodeSize == 2) {
+      if (largestLogicalNodeSize == 1) {
         return optimizedGraph;
       }
     } else {
