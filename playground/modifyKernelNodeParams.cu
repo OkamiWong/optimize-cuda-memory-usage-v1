@@ -5,7 +5,12 @@
 #include "../utilities/cudaGraphUtilities.hpp"
 #include "../utilities/cudaUtilities.hpp"
 
-__global__ void foo(int8_t a, int16_t b, int32_t c, int64_t d, int *p) {
+struct Param {
+  int8_t a; 
+  int64_t c;
+};
+
+__global__ void foo(int8_t a, int16_t b, int32_t c, int64_t d, int *p, Param param, int something) {
   printf("a = %d\n", a);
   printf("b = %d\n", b);
   printf("c = %d\n", c);
@@ -13,7 +18,7 @@ __global__ void foo(int8_t a, int16_t b, int32_t c, int64_t d, int *p) {
   printf("*p = %d\n", *p);
 }
 
-void ModifyKernelNodeParams(cudaGraphNode_t kernelNode) {
+void modifyKernelNodeParams(cudaGraphNode_t kernelNode) {
   CUDA_KERNEL_NODE_PARAMS nodeParams;
   checkCudaErrors(cuGraphKernelNodeGetParams(kernelNode, &nodeParams));
 
@@ -31,6 +36,21 @@ void ModifyKernelNodeParams(cudaGraphNode_t kernelNode) {
   printf("7: %zx\n", kernelParams[7]);
 }
 
+void countKernelNodeParams(cudaGraphNode_t kernelNode) {
+  CUDA_KERNEL_NODE_PARAMS nodeParams;
+  checkCudaErrors(cuGraphKernelNodeGetParams(kernelNode, &nodeParams));
+
+  void **kernelParams = nodeParams.kernelParams;
+  int count = 1;
+  while (kernelParams != nullptr) {
+    int offset = static_cast<char *>(kernelParams[count]) - static_cast<char *>(kernelParams[count - 1]);
+    if (offset != 2 && offset != 4 && offset != 8) break;
+    count++;
+  }
+
+  printf("count = %d\n", count);
+}
+
 int main() {
   int *p;
   checkCudaErrors(cudaMallocManaged(&p, sizeof(int)));
@@ -38,18 +58,22 @@ int main() {
 
   printf("p = %p\n", p);
 
+  Param param;
+
   cudaStream_t stream;
   checkCudaErrors(cudaStreamCreate(&stream));
   checkCudaErrors(cudaStreamBeginCapture(stream, cudaStreamCaptureModeGlobal));
 
-  foo<<<1, 1, 0, stream>>>(101, 102, 103, 104, p);
+  foo<<<1, 1, 0, stream>>>(101, 102, 103, 104, p, param, 1234);
 
   cudaGraph_t graph;
   checkCudaErrors(cudaStreamEndCapture(stream, &graph));
 
   checkCudaErrors(cudaGraphDebugDotPrint(graph, "./graph.dot", cudaGraphDebugDotFlagsVerbose));
 
-  ModifyKernelNodeParams(getRootNode(graph));
+  auto node = getRootNode(graph);
+  modifyKernelNodeParams(node);
+  countKernelNodeParams(node);
 
   cudaGraphExec_t graphExec;
   checkCudaErrors(cudaGraphInstantiate(&graphExec, graph, nullptr, nullptr, 0));
