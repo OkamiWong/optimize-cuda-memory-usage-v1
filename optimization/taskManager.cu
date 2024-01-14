@@ -3,9 +3,9 @@
 #include <cassert>
 #include <cstdlib>
 #include <functional>
-#include <map>
 #include <memory>
 #include <queue>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -109,7 +109,7 @@ void TaskManager::queueCudaNodeToStream(cudaGraphNode_t node, cudaStream_t strea
   }
 }
 
-std::map<CustomGraph::NodeId, TaskManager::StreamId> TaskManager::getStreamAssignment(
+std::unordered_map<CustomGraph::NodeId, TaskManager::StreamId> TaskManager::getStreamAssignment(
   CustomGraph &optimizedGraph
 ) {
   augment_path augmentPathAlgorithm(optimizedGraph.nodes.size(), optimizedGraph.nodes.size());
@@ -120,7 +120,7 @@ std::map<CustomGraph::NodeId, TaskManager::StreamId> TaskManager::getStreamAssig
   }
   augmentPathAlgorithm.solve();
 
-  std::map<CustomGraph::NodeId, TaskManager::StreamId> nodeIdToStreamIdMap;
+  std::unordered_map<CustomGraph::NodeId, TaskManager::StreamId> nodeIdToStreamIdMap;
   TaskManager::StreamId nextStreamId = 0;
   for (auto u : optimizedGraph.nodes) {
     if (nodeIdToStreamIdMap.count(u) == 0) {

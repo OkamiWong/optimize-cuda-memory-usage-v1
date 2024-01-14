@@ -2,7 +2,7 @@
 
 #include <cuda.h>
 
-#include <map>
+#include <unordered_map>
 
 #include "customGraph.hpp"
 #include "optimizer.hpp"
@@ -31,5 +31,5 @@ class TaskManager {
   void queueCudaMemsetToStream(CUgraphNode node, cudaStream_t stream);
 
   // Calculate the stream assignment by bipartite matching
-  std::map<CustomGraph::NodeId, StreamId> getStreamAssignment(CustomGraph &optimizedGraph);
+  std::unordered_map<CustomGraph::NodeId, StreamId> getStreamAssignment(CustomGraph &optimizedGraph);
 };
