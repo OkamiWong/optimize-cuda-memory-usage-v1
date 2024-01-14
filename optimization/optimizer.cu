@@ -222,6 +222,7 @@ OptimizationInput constructOptimizationInput(
   }
 
   // Add duration and data dependency
+  uint64_t globalMinStart = std::numeric_limits<uint64_t>::max(), globalMaxEnd = 0;
   for (auto &logicalNode : optimizationInput.nodes) {
     uint64_t minStart = std::numeric_limits<uint64_t>::max(), maxEnd = 0;
 
@@ -243,8 +244,13 @@ OptimizationInput constructOptimizationInput(
       mergeDataDependency(logicalNode, nodeToAnnotationMap[node]);
     }
 
+    globalMinStart = std::min(globalMinStart, minStart);
+    globalMaxEnd = std::max(globalMaxEnd, maxEnd);
+
     logicalNode.duration = static_cast<float>(maxEnd - minStart) * 1e-9f;
   }
+
+  optimizationInput.originalTotalRunningTime = static_cast<float>(globalMaxEnd - globalMinStart) * 1e-9f;
 
   return optimizationInput;
 }

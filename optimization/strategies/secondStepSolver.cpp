@@ -19,7 +19,7 @@ struct IntegerProgrammingSolver {
   // States of the solver
   SecondStepSolver::Input input;
   size_t originalPeakMemoryUsage;
-  float originalTotalTime;
+  float originalTotalRunningTime;
   int numberOfLogicalNodes, numberOfArrays, numberOfVertices;
   std::map<std::pair<int, int>, bool> shouldAllocate, shouldDeallocate;
 
@@ -62,14 +62,7 @@ struct IntegerProgrammingSolver {
     numberOfArrays = input.arraySizes.size();
     numberOfVertices = numberOfLogicalNodes * 2 + numberOfLogicalNodes * numberOfArrays * 2;
 
-    originalTotalTime = std::accumulate(
-      input.nodeDurations.begin(),
-      input.nodeDurations.end(),
-      0.0f,
-      [](float a, float b) {
-        return a + b;
-      }
-    );
+    originalTotalRunningTime = input.originalTotalRunningTime;
 
     std::set<int> allDependencies, currentDependencies;
     originalPeakMemoryUsage = 0;
@@ -383,7 +376,7 @@ struct IntegerProgrammingSolver {
       }
     }
 
-    const float infinityForTime = 10.0 * originalTotalTime;
+    const float infinityForTime = 10.0 * originalTotalRunningTime;
 
     for (int u = 0; u < numberOfVertices; u++) {
       if (u != getLogicalNodeStartVertexIndex(0)) {
@@ -397,7 +390,7 @@ struct IntegerProgrammingSolver {
       }
     }
 
-    auto zLastKernelConstraint = solver->MakeRowConstraint(0, originalTotalTime * Constants::ACCEPTABLE_RUNNING_TIME_FACTOR);
+    auto zLastKernelConstraint = solver->MakeRowConstraint(0, originalTotalRunningTime * Constants::ACCEPTABLE_RUNNING_TIME_FACTOR);
     zLastKernelConstraint->SetCoefficient(z[getLogicalNodeVertexIndex(numberOfLogicalNodes - 1)], 1);
   }
 
@@ -431,9 +424,9 @@ struct IntegerProgrammingSolver {
     fmt::print(fp, "Optimal peak memory usage (MByte): {:.6f}\n", optimizedPeakMemoryUsage);
     fmt::print(fp, "Optimal peak memory usage  / Original peak memory usage: {:.6f}%\n", optimizedPeakMemoryUsage * 1e6 / originalPeakMemoryUsage * 100.0);
 
-    fmt::print(fp, "Original total running time (s): {:.6f}\n", originalTotalTime);
+    fmt::print(fp, "Original total running time (s): {:.6f}\n", originalTotalRunningTime);
     fmt::print(fp, "Total running time (s): {:.6f}\n", totalRunningTime);
-    fmt::print(fp, "Total running time / original: {:.6f}%\n", totalRunningTime / originalTotalTime * 100.0);
+    fmt::print(fp, "Total running time / original: {:.6f}%\n", totalRunningTime / originalTotalRunningTime * 100.0);
 
     fmt::print(fp, "Solution:\n");
 

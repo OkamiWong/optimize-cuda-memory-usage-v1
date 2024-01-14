@@ -23,4 +23,6 @@ struct OptimizationInput {
   std::map<NodeId, std::vector<NodeId>> edges;
 
   cudaGraph_t originalGraph;
+
+  float originalTotalRunningTime;
 };

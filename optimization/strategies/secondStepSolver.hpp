@@ -14,6 +14,8 @@ class SecondStepSolver {
     std::vector<std::set<int>> nodeInputArrays, nodeOutputArrays;
 
     float prefetchingBandwidth, offloadingBandwidth;
+
+    float originalTotalRunningTime;
   };
 
   struct Output {
