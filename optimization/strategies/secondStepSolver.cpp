@@ -567,7 +567,13 @@ struct IntegerProgrammingSolver {
 
     solver->set_time_limit(1000 * 30);
 
-    auto resultStatus = solver->Solve();
+    MPSolverParameters solverParam;
+    solverParam.SetIntegerParam(
+      MPSolverParameters::IntegerParam::LP_ALGORITHM,
+      MPSolverParameters::LpAlgorithmValues::PRIMAL
+    );
+
+    auto resultStatus = solver->Solve(solverParam);
 
     SecondStepSolver::Output output;
 
