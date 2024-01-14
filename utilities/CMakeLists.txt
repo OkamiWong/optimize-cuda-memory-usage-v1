@@ -15,3 +15,5 @@ target_link_libraries(peakMemoryProfiler -lcupti)
 
 add_library(injectedPeakMemoryProfiler SHARED injectedPeakMemoryProfiler.cu)
 target_link_libraries(injectedPeakMemoryProfiler peakMemoryProfiler logger)
+
+add_library(alternativeCudaGemm SHARED alternativeCudaGemm.cu)

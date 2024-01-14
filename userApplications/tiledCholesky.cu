@@ -22,6 +22,7 @@
 #include "../optimization/optimization.hpp"
 #include "../profiling/annotation.hpp"
 #include "../profiling/memoryManager.hpp"
+#include "../utilities/alternativeCudaGemm.hpp"
 #include "../utilities/cudaUtilities.hpp"
 #include "../utilities/logger.hpp"
 #include "../utilities/utilities.hpp"
@@ -404,19 +405,20 @@ void tiledCholesky(bool optimize, bool verify) {
           {std::make_pair(j, i), std::make_pair(j, k), std::make_pair(i, k)}
         );
         annotateNextKernel({getMatrixBlock(j, i), getMatrixBlock(j, k), getMatrixBlock(i, k)}, {getMatrixBlock(j, i)}, s);
-        checkCudaErrors(cublasGemmEx(
-          cublasHandle,
-          CUBLAS_OP_N,
-          CUBLAS_OP_T,
-          B, B, B,
-          minusOne,
-          getMatrixBlock(j, k), CUDA_R_64F, B,
-          getMatrixBlock(i, k), CUDA_R_64F, B,
-          one,
-          getMatrixBlock(j, i), CUDA_R_64F, B,
-          CUBLAS_COMPUTE_64F,
-          CUBLAS_GEMM_DEFAULT
-        ));
+        // checkCudaErrors(cublasGemmEx(
+        //   cublasHandle,
+        //   CUBLAS_OP_N,
+        //   CUBLAS_OP_T,
+        //   B, B, B,
+        //   minusOne,
+        //   getMatrixBlock(j, k), CUDA_R_64F, B,
+        //   getMatrixBlock(i, k), CUDA_R_64F, B,
+        //   one,
+        //   getMatrixBlock(j, i), CUDA_R_64F, B,
+        //   CUBLAS_COMPUTE_64F,
+        //   CUBLAS_GEMM_DEFAULT
+        // ));
+        alternativeCudaGemm(B, B, B, minusOne, getMatrixBlock(j, k), B, getMatrixBlock(i, k), B, one, getMatrixBlock(j, i), B, s);
         tiledCholeskyGraphCreator->endCaptureOperation();
       }
     }

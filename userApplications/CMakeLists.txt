@@ -16,6 +16,7 @@ target_link_libraries(
   annotation
   optimization
   logger
+  alternativeCudaGemm
   CUDA::cublas
   CUDA::cusolver
   fmt::fmt
