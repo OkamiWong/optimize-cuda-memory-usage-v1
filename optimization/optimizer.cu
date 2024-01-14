@@ -86,6 +86,10 @@ void dfs(
   std::map<cudaGraphNode_t, std::vector<cudaGraphNode_t>> &edges,
   std::map<cudaGraphNode_t, cudaGraphNode_t> &nodeToAnnotationMap
 ) {
+  if (nodeToAnnotationMap.find(currentNode) != nodeToAnnotationMap.end()) {
+    return;
+  }
+
   bool isAnnotationNode = false;
 
   if (!currentAnnotationNode) {
