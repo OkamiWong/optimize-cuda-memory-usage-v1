@@ -58,16 +58,44 @@ void TaskManager::queueCudaKernelToStream(cudaGraphNode_t node, cudaStream_t str
   config.hStream = stream;
 
   // Currently kernel attributes are ignored
-  config.attrs = NULL;
+  config.attrs = nullptr;
   config.numAttrs = 0;
+
+  if (params.extra != nullptr) {
+    LOG_TRACE_WITH_INFO("Currently only support params.extra == nullptr");
+    exit(-1);
+  }
+
+  // Replace recorded memory addresses with actual ones
+  void **modifiedKernelParams = nullptr;
+  void **kernelParams = params.kernelParams;
+  std::vector<void *> modifiedKernelParamsContainer;
+  if (kernelParams != nullptr) {
+    while (true) {
+      auto addr = static_cast<void **>(kernelParams[0])[0];
+      if (this->recordedAddressToActualAddressMap.count(addr) != 0) {
+        modifiedKernelParamsContainer.push_back(&(this->recordedAddressToActualAddressMap[addr]));
+      } else {
+        modifiedKernelParamsContainer.push_back(kernelParams[0]);
+      }
+
+      int offset = static_cast<char *>(kernelParams[1]) - static_cast<char *>(kernelParams[0]);
+      if (offset != 2 && offset != 4 && offset != 8 && offset != 16 && offset != 32 && offset != 64) {
+        break;
+      }
+
+      kernelParams++;
+    }
+    modifiedKernelParams = modifiedKernelParamsContainer.data();
+  }
 
   if (params.func != nullptr) {
     if (params.func == this->dummyKernelHandle) return;
     checkCudaErrors(cuLaunchKernelEx(
       &config,
       params.func,
-      params.kernelParams,
-      params.extra
+      modifiedKernelParams,
+      nullptr
     ));
   } else if (params.kern != nullptr) {
     auto func = reinterpret_cast<CUfunction>(params.kern);
@@ -75,11 +103,11 @@ void TaskManager::queueCudaKernelToStream(cudaGraphNode_t node, cudaStream_t str
     checkCudaErrors(cuLaunchKernelEx(
       &config,
       func,
-      params.kernelParams,
-      params.extra
+      modifiedKernelParams,
+      nullptr
     ));
   } else {
-    LOG_TRACE_WITH_INFO("Currently only support params.func != NULL or params.kernel != NULL");
+    LOG_TRACE_WITH_INFO("Currently only support params.func != nullptr or params.kernel != nullptr");
     exit(-1);
   }
 }
@@ -103,8 +131,21 @@ void TaskManager::queueCudaNodeToStream(cudaGraphNode_t node, cudaStream_t strea
     this->queueCudaKernelToStream(node, stream);
   } else if (nodeType == CU_GRAPH_NODE_TYPE_MEMSET) {
     this->queueCudaMemsetToStream(node, stream);
+  } else if (nodeType == CU_GRAPH_NODE_TYPE_MEM_ALLOC) {
+    CUDA_MEM_ALLOC_NODE_PARAMS params;
+    checkCudaErrors(cuGraphMemAllocNodeGetParams(node, &params));
+    void *ptr;
+    checkCudaErrors(cudaMallocAsync(&ptr, params.bytesize, stream));
+    this->recordedAddressToActualAddressMap[reinterpret_cast<void *>(params.dptr)] = ptr;
+  } else if (nodeType == CU_GRAPH_NODE_TYPE_MEM_FREE) {
+    CUdeviceptr dptr;
+    checkCudaErrors(cuGraphMemFreeNodeGetParams(node, &dptr));
+    checkCudaErrors(cudaFreeAsync(
+      this->recordedAddressToActualAddressMap[reinterpret_cast<void *>(dptr)],
+      stream
+    ));
   } else {
-    LOG_TRACE_WITH_INFO("Currently only support executing kernel or memset");
+    LOG_TRACE_WITH_INFO("Currently only support executing kernel, memset, mem alloc, and mem free");
     exit(-1);
   }
 }
@@ -137,6 +178,8 @@ std::unordered_map<CustomGraph::NodeId, TaskManager::StreamId> TaskManager::getS
 
 void TaskManager::executeOptimizedGraph(CustomGraph &optimizedGraph) {
   // Initialization
+  this->recordedAddressToActualAddressMap.clear();
+
   auto nodeIdToStreamIdMap = this->getStreamAssignment(optimizedGraph);
   std::map<TaskManager::StreamId, cudaStream_t> streamIdToCudaStreamMap;
   for (auto &[nodeId, streamId] : nodeIdToStreamIdMap) {

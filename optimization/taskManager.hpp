@@ -26,6 +26,8 @@ class TaskManager {
  private:
   CUfunction dummyKernelHandle = nullptr;
 
+  std::unordered_map<void *, void *> recordedAddressToActualAddressMap;
+
   void queueCudaNodeToStream(CUgraphNode node, cudaStream_t stream);
   void queueCudaKernelToStream(CUgraphNode node, cudaStream_t stream);
   void queueCudaMemsetToStream(CUgraphNode node, cudaStream_t stream);
