@@ -1,4 +1,5 @@
 #include <cuda.h>
+#include <unistd.h>
 
 #include <cassert>
 #include <cstdlib>
@@ -74,13 +75,15 @@ void TaskManager::queueCudaKernelToStream(cudaGraphNode_t node, cudaStream_t str
     while (true) {
       auto addr = static_cast<void **>(kernelParams[0])[0];
       if (this->recordedAddressToActualAddressMap.count(addr) != 0) {
+        puts("replace addr");
         modifiedKernelParamsContainer.push_back(&(this->recordedAddressToActualAddressMap[addr]));
       } else {
         modifiedKernelParamsContainer.push_back(kernelParams[0]);
       }
 
       int offset = static_cast<char *>(kernelParams[1]) - static_cast<char *>(kernelParams[0]);
-      if (offset != 2 && offset != 4 && offset != 8 && offset != 16 && offset != 32 && offset != 64) {
+      printf("%d\n", offset);
+      if (offset != 2 && offset != 4 && offset != 8 && offset != 16 && offset != 32 && offset != 64 && offset != 56) {
         break;
       }
 
@@ -88,6 +91,7 @@ void TaskManager::queueCudaKernelToStream(cudaGraphNode_t node, cudaStream_t str
     }
     modifiedKernelParams = modifiedKernelParamsContainer.data();
   }
+  puts("kernelParam updated\n");
 
   if (params.func != nullptr) {
     if (params.func == this->dummyKernelHandle) return;
@@ -110,6 +114,7 @@ void TaskManager::queueCudaKernelToStream(cudaGraphNode_t node, cudaStream_t str
     LOG_TRACE_WITH_INFO("Currently only support params.func != nullptr or params.kernel != nullptr");
     exit(-1);
   }
+  cuMemCreate();
 }
 
 void TaskManager::queueCudaMemsetToStream(cudaGraphNode_t node, cudaStream_t stream) {
@@ -250,6 +255,33 @@ void TaskManager::executeOptimizedGraph(CustomGraph &optimizedGraph) {
         checkCudaErrors(cudaStreamWaitEvent(vStream, e));
       }
     }
+  }
+
+  LOG_TRACE_WITH_INFO("All nodes are queued to streams");
+
+  for (;;) {
+    sleep(1);
+    std::vector<TaskManager::StreamId> unfinishedStreams;
+    for (auto &[streamId, stream] : streamIdToCudaStreamMap) {
+      auto result = cudaStreamQuery(stream);
+      if (result != cudaSuccess) {
+        if (result == cudaErrorNotReady) {
+          unfinishedStreams.push_back(streamId);
+        } else {
+          checkCudaErrors(result);
+        }
+      }
+    }
+
+    if (unfinishedStreams.size() == 0) {
+      break;
+    }
+
+    printf("Unfinished streams: ");
+    for (auto id : unfinishedStreams) {
+      printf("%d, ", id);
+    }
+    printf("\n\n");
   }
 
   // Clean-up
