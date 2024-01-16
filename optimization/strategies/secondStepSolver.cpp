@@ -134,7 +134,7 @@ struct IntegerProgrammingSolver {
   }
 
   void initialize() {
-    solver = std::unique_ptr<MPSolver>(MPSolver::CreateSolver("SCIP"));
+    solver = std::unique_ptr<MPSolver>(MPSolver::CreateSolver("CLP"));
 
     if (!solver) {
       fmt::print("Solver not available\n");
