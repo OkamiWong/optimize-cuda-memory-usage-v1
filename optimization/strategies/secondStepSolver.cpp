@@ -17,6 +17,7 @@ using namespace operations_research;
 // because nvcc cannot compile or_tools
 struct IntegerProgrammingSolver {
   static constexpr double totalRunningTimeWeight = 0.0001;
+  static constexpr double totalNumberOfDataMovementWeight = 0.00001;
 
   // States of the solver
   SecondStepSolver::Input input;
@@ -46,6 +47,7 @@ struct IntegerProgrammingSolver {
   std::vector<MPVariable *> z;
 
   MPVariable *peakMemoryUsage;
+  MPVariable *numberOfDataMovements;
 
   int getLogicalNodeVertexIndex(int i) {
     return i * 2 + 1;
@@ -432,6 +434,26 @@ struct IntegerProgrammingSolver {
     }
   }
 
+  void defineNumberOfDataMovements() {
+    numberOfDataMovements = solver->MakeNumVar(0, infinity, "");
+    auto constraint = solver->MakeRowConstraint(0, infinity);
+    constraint->SetCoefficient(numberOfDataMovements, 1);
+
+    for (int i = 0; i < numberOfLogicalNodes; i++) {
+      for (int j = 0; j < numberOfArrays; j++) {
+        constraint->SetCoefficient(p[i][j], -1);
+      }
+    }
+
+    for (int i = 0; i < numberOfLogicalNodes; i++) {
+      for (int j = 0; j < numberOfArrays; j++) {
+        for (int k = i + 1; k < numberOfLogicalNodes; k++) {
+          constraint->SetCoefficient(o[i][j][k], -1);
+        }
+      }
+    }
+  }
+
   void printSolution() {
     LOG_TRACE_WITH_INFO("Printing solution to secondStepSolver.out");
 
@@ -557,8 +579,11 @@ struct IntegerProgrammingSolver {
 
     definePeakMemoryUsage();
 
+    defineNumberOfDataMovements();
+
     auto objective = solver->MutableObjective();
     objective->SetCoefficient(peakMemoryUsage, 1);
+    objective->SetCoefficient(numberOfDataMovements, totalNumberOfDataMovementWeight);
     objective->SetCoefficient(
       z[getLogicalNodeVertexIndex(numberOfLogicalNodes - 1)],
       originalPeakMemoryUsageToTotalRunningTimeRatio * totalRunningTimeWeight
