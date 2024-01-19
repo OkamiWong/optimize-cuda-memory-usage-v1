@@ -369,6 +369,7 @@ void tiledCholesky(bool optimize, bool verify) {
 
   auto tiledCholeskyTaskManager = std::make_unique<TiledCholeskyTaskManager>();
 
+  int nextTaskId;
   for (int k = 0; k < T; k++) {
     // A[k][k] = POTRF(A[k][k])
     // L[k][k] = POTRF(A[k][k])
@@ -376,8 +377,8 @@ void tiledCholesky(bool optimize, bool verify) {
       {k, k},
       {{k, k}}
     );
-    tiledCholeskyTaskManager->addTask(TiledCholeskyTaskManager::Task::OperationType::portf, {k, k});
-    annotateNextKernel({getMatrixBlock(k, k)}, {getMatrixBlock(k, k)}, s);
+    nextTaskId = tiledCholeskyTaskManager->addTask(TiledCholeskyTaskManager::Task::OperationType::portf, {k, k});
+    annotateNextKernel(nextTaskId, {getMatrixBlock(k, k)}, {getMatrixBlock(k, k)}, s);
     checkCudaErrors(cusolverDnXpotrf(
       cusolverDnHandle,
       cusolverDnParams,
@@ -402,8 +403,8 @@ void tiledCholesky(bool optimize, bool verify) {
         {i, k},
         {{k, k}, {i, k}}
       );
-      tiledCholeskyTaskManager->addTask(TiledCholeskyTaskManager::Task::OperationType::trsm, {i, k}, {k, k});
-      annotateNextKernel({getMatrixBlock(i, k), getMatrixBlock(k, k)}, {getMatrixBlock(i, k)}, s);
+      nextTaskId = tiledCholeskyTaskManager->addTask(TiledCholeskyTaskManager::Task::OperationType::trsm, {i, k}, {k, k});
+      annotateNextKernel(nextTaskId, {getMatrixBlock(i, k), getMatrixBlock(k, k)}, {getMatrixBlock(i, k)}, s);
       checkCudaErrors(cublasDtrsm(
         cublasHandle,
         CUBLAS_SIDE_RIGHT,
@@ -425,8 +426,8 @@ void tiledCholesky(bool optimize, bool verify) {
         {i, i},
         {{i, i}, {i, k}}
       );
-      tiledCholeskyTaskManager->addTask(TiledCholeskyTaskManager::Task::OperationType::syrk, {i, i}, {i, k});
-      annotateNextKernel({getMatrixBlock(i, i), getMatrixBlock(i, k)}, {getMatrixBlock(i, i)}, s);
+      nextTaskId = tiledCholeskyTaskManager->addTask(TiledCholeskyTaskManager::Task::OperationType::syrk, {i, i}, {i, k});
+      annotateNextKernel(nextTaskId, {getMatrixBlock(i, i), getMatrixBlock(i, k)}, {getMatrixBlock(i, i)}, s);
       checkCudaErrors(cublasDsyrk(
         cublasHandle,
         CUBLAS_FILL_MODE_LOWER,
@@ -444,8 +445,8 @@ void tiledCholesky(bool optimize, bool verify) {
           {j, i},
           {{j, i}, {j, k}, {i, k}}
         );
-        tiledCholeskyTaskManager->addTask(TiledCholeskyTaskManager::Task::OperationType::gemm, {j, i}, {j, k}, {i, k});
-        annotateNextKernel({getMatrixBlock(j, i), getMatrixBlock(j, k), getMatrixBlock(i, k)}, {getMatrixBlock(j, i)}, s);
+        nextTaskId = tiledCholeskyTaskManager->addTask(TiledCholeskyTaskManager::Task::OperationType::gemm, {j, i}, {j, k}, {i, k});
+        annotateNextKernel(nextTaskId, {getMatrixBlock(j, i), getMatrixBlock(j, k), getMatrixBlock(i, k)}, {getMatrixBlock(j, i)}, s);
         checkCudaErrors(cublasGemmEx(
           cublasHandle,
           CUBLAS_OP_N,
