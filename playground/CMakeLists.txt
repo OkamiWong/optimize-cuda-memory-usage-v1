@@ -14,7 +14,7 @@ target_link_libraries(orToolsPlayground ortools::ortools fmt::fmt)
 add_executable(orToolsRoutingPlayground orToolsRoutingPlayground.cpp)
 target_link_libraries(orToolsRoutingPlayground ortools::ortools fmt::fmt)
 
-add_executable(tiledCholeskyPlayground tiledCholesky.cu)
+add_executable(tiledCholeskyPlayground tiledCholeskyPlayground.cu)
 target_link_libraries(
   tiledCholeskyPlayground
   cudaUtilities
