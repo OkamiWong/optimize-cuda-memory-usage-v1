@@ -2,7 +2,7 @@
 
 #include "annotation.hpp"
 
-__global__ void dummyKernelForAnnotation(TaskAnnotation io) {
+__global__ void dummyKernelForAnnotation(TaskAnnotation taskAnnotation) {
   return;
 }
 
