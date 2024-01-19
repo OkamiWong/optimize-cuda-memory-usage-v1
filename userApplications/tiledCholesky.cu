@@ -122,6 +122,7 @@ class TiledCholeskyGraphCreator {
   TiledCholeskyGraphCreator(cudaStream_t stream, cudaGraph_t graph) : stream(stream), graph(graph) {
     this->lastModifiedTile = std::make_pair(-1, -1);
   }
+
   void beginCaptureOperation(MatrixTile tileToWrite, std::initializer_list<MatrixTile> tilesToRead) {
     auto tiles = std::vector<MatrixTile>(tilesToRead);
     tiles.push_back(tileToWrite);
