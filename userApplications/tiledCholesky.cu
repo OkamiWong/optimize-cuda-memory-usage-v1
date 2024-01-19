@@ -336,8 +336,8 @@ void tiledCholesky(bool optimize, bool verify) {
     // A[k][k] = POTRF(A[k][k])
     // L[k][k] = POTRF(A[k][k])
     tiledCholeskyGraphCreator->beginCaptureOperation(
-      std::make_pair(k, k),
-      {std::make_pair(k, k)}
+      {k, k},
+      {{k, k}}
     );
     annotateNextKernel({getMatrixBlock(k, k)}, {getMatrixBlock(k, k)}, s);
     checkCudaErrors(cusolverDnXpotrf(
@@ -361,8 +361,8 @@ void tiledCholesky(bool optimize, bool verify) {
       // A[i][k] = TRSM(A[k][k], A[i][k])
       // L[i][k] * L[k][k]^T = A[i][k]
       tiledCholeskyGraphCreator->beginCaptureOperation(
-        std::make_pair(i, k),
-        {std::make_pair(k, k), std::make_pair(i, k)}
+        {i, k},
+        {{k, k}, {i, k}}
       );
       annotateNextKernel({getMatrixBlock(i, k), getMatrixBlock(k, k)}, {getMatrixBlock(i, k)}, s);
       checkCudaErrors(cublasDtrsm(
@@ -383,8 +383,8 @@ void tiledCholesky(bool optimize, bool verify) {
       // A[i][i] = SYRK(A[i][k], A[i][i])
       // A[i][i] = A[i][i] - L[i][k] * L[i][k]^T
       tiledCholeskyGraphCreator->beginCaptureOperation(
-        std::make_pair(i, i),
-        {std::make_pair(i, i), std::make_pair(i, k)}
+        {i, i},
+        {{i, i}, {i, k}}
       );
       annotateNextKernel({getMatrixBlock(i, i), getMatrixBlock(i, k)}, {getMatrixBlock(i, i)}, s);
       checkCudaErrors(cublasDsyrk(
@@ -401,8 +401,8 @@ void tiledCholesky(bool optimize, bool verify) {
         // A[j][i] = GEMM(A[j][k], A[i][k])
         // A[j][i] = A[j][i] - L[j][k] * L[i][k]^T
         tiledCholeskyGraphCreator->beginCaptureOperation(
-          std::make_pair(j, i),
-          {std::make_pair(j, i), std::make_pair(j, k), std::make_pair(i, k)}
+          {j, i},
+          {{j, i}, {j, k}, {i, k}}
         );
         annotateNextKernel({getMatrixBlock(j, i), getMatrixBlock(j, k), getMatrixBlock(i, k)}, {getMatrixBlock(j, i)}, s);
         checkCudaErrors(cublasGemmEx(
