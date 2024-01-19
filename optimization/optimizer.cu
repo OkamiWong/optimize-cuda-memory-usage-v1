@@ -270,6 +270,9 @@ CustomGraph Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
   std::map<cudaGraphNode_t, std::vector<cudaGraphNode_t>> edges;
   extractGraphNodesAndEdges(originalGraph, nodes, edges);
 
+  std::map<cudaGraphNode_t, cudaGraphNode_t> nodeToAnnotationMap;
+  mapNodeToAnnotation(originalGraph, edges, nodeToAnnotationMap);
+
   bool feasibleSolutionFound = false;
   CustomGraph lastFeasibleGraph;
   int logicalNodeSizeLimit = std::numeric_limits<int>::max();
@@ -283,9 +286,6 @@ CustomGraph Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
     for (auto node : nodes) {
       largestLogicalNodeSize = std::max(largestLogicalNodeSize, static_cast<int>(disjointSet.getSetSize(node)));
     }
-
-    std::map<cudaGraphNode_t, cudaGraphNode_t> nodeToAnnotationMap;
-    mapNodeToAnnotation(originalGraph, edges, nodeToAnnotationMap);
 
     mergeNodesWithSameAnnotation(nodes, nodeToAnnotationMap, disjointSet);
 
