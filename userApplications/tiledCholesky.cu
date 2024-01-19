@@ -219,6 +219,41 @@ class TiledCholeskyGraphCreator {
   }
 };
 
+class TiledCholeskyTaskManager {
+ public:
+  struct Task {
+    enum class OperationType {
+      portf,  // a = PORTF(a)
+      trsm,   // a = a * b^T
+      syrk,   // a = a - b * b^T
+      gemm    // a = a - b * c^T
+    };
+
+    OperationType operation;
+    MatrixTile a, b, c;
+  };
+
+  int addTask(
+    Task::OperationType operation,
+    MatrixTile a,
+    MatrixTile b = {0, 0},
+    MatrixTile c = {0, 0}
+  ) {
+    Task t;
+    t.operation = operation;
+    t.a = a;
+    t.b = b;
+    t.c = c;
+
+    this->tasks.push_back(t);
+
+    return this->tasks.size() - 1;
+  }
+
+ private:
+  std::vector<Task> tasks;
+};
+
 void initializeHostData(double *h_originalMatrix) {
   generateRandomSymmetricPositiveDefiniteMatrix(h_originalMatrix, N);
 }
@@ -332,6 +367,8 @@ void tiledCholesky(bool optimize, bool verify) {
 
   auto tiledCholeskyGraphCreator = std::make_unique<TiledCholeskyGraphCreator>(s, graph);
 
+  auto tiledCholeskyTaskManager = std::make_unique<TiledCholeskyTaskManager>();
+
   for (int k = 0; k < T; k++) {
     // A[k][k] = POTRF(A[k][k])
     // L[k][k] = POTRF(A[k][k])
@@ -339,6 +376,7 @@ void tiledCholesky(bool optimize, bool verify) {
       {k, k},
       {{k, k}}
     );
+    tiledCholeskyTaskManager->addTask(TiledCholeskyTaskManager::Task::OperationType::portf, {k, k});
     annotateNextKernel({getMatrixBlock(k, k)}, {getMatrixBlock(k, k)}, s);
     checkCudaErrors(cusolverDnXpotrf(
       cusolverDnHandle,
@@ -364,6 +402,7 @@ void tiledCholesky(bool optimize, bool verify) {
         {i, k},
         {{k, k}, {i, k}}
       );
+      tiledCholeskyTaskManager->addTask(TiledCholeskyTaskManager::Task::OperationType::trsm, {i, k}, {k, k});
       annotateNextKernel({getMatrixBlock(i, k), getMatrixBlock(k, k)}, {getMatrixBlock(i, k)}, s);
       checkCudaErrors(cublasDtrsm(
         cublasHandle,
@@ -386,6 +425,7 @@ void tiledCholesky(bool optimize, bool verify) {
         {i, i},
         {{i, i}, {i, k}}
       );
+      tiledCholeskyTaskManager->addTask(TiledCholeskyTaskManager::Task::OperationType::syrk, {i, i}, {i, k});
       annotateNextKernel({getMatrixBlock(i, i), getMatrixBlock(i, k)}, {getMatrixBlock(i, i)}, s);
       checkCudaErrors(cublasDsyrk(
         cublasHandle,
@@ -404,6 +444,7 @@ void tiledCholesky(bool optimize, bool verify) {
           {j, i},
           {{j, i}, {j, k}, {i, k}}
         );
+        tiledCholeskyTaskManager->addTask(TiledCholeskyTaskManager::Task::OperationType::gemm, {j, i}, {j, k}, {i, k});
         annotateNextKernel({getMatrixBlock(j, i), getMatrixBlock(j, k), getMatrixBlock(i, k)}, {getMatrixBlock(j, i)}, s);
         checkCudaErrors(cublasGemmEx(
           cublasHandle,
