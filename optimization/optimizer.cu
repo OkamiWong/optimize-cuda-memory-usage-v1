@@ -142,14 +142,14 @@ void mergeNodesWithSameAnnotation(
 }
 
 OptimizationInput::LogicalNode::DataDependency
-convertKernelIOToKernelDataDependency(const KernelIO &kernelIO) {
+convertTaskAnnotationToKernelDataDependency(const TaskAnnotation &kernelIO) {
   OptimizationInput::LogicalNode::DataDependency dep;
-  for (int i = 0; i < KernelIO::MAX_NUM_PTR; i++) {
+  for (int i = 0; i < TaskAnnotation::MAX_NUM_PTR; i++) {
     void *ptr = kernelIO.inputs[i];
     if (ptr == nullptr) break;
     dep.inputs.insert(ptr);
   }
-  for (int i = 0; i < KernelIO::MAX_NUM_PTR; i++) {
+  for (int i = 0; i < TaskAnnotation::MAX_NUM_PTR; i++) {
     void *ptr = kernelIO.outputs[i];
     if (ptr == nullptr) break;
     dep.outputs.insert(ptr);
@@ -169,8 +169,8 @@ void mergeDataDependency(OptimizationInput::LogicalNode &logicalNode, cudaGraphN
 
   assert(nodeParams.func == TaskManager::getInstance()->getDummyKernelHandle());
 
-  auto kernelIOPtr = reinterpret_cast<KernelIO *>(nodeParams.kernelParams[0]);
-  auto dataDependencyByAnnotation = convertKernelIOToKernelDataDependency(*kernelIOPtr);
+  auto kernelIOPtr = reinterpret_cast<TaskAnnotation *>(nodeParams.kernelParams[0]);
+  auto dataDependencyByAnnotation = convertTaskAnnotationToKernelDataDependency(*kernelIOPtr);
 
   logicalNode.dataDependency.inputs.insert(dataDependencyByAnnotation.inputs.begin(), dataDependencyByAnnotation.inputs.end());
   logicalNode.dataDependency.outputs.insert(dataDependencyByAnnotation.outputs.begin(), dataDependencyByAnnotation.outputs.end());
