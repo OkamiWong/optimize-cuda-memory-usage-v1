@@ -75,8 +75,8 @@ FirstStepSolver::Input convertToFirstStepInput(OptimizationInput &optimizationIn
 
 SecondStepSolver::Input convertToSecondStepInput(OptimizationInput &optimizationInput, FirstStepSolver::Output &firstStepOutput) {
   SecondStepSolver::Input secondStepInput;
-  secondStepInput.prefetchingBandwidth = ConfigurationManager::getConfiguration().prefetchingBandwidthInGB * 1e9;
-  secondStepInput.offloadingBandwidth = ConfigurationManager::getConfiguration().prefetchingBandwidthInGB * 1e9;
+  secondStepInput.prefetchingBandwidth = ConfigurationManager::getConfig().prefetchingBandwidthInGB * 1e9;
+  secondStepInput.offloadingBandwidth = ConfigurationManager::getConfig().prefetchingBandwidthInGB * 1e9;
   secondStepInput.originalTotalRunningTime = optimizationInput.originalTotalRunningTime;
 
   secondStepInput.nodeDurations.resize(optimizationInput.nodes.size());

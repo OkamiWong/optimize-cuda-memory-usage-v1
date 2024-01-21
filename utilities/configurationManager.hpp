@@ -19,7 +19,7 @@ struct Configuration {
 
 class ConfigurationManager {
  public:
-  static const Configuration& getConfiguration() {
+  static const Configuration& getConfig() {
     return configuration;
   };
 

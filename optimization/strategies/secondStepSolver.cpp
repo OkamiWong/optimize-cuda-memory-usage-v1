@@ -401,7 +401,7 @@ struct IntegerProgrammingSolver {
       }
     }
 
-    auto zLastKernelConstraint = solver->MakeRowConstraint(0, originalTotalRunningTime * ConfigurationManager::getConfiguration().acceptableRunningTimeFactor);
+    auto zLastKernelConstraint = solver->MakeRowConstraint(0, originalTotalRunningTime * ConfigurationManager::getConfig().acceptableRunningTimeFactor);
     zLastKernelConstraint->SetCoefficient(z[getLogicalNodeVertexIndex(numberOfLogicalNodes - 1)], 1);
   }
 
