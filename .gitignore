@@ -4,6 +4,10 @@
 # Build artifacts
 build/
 
+# Config
+defaultConfig.json
+config.json
+
 # Debug
 *.dot
 *.z3-trace
