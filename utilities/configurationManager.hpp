@@ -8,12 +8,16 @@
 #include "../include/json.hpp"
 
 struct Configuration {
+  // Generic
   bool optimize = false;
   bool verify = false;
 
+  // Optimization
+  bool mergeConcurrentCudaGraphNodes = true;
   double prefetchingBandwidthInGB = 281.0;
   double acceptableRunningTimeFactor = 10.0;
 
+  // Tiled Cholesky
   int tiledCholeskyN = 256;
   int tiledCholeskyT = 4;
 
@@ -21,6 +25,7 @@ struct Configuration {
     Configuration,
     optimize,
     verify,
+    mergeConcurrentCudaGraphNodes,
     prefetchingBandwidthInGB,
     acceptableRunningTimeFactor,
     tiledCholeskyN,

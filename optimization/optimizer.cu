@@ -7,6 +7,7 @@
 #include "../profiling/annotation.hpp"
 #include "../profiling/cudaGraphExecutionTimelineProfiler.hpp"
 #include "../profiling/memoryManager.hpp"
+#include "../utilities/configurationManager.hpp"
 #include "../utilities/cudaGraphUtilities.hpp"
 #include "../utilities/cudaUtilities.hpp"
 #include "../utilities/disjointSet.hpp"
@@ -260,7 +261,6 @@ OptimizationInput constructOptimizationInput(
 }
 
 CustomGraph Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
-  // Profile
   auto taskManager = TaskManager::getInstance();
   taskManager->registerDummyKernelHandle(originalGraph);
 
@@ -273,41 +273,22 @@ CustomGraph Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
   std::map<cudaGraphNode_t, cudaGraphNode_t> nodeToAnnotationMap;
   mapNodeToAnnotation(originalGraph, edges, nodeToAnnotationMap);
 
-  bool feasibleSolutionFound = false;
-  CustomGraph lastFeasibleGraph;
-  int logicalNodeSizeLimit = std::numeric_limits<int>::max();
-  for (;;) {
-    LOG_TRACE_WITH_INFO("logicalNodeSizeLimit = %d", logicalNodeSizeLimit);
+  DisjointSet<cudaGraphNode_t> disjointSet;
 
-    DisjointSet<cudaGraphNode_t> disjointSet;
-    mergeConcurrentCudaGraphNodes(timeline, disjointSet, logicalNodeSizeLimit);
+  if (ConfigurationManager::getConfig().mergeConcurrentCudaGraphNodes) {
+    mergeConcurrentCudaGraphNodes(timeline, disjointSet, std::numeric_limits<int>::max());
+  }
 
-    int largestLogicalNodeSize = 0;
-    for (auto node : nodes) {
-      largestLogicalNodeSize = std::max(largestLogicalNodeSize, static_cast<int>(disjointSet.getSetSize(node)));
-    }
+  mergeNodesWithSameAnnotation(nodes, nodeToAnnotationMap, disjointSet);
 
-    mergeNodesWithSameAnnotation(nodes, nodeToAnnotationMap, disjointSet);
+  auto optimizationInput = constructOptimizationInput(originalGraph, edges, timeline, disjointSet, nodeToAnnotationMap);
 
-    auto optimizationInput = constructOptimizationInput(originalGraph, edges, timeline, disjointSet, nodeToAnnotationMap);
+  auto optimizedGraph = this->optimize<TwoStepOptimizationStrategy>(optimizationInput);
 
-    // Optimize
-    auto optimizedGraph = this->optimize<TwoStepOptimizationStrategy>(optimizationInput);
-
-    if (optimizedGraph.optimal) {
-      feasibleSolutionFound = true;
-      lastFeasibleGraph = optimizedGraph;
-
-      logicalNodeSizeLimit = (largestLogicalNodeSize + 1) / 2;
-
-      if (largestLogicalNodeSize == 1) {
-        return optimizedGraph;
-      }
-    } else {
-      if (feasibleSolutionFound) {
-        return lastFeasibleGraph;
-      }
-      exit(-1);
-    }
+  if (optimizedGraph.optimal) {
+    return optimizedGraph;
+  } else {
+    LOG_TRACE_WITH_INFO("Could not find any feasible solution");
+    exit(-1);
   }
 }
