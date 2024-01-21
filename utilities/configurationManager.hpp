@@ -14,12 +14,17 @@ struct Configuration {
   double prefetchingBandwidthInGB = 281.0;
   double acceptableRunningTimeFactor = 10.0;
 
+  int tiledCholeskyN = 256;
+  int tiledCholeskyT = 4;
+
   NLOHMANN_DEFINE_TYPE_INTRUSIVE(
     Configuration,
     optimize,
     verify,
     prefetchingBandwidthInGB,
-    acceptableRunningTimeFactor
+    acceptableRunningTimeFactor,
+    tiledCholeskyN,
+    tiledCholeskyT
   );
 };
 

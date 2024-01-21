@@ -18,18 +18,17 @@
 #include <tuple>
 #include <vector>
 
-#include "../include/argh.h"
 #include "../optimization/optimization.hpp"
 #include "../profiling/annotation.hpp"
 #include "../profiling/memoryManager.hpp"
+#include "../utilities/configurationManager.hpp"
 #include "../utilities/cudaUtilities.hpp"
 #include "../utilities/logger.hpp"
 #include "../utilities/utilities.hpp"
 
-constexpr size_t N = 1024 * 8;
-constexpr size_t B = N / 4;
-
-constexpr size_t T = N / B;
+size_t N;
+size_t B;
+size_t T;
 
 // Credit to: https://math.stackexchange.com/questions/357980/how-to-generate-random-symmetric-positive-definite-matrices-using-matlab
 void generateRandomSymmetricPositiveDefiniteMatrix(double *h_A, const size_t n) {
@@ -258,7 +257,7 @@ void initializeHostData(double *h_originalMatrix) {
   generateRandomSymmetricPositiveDefiniteMatrix(h_originalMatrix, N);
 }
 
-__global__ void storeBlockMatrixInContiguousSpace(double *d_matrix, double *d_originalMatrix) {
+__global__ void storeBlockMatrixInContiguousSpace(double *d_matrix, double *d_originalMatrix, int N, int B, int T) {
   size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
 
   size_t i = (idx % N) / B;
@@ -277,9 +276,13 @@ void initializeDeviceData(double *h_originalMatrix, double *d_matrix) {
   checkCudaErrors(cudaMemcpy(d_originalMatrix, h_originalMatrix, N * N * sizeof(double), cudaMemcpyHostToDevice));
 
   // Reorder elements in d_matrix, such that each block matrix is stored in a contiguous space
-  constexpr size_t NUM_THREADS = 1024;
-  constexpr size_t NUM_BLOCKS = (N * N + NUM_THREADS) / NUM_THREADS;
-  storeBlockMatrixInContiguousSpace<<<NUM_BLOCKS, NUM_THREADS>>>(d_matrix, d_originalMatrix);
+  const size_t NUM_THREADS = 1024;
+  const size_t NUM_BLOCKS = (N * N + NUM_THREADS) / NUM_THREADS;
+  storeBlockMatrixInContiguousSpace<<<NUM_BLOCKS, NUM_THREADS>>>(
+    d_matrix,
+    d_originalMatrix,
+    N, B, T
+  );
 
   checkCudaErrors(cudaDeviceSynchronize());
 
@@ -517,9 +520,18 @@ void tiledCholesky(bool optimize, bool verify) {
 }
 
 int main(int argc, char **argv) {
-  auto cmdl = argh::parser(argc, argv);
+  ConfigurationManager::exportDefaultConfiguration();
 
-  tiledCholesky(cmdl["optimize"], cmdl["verify"]);
+  ConfigurationManager::initialize(argc, argv);
+
+  N = ConfigurationManager::getConfig().tiledCholeskyN;
+  T = ConfigurationManager::getConfig().tiledCholeskyT;
+  B = N / T;
+
+  tiledCholesky(
+    ConfigurationManager::getConfig().optimize,
+    ConfigurationManager::getConfig().verify
+  );
 
   return 0;
 }
