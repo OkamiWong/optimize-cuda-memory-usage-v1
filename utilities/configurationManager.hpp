@@ -45,6 +45,10 @@ class ConfigurationManager {
       configuration = j.get<Configuration>();
     } catch (...) {
       std::cerr << "Failed to load configuration from " << fileName << std::endl;
+      std::cerr << "See defaultConfig.json for sample configuration" << std::endl;
+
+      exportDefaultConfiguration();
+
       exit(-1);
     }
   }
