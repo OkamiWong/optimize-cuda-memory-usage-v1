@@ -6,6 +6,3 @@ add_library(cudaGraphUtilities SHARED cudaGraphUtilities.cu)
 target_link_libraries(cudaGraphUtilities cudaUtilities)
 
 add_library(logger SHARED logger.cpp)
-
-add_library(peakMemoryProfiler SHARED peakMemoryProfiler.cu)
-target_link_libraries(peakMemoryProfiler -lcupti)

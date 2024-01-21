@@ -2,7 +2,7 @@
 #include <cassert>
 #include <cstdio>
 
-#include "cuptiUtilities.hpp"
+#include "../utilities/cuptiUtilities.hpp"
 #include "peakMemoryProfiler.hpp"
 
 PeakMemoryProfiler *PeakMemoryProfiler::instance = nullptr;
