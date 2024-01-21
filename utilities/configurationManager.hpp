@@ -25,11 +25,11 @@ class ConfigurationManager {
 
   static void exportDefaultConfiguration(std::string fileName = "defaultConfig.json") {
     Configuration defaultConfiguration;
-    nlohmann::json j = defaultConfiguration;
-    std::string s = j.dump(2);
+    exportConfiguration(fileName, defaultConfiguration);
+  }
 
-    std::ofstream f(fileName);
-    f << s << std::endl;
+  static void exportCurrentConfiguration(std::string fileName = "currentConfig.json") {
+    exportConfiguration(fileName, configuration);
   }
 
   static void loadConfiguration(std::string fileName = "config.json") {
@@ -45,4 +45,12 @@ class ConfigurationManager {
 
  private:
   inline static Configuration configuration;
+
+  static void exportConfiguration(const std::string& fileName, const Configuration& configuration) {
+    nlohmann::json j = configuration;
+    std::string s = j.dump(2);
+
+    std::ofstream f(fileName);
+    f << s << std::endl;
+  }
 };
