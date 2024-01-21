@@ -5,8 +5,9 @@
 build/
 
 # Config
-defaultConfig.json
 config.json
+currentConfig.json
+defaultConfig.json
 
 # Debug
 *.dot
