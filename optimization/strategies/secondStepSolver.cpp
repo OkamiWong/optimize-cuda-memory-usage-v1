@@ -8,6 +8,7 @@
 #include <iterator>
 #include <numeric>
 
+#include "../../utilities/configurationManager.hpp"
 #include "../../utilities/constants.hpp"
 #include "../../utilities/logger.hpp"
 
@@ -400,7 +401,7 @@ struct IntegerProgrammingSolver {
       }
     }
 
-    auto zLastKernelConstraint = solver->MakeRowConstraint(0, originalTotalRunningTime * Constants::ACCEPTABLE_RUNNING_TIME_FACTOR);
+    auto zLastKernelConstraint = solver->MakeRowConstraint(0, originalTotalRunningTime * ConfigurationManager::getConfiguration().acceptableRunningTimeFactor);
     zLastKernelConstraint->SetCoefficient(z[getLogicalNodeVertexIndex(numberOfLogicalNodes - 1)], 1);
   }
 

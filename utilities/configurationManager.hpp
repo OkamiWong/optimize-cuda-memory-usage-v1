@@ -7,15 +7,13 @@
 #include "../include/json.hpp"
 
 struct Configuration {
-  bool optimize = false;
-  bool verify = false;
-  int deviceId = 0;
+  double prefetchingBandwidthInGB = 281.0;
+  double acceptableRunningTimeFactor = 10.0;
 
   NLOHMANN_DEFINE_TYPE_INTRUSIVE(
     Configuration,
-    optimize,
-    verify,
-    deviceId
+    prefetchingBandwidthInGB,
+    acceptableRunningTimeFactor
   );
 };
 

@@ -4,6 +4,7 @@
 #include <utility>
 
 #include "../../profiling/memoryManager.hpp"
+#include "../../utilities/configurationManager.hpp"
 #include "../../utilities/constants.hpp"
 #include "../../utilities/logger.hpp"
 #include "firstStepSolver.hpp"
@@ -58,16 +59,14 @@ FirstStepSolver::Input convertToFirstStepInput(OptimizationInput &optimizationIn
         std::inserter(dataDependencyIntersection, dataDependencyIntersection.begin())
       );
 
-      firstStepInput.dataDependencyOverlapInBytes[i][j] =
-        firstStepInput.dataDependencyOverlapInBytes[j][i] =
-          std::accumulate(
-            dataDependencyIntersection.begin(),
-            dataDependencyIntersection.end(),
-            static_cast<size_t>(0),
-            [](size_t a, void *b) {
-              return a + MemoryManager::managedMemoryAddressToSizeMap[b];
-            }
-          );
+      firstStepInput.dataDependencyOverlapInBytes[i][j] = firstStepInput.dataDependencyOverlapInBytes[j][i] = std::accumulate(
+        dataDependencyIntersection.begin(),
+        dataDependencyIntersection.end(),
+        static_cast<size_t>(0),
+        [](size_t a, void *b) {
+          return a + MemoryManager::managedMemoryAddressToSizeMap[b];
+        }
+      );
     }
   }
 
@@ -76,8 +75,8 @@ FirstStepSolver::Input convertToFirstStepInput(OptimizationInput &optimizationIn
 
 SecondStepSolver::Input convertToSecondStepInput(OptimizationInput &optimizationInput, FirstStepSolver::Output &firstStepOutput) {
   SecondStepSolver::Input secondStepInput;
-  secondStepInput.prefetchingBandwidth = Constants::PREFETCHING_BANDWIDTH;
-  secondStepInput.offloadingBandwidth = Constants::OFFLOADING_BANDWIDTH;
+  secondStepInput.prefetchingBandwidth = ConfigurationManager::getConfiguration().prefetchingBandwidthInGB * 1e9;
+  secondStepInput.offloadingBandwidth = ConfigurationManager::getConfiguration().prefetchingBandwidthInGB * 1e9;
   secondStepInput.originalTotalRunningTime = optimizationInput.originalTotalRunningTime;
 
   secondStepInput.nodeDurations.resize(optimizationInput.nodes.size());
