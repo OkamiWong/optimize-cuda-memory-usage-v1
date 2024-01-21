@@ -12,6 +12,3 @@ target_link_libraries(cudaGraphExecutionTimelineProfiler cudaUtilities -lcupti)
 
 add_library(peakMemoryProfiler SHARED peakMemoryProfiler.cu)
 target_link_libraries(peakMemoryProfiler -lcupti)
-
-add_library(injectedPeakMemoryProfiler SHARED injectedPeakMemoryProfiler.cu)
-target_link_libraries(injectedPeakMemoryProfiler peakMemoryProfiler logger)
