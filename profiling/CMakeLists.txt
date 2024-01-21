@@ -1,1 +1,4 @@
 add_library(annotation SHARED annotation.cu)
+
+add_library(cudaGraphExecutionTimelineProfiler SHARED cudaGraphExecutionTimelineProfiler.cu)
+target_link_libraries(cudaGraphExecutionTimelineProfiler cudaUtilities -lcupti)

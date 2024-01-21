@@ -5,8 +5,8 @@
 #include <utility>
 
 #include "../profiling/annotation.hpp"
+#include "../profiling/cudaGraphExecutionTimelineProfiler.hpp"
 #include "../profiling/memoryManager.hpp"
-#include "../utilities/cudaGraphExecutionTimelineProfiler.hpp"
 #include "../utilities/cudaGraphUtilities.hpp"
 #include "../utilities/cudaUtilities.hpp"
 #include "../utilities/disjointSet.hpp"

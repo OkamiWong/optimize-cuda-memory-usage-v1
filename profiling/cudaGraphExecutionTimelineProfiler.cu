@@ -2,9 +2,9 @@
 #include <cstdio>
 #include <memory>
 
+#include "../utilities/cudaUtilities.hpp"
+#include "../utilities/cuptiUtilities.hpp"
 #include "cudaGraphExecutionTimelineProfiler.hpp"
-#include "cudaUtilities.hpp"
-#include "cuptiUtilities.hpp"
 
 CudaGraphExecutionTimelineProfiler *CudaGraphExecutionTimelineProfiler::instance = nullptr;
 
@@ -19,20 +19,18 @@ void CudaGraphExecutionTimelineProfiler::consumeActivityRecord(CUpti_Activity *r
   switch (record->kind) {
     case CUPTI_ACTIVITY_KIND_CONCURRENT_KERNEL: {
       auto kernelActivityRecord = reinterpret_cast<CUpti_ActivityKernel9 *>(record);
-      this->graphNodeIdToLifetimeMap[static_cast<uint64_t>(kernelActivityRecord->graphNodeId)] =
-        std::make_pair(
-          static_cast<uint64_t>(kernelActivityRecord->start),
-          static_cast<uint64_t>(kernelActivityRecord->end)
-        );
+      this->graphNodeIdToLifetimeMap[static_cast<uint64_t>(kernelActivityRecord->graphNodeId)] = std::make_pair(
+        static_cast<uint64_t>(kernelActivityRecord->start),
+        static_cast<uint64_t>(kernelActivityRecord->end)
+      );
       break;
     }
     case CUPTI_ACTIVITY_KIND_MEMSET: {
       auto memsetActivityRecord = reinterpret_cast<CUpti_ActivityMemset4 *>(record);
-      this->graphNodeIdToLifetimeMap[static_cast<uint64_t>(memsetActivityRecord->graphNodeId)] =
-        std::make_pair(
-          static_cast<uint64_t>(memsetActivityRecord->start),
-          static_cast<uint64_t>(memsetActivityRecord->end)
-        );
+      this->graphNodeIdToLifetimeMap[static_cast<uint64_t>(memsetActivityRecord->graphNodeId)] = std::make_pair(
+        static_cast<uint64_t>(memsetActivityRecord->start),
+        static_cast<uint64_t>(memsetActivityRecord->end)
+      );
       break;
     }
     default: {
