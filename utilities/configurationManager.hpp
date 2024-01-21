@@ -4,14 +4,20 @@
 #include <iostream>
 #include <string>
 
+#include "../include/argh.h"
 #include "../include/json.hpp"
 
 struct Configuration {
+  bool optimize = false;
+  bool verify = false;
+
   double prefetchingBandwidthInGB = 281.0;
   double acceptableRunningTimeFactor = 10.0;
 
   NLOHMANN_DEFINE_TYPE_INTRUSIVE(
     Configuration,
+    optimize,
+    verify,
     prefetchingBandwidthInGB,
     acceptableRunningTimeFactor
   );
@@ -41,6 +47,13 @@ class ConfigurationManager {
       std::cerr << "Failed to load configuration from " << fileName << std::endl;
       exit(-1);
     }
+  }
+
+  static void initialize(int argc, char** argv) {
+    auto cmdl = argh::parser(argc, argv);
+    std::string configFilePath;
+    cmdl("configFile", "config.json") >> configFilePath;
+    loadConfiguration(configFilePath);
   }
 
  private:
