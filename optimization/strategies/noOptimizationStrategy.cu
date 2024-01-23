@@ -1,54 +1,55 @@
 #include "../../utilities/logger.hpp"
+#include "../../utilities/types.hpp"
 #include "strategies.hpp"
 #include "strategyUtilities.hpp"
 
-CustomGraph NoOptimizationStrategy::run(OptimizationInput &input) {
+OptimizationOutput NoOptimizationStrategy::run(OptimizationInput &input) {
   LOG_TRACE();
 
-  CustomGraph optimizedGraph;
-  optimizedGraph.originalGraph = input.originalGraph;
+  OptimizationOutput output;
+  output.optimal = true;
 
-  // Add logical nodes
-  std::vector<CustomGraph::NodeId> logicalNodeStarts, logicalNodeEnds;
+  // Add task groups
+  std::vector<int> taskGroupStartNodes, taskGroupEndNodes;
   for (int i = 0; i < input.nodes.size(); i++) {
-    logicalNodeStarts.push_back(optimizedGraph.addEmptyNode());
-    logicalNodeEnds.push_back(optimizedGraph.addEmptyNode());
+    taskGroupStartNodes.push_back(output.addEmptyNode());
+    taskGroupEndNodes.push_back(output.addEmptyNode());
   }
 
-  // Add edges between logical ndoes
+  // Add edges between task groups
   for (const auto &[u, destinations] : input.edges) {
     for (auto v : destinations) {
-      optimizedGraph.addEdge(logicalNodeEnds[u], logicalNodeStarts[v]);
+      output.addEdge(taskGroupEndNodes[u], taskGroupStartNodes[v]);
     }
   }
 
-  // Add nodes and edges inside logical nodes
+  // Add nodes and edges inside task groups
   for (int i = 0; i < input.nodes.size(); i++) {
-    auto &logicalNode = input.nodes[i];
+    auto &taskGroup = input.nodes[i];
 
-    std::map<cudaGraphNode_t, CustomGraph::NodeId> cudaGraphNodeToCustomGraphNodeIdMap;
-    std::map<cudaGraphNode_t, bool> cudaGraphNodeHasIncomingEdgeMap;
-    for (auto u : logicalNode.nodes) {
-      cudaGraphNodeToCustomGraphNodeIdMap[u] = optimizedGraph.addKernelNode(u);
+    std::map<TaskId, int> taskIdToOutputNodeId;
+    std::map<TaskId, bool> taskHasIncomingEdgeMap;
+    for (TaskId u : taskGroup.nodes) {
+      taskIdToOutputNodeId[u] = output.addTaskNode(u);
     }
 
-    for (const auto &[u, destinations] : logicalNode.edges) {
+    for (const auto &[u, destinations] : taskGroup.edges) {
       for (auto v : destinations) {
-        optimizedGraph.addEdge(cudaGraphNodeToCustomGraphNodeIdMap[u], cudaGraphNodeToCustomGraphNodeIdMap[v]);
-        cudaGraphNodeHasIncomingEdgeMap[v] = true;
+        output.addEdge(taskIdToOutputNodeId[u], taskIdToOutputNodeId[v]);
+        taskHasIncomingEdgeMap[v] = true;
       }
     }
 
-    for (auto u : logicalNode.nodes) {
-      if (!cudaGraphNodeHasIncomingEdgeMap[u]) {
-        optimizedGraph.addEdge(logicalNodeStarts[i], cudaGraphNodeToCustomGraphNodeIdMap[u]);
+    for (auto u : taskGroup.nodes) {
+      if (!taskHasIncomingEdgeMap[u]) {
+        output.addEdge(taskGroupStartNodes[i], taskIdToOutputNodeId[u]);
       }
 
-      if (logicalNode.edges[u].size() == 0) {
-        optimizedGraph.addEdge(cudaGraphNodeToCustomGraphNodeIdMap[u], logicalNodeEnds[i]);
+      if (taskGroup.edges[u].size() == 0) {
+        output.addEdge(taskIdToOutputNodeId[u], taskGroupEndNodes[i]);
       }
     }
   }
 
-  return optimizedGraph;
+  return output;
 }

@@ -4,25 +4,22 @@
 #include <set>
 #include <vector>
 
-struct OptimizationInput {
-  // The domain of NodeId is [0, the total number of nodes).
-  typedef int NodeId;
+#include "../utilities/types.hpp"
 
-  struct LogicalNode {
+struct OptimizationInput {
+  struct TaskGroup {
     struct DataDependency {
       std::set<void *> inputs, outputs;
     };
 
-    std::set<cudaGraphNode_t> nodes;
-    std::map<cudaGraphNode_t, std::vector<cudaGraphNode_t>> edges;
-    float duration;
+    std::set<TaskId> nodes;
+    std::map<TaskId, std::vector<TaskId>> edges;
+    float runningTime;
     DataDependency dataDependency;
   };
 
-  std::vector<LogicalNode> nodes;
-  std::map<NodeId, std::vector<NodeId>> edges;
-
-  cudaGraph_t originalGraph;
+  std::vector<TaskGroup> nodes;
+  std::map<TaskGroupId, std::vector<TaskGroupId>> edges;
 
   float originalTotalRunningTime;
 };

@@ -5,9 +5,11 @@
 #include <set>
 #include <vector>
 
+#include "../utilities/types.hpp"
+
 struct MemoryManager {
   inline static std::vector<void *> managedMemoryAddresses;
-  inline static std::map<void *, int> managedMemoryAddressToIndexMap;
+  inline static std::map<void *, ArrayId> managedMemoryAddressToIndexMap;
   inline static std::map<void *, size_t> managedMemoryAddressToSizeMap;
   inline static std::set<void *> applicationInputs, applicationOutputs;
 };

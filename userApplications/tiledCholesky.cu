@@ -232,6 +232,30 @@ class TiledCholeskyTaskManager {
     MatrixTile a, b, c;
   };
 
+  TiledCholeskyTaskManager(
+    cusolverDnHandle_t cusolverDnHandle,
+    cusolverDnParams_t cusolverDnParams,
+    cublasHandle_t cublasHandle,
+    size_t workspaceInBytesOnDevice,
+    size_t workspaceInBytesOnHost,
+    void *h_workspace,
+    void *d_workspace,
+    int *d_info,
+    double *one,
+    double *minusOne
+  ) {
+    this->cusolverDnHandle = cusolverDnHandle;
+    this->cusolverDnParams = cusolverDnParams;
+    this->cublasHandle = cublasHandle;
+    this->workspaceInBytesOnDevice = workspaceInBytesOnDevice;
+    this->workspaceInBytesOnHost = workspaceInBytesOnHost;
+    this->h_workspace = h_workspace;
+    this->d_workspace = d_workspace;
+    this->d_info = d_info;
+    this->one = one;
+    this->minusOne = minusOne;
+  }
+
   int addTask(
     Task::OperationType operation,
     MatrixTile a,
@@ -249,8 +273,85 @@ class TiledCholeskyTaskManager {
     return this->tasks.size() - 1;
   }
 
+  void executeRandomTask(std::function<double *(int, int)> getMatrixBlock, int taskId, std::map<void *, void *> addressUpdate, cudaStream_t stream) {
+    const auto &task = this->tasks[taskId];
+
+    checkCudaErrors(cusolverDnSetStream(cusolverDnHandle, stream));
+    checkCudaErrors(cublasSetStream(cublasHandle, stream));
+
+    if (task.operation == Task::OperationType::portf) {
+      checkCudaErrors(cusolverDnXpotrf(
+        cusolverDnHandle,
+        cusolverDnParams,
+        CUBLAS_FILL_MODE_LOWER,
+        B,
+        CUDA_R_64F,
+        tryGettingUpdatedAddress(addressUpdate, getMatrixBlock(task.a.first, task.a.second)),
+        B,
+        CUDA_R_64F,
+        d_workspace,
+        workspaceInBytesOnDevice,
+        h_workspace,
+        workspaceInBytesOnHost,
+        d_info
+      ));
+    } else if (task.operation == Task::OperationType::trsm) {
+      checkCudaErrors(cublasDtrsm(
+        cublasHandle,
+        CUBLAS_SIDE_RIGHT,
+        CUBLAS_FILL_MODE_LOWER,
+        CUBLAS_OP_T,
+        CUBLAS_DIAG_NON_UNIT,
+        B, B,
+        one,
+        tryGettingUpdatedAddress(addressUpdate, getMatrixBlock(task.b.first, task.b.second)), B,
+        tryGettingUpdatedAddress(addressUpdate, getMatrixBlock(task.a.first, task.a.second)), B
+      ));
+    } else if (task.operation == Task::OperationType::syrk) {
+      checkCudaErrors(cublasDsyrk(
+        cublasHandle,
+        CUBLAS_FILL_MODE_LOWER,
+        CUBLAS_OP_N,
+        B, B,
+        minusOne, tryGettingUpdatedAddress(addressUpdate, getMatrixBlock(task.b.first, task.b.second)), B,
+        one, tryGettingUpdatedAddress(addressUpdate, getMatrixBlock(task.a.first, task.a.second)), B
+      ));
+    } else if (task.operation == Task::OperationType::gemm) {
+      checkCudaErrors(cublasGemmEx(
+        cublasHandle,
+        CUBLAS_OP_N,
+        CUBLAS_OP_T,
+        B, B, B,
+        minusOne,
+        tryGettingUpdatedAddress(addressUpdate, getMatrixBlock(task.b.first, task.b.second)), CUDA_R_64F, B,
+        tryGettingUpdatedAddress(addressUpdate, getMatrixBlock(task.c.first, task.c.second)), CUDA_R_64F, B,
+        one,
+        tryGettingUpdatedAddress(addressUpdate, getMatrixBlock(task.a.first, task.a.second)), CUDA_R_64F, B,
+        CUBLAS_COMPUTE_64F,
+        CUBLAS_GEMM_DEFAULT
+      ));
+    }
+  }
+
  private:
   std::vector<Task> tasks;
+
+  cusolverDnHandle_t cusolverDnHandle;
+  cusolverDnParams_t cusolverDnParams;
+  cublasHandle_t cublasHandle;
+  size_t workspaceInBytesOnDevice, workspaceInBytesOnHost;
+  void *h_workspace, *d_workspace;
+  int *d_info;
+  double *one, *minusOne;
+
+  template <typename T>
+  T *tryGettingUpdatedAddress(std::map<void *, void *> &addressUpdate, T *oldAddress) {
+    auto it = addressUpdate.find(static_cast<void *>(oldAddress));
+    if (it != addressUpdate.end()) {
+      return static_cast<T *>(it->second);
+    }
+    return oldAddress;
+  }
 };
 
 void initializeHostData(double *h_originalMatrix) {
@@ -370,7 +471,18 @@ void tiledCholesky(bool optimize, bool verify) {
 
   auto tiledCholeskyGraphCreator = std::make_unique<TiledCholeskyGraphCreator>(s, graph);
 
-  auto tiledCholeskyTaskManager = std::make_unique<TiledCholeskyTaskManager>();
+  auto tiledCholeskyTaskManager = std::make_unique<TiledCholeskyTaskManager>(
+    cusolverDnHandle,
+    cusolverDnParams,
+    cublasHandle,
+    workspaceInBytesOnDevice,
+    workspaceInBytesOnHost,
+    h_workspace,
+    d_workspace,
+    d_info,
+    one,
+    minusOne
+  );
 
   int nextTaskId;
   for (int k = 0; k < T; k++) {
@@ -475,21 +587,23 @@ void tiledCholesky(bool optimize, bool verify) {
 
   clock.logWithCurrentTime("Graph printed");
 
-  CudaEventClock cudaEventClock;
-
   if (optimize) {
     auto optimizedGraph = profileAndOptimize(graph);
 
     initializeDeviceData(h_originalMatrix.get(), d_matrix);
 
-    distributeInitialData(optimizedGraph);
-
-    cudaEventClock.start();
-    executeOptimizedGraph(optimizedGraph);
-    cudaEventClock.end();
+    float runningTime = executeOptimizedGraph(
+      optimizedGraph,
+      [&](int taskId, std::map<void *, void *> addressUpdate, cudaStream_t stream) {
+        tiledCholeskyTaskManager->executeRandomTask(getMatrixBlock, taskId, addressUpdate, stream);
+      }
+    );
 
     checkCudaErrors(cudaDeviceSynchronize());
+
+    fmt::print("Total time used (s): {}\n", runningTime);
   } else {
+    CudaEventClock cudaEventClock;
     cudaGraphExec_t graphExec;
     checkCudaErrors(cudaGraphInstantiate(&graphExec, graph, nullptr, nullptr, 0));
 
@@ -502,6 +616,8 @@ void tiledCholesky(bool optimize, bool verify) {
     clock.logWithCurrentTime("Graph launched, waiting for synchronization");
 
     checkCudaErrors(cudaDeviceSynchronize());
+
+    fmt::print("Total time used (s): {}\n", cudaEventClock.getTimeInSeconds());
   }
 
   clock.logWithCurrentTime("Synchronization done");
@@ -510,7 +626,6 @@ void tiledCholesky(bool optimize, bool verify) {
     cleanTiledCholeskyDecompositionResult(d_matrix, N, B);
     fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(h_originalMatrix.get(), d_matrix, N));
   }
-  fmt::print("Total time used (s): {}\n", cudaEventClock.getTimeInSeconds());
 
   clock.logWithCurrentTime("All finished");
 

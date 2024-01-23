@@ -2,8 +2,8 @@ add_library(
   optimization
   SHARED
   optimization.cu
-  taskManager.cu
   optimizer.cu
+  executor.cu
 )
 target_link_libraries(
   optimization

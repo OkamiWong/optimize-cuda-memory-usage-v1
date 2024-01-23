@@ -4,14 +4,16 @@
 #include <tuple>
 #include <vector>
 
+#include "../../utilities/types.hpp"
+
 class SecondStepSolver {
  public:
   struct Input {
-    std::vector<float> nodeDurations;
+    std::vector<float> taskGroupRunningTimes;
 
     std::vector<size_t> arraySizes;
-    std::set<int> applicationInputArrays, applicationOutputArrays;
-    std::vector<std::set<int>> nodeInputArrays, nodeOutputArrays;
+    std::set<ArrayId> applicationInputArrays, applicationOutputArrays;
+    std::vector<std::set<ArrayId>> taskGroupInputArrays, taskGroupOutputArrays;
 
     float prefetchingBandwidth, offloadingBandwidth;
 
@@ -19,14 +21,14 @@ class SecondStepSolver {
   };
 
   struct Output {
-    // (Node Index, Array Index)
-    typedef std::tuple<int, int> Prefetch;
+    // (Task Group Index, Array Index)
+    typedef std::tuple<TaskGroupId, ArrayId> Prefetch;
 
-    // (Starting Node Index, Array Index, Ending Node Index)
-    typedef std::tuple<int, int, int> Offload;
+    // (Starting Task Group Index, Array Index, Ending Task Group Index)
+    typedef std::tuple<TaskGroupId, ArrayId, TaskGroupId> Offload;
 
     bool optimal;
-    std::vector<int> indicesOfArraysInitiallyOnDevice;
+    std::vector<ArrayId> indicesOfArraysInitiallyOnDevice;
     std::vector<Prefetch> prefetches;
     std::vector<Offload> offloadings;
   };

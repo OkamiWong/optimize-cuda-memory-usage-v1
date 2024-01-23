@@ -4,10 +4,10 @@
 
 class NoOptimizationStrategy {
   public:
-    CustomGraph run(OptimizationInput &optimizationInput);
+    OptimizationOutput run(OptimizationInput &optimizationInput);
 };
 
 class TwoStepOptimizationStrategy {
   public:
-    CustomGraph run(OptimizationInput &optimizationInput);
+    OptimizationOutput run(OptimizationInput &optimizationInput);
 };

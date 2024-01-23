@@ -7,7 +7,7 @@ __global__ void dummyKernelForAnnotation(TaskAnnotation taskAnnotation) {
 }
 
 __host__ void annotateNextKernel(
-  int taskId,
+  TaskId taskId,
   std::initializer_list<void *> inputs,
   std::initializer_list<void *> outputs,
   cudaStream_t stream

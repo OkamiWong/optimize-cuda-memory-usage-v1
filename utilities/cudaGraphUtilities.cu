@@ -1,3 +1,5 @@
+#include <cuda.h>
+
 #include <cassert>
 #include <map>
 #include <memory>
@@ -39,4 +41,14 @@ cudaGraphNode_t getRootNode(cudaGraph_t graph) {
   auto rootNodes = std::make_unique<cudaGraphNode_t[]>(numRootNodes);
   checkCudaErrors(cudaGraphGetRootNodes(graph, rootNodes.get(), &numRootNodes));
   return rootNodes[0];
+}
+
+void getKernelNodeParams(cudaGraphNode_t kernelNode, CUDA_KERNEL_NODE_PARAMS &nodeParams) {
+  cudaGraphNodeType nodeType;
+  checkCudaErrors(cudaGraphNodeGetType(kernelNode, &nodeType));
+  assert(nodeType == cudaGraphNodeTypeKernel);
+
+  // Why switch to driver API:
+  // https://forums.developer.nvidia.com/t/cuda-runtime-api-error-for-cuda-graph-and-opencv/215408/13
+  checkCudaErrors(cuGraphKernelNodeGetParams(kernelNode, &nodeParams));
 }

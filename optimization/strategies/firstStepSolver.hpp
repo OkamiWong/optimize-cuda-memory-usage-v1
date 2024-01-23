@@ -2,16 +2,18 @@
 
 #include <vector>
 
+#include "../../utilities/types.hpp"
+
 class FirstStepSolver {
  public:
   struct Input {
-    int n;
-    std::vector<std::vector<int>> edges;
+    TaskGroupId n;
+    std::vector<std::vector<TaskGroupId>> edges;
     std::vector<std::vector<size_t>> dataDependencyOverlapInBytes;
   };
 
   struct Output {
-    std::vector<int> nodeExecutionOrder;
+    std::vector<TaskGroupId> taskGroupExecutionOrder;
   };
 
   FirstStepSolver(Input &&input);
@@ -23,7 +25,7 @@ class FirstStepSolver {
   size_t maxTotalOverlap;
   std::vector<bool> visited;
   std::vector<int> inDegree;
-  std::vector<int> currentTopologicalSort;
+  std::vector<TaskGroupId> currentTopologicalSort;
 
   void dfs(size_t currentTotalOverlap);
   void printSolution();

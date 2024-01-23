@@ -1,7 +1,7 @@
 #pragma once
 
-#include "customGraph.hpp"
+#include "executor.hpp"
+#include "optimizationOutput.hpp"
 
-CustomGraph profileAndOptimize(cudaGraph_t originalGraph);
-void distributeInitialData(CustomGraph& optimizedGraph);
-void executeOptimizedGraph(CustomGraph& optimizedGraph);
+OptimizationOutput profileAndOptimize(cudaGraph_t originalGraph);
+float executeOptimizedGraph(OptimizationOutput& optimizedGraph, ExecuteRandomTask executeRandomTask);

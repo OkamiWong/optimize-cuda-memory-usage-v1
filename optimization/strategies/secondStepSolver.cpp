@@ -26,7 +26,7 @@ struct IntegerProgrammingSolver {
   double originalPeakMemoryUsage;  // In MB
   float originalTotalRunningTime;
   double originalPeakMemoryUsageToTotalRunningTimeRatio;
-  int numberOfLogicalNodes, numberOfArrays, numberOfVertices;
+  int numberOfTaskGroups, numberOfArrays, numberOfVertices;
   std::map<std::pair<int, int>, bool> shouldAllocate, shouldDeallocate;
 
   std::unique_ptr<MPSolver> solver;
@@ -50,37 +50,37 @@ struct IntegerProgrammingSolver {
   MPVariable *peakMemoryUsage;
   MPVariable *numberOfDataMovements;
 
-  int getLogicalNodeVertexIndex(int i) {
+  int getTaskGroupVertexIndex(int i) {
     return i * 2 + 1;
   }
 
-  int getLogicalNodeStartVertexIndex(int i) {
+  int getTaskGroupStartVertexIndex(int i) {
     return i * 2;
   }
 
   int getPrefetchVertexIndex(int i, int j) {
-    return numberOfLogicalNodes * 2 + i * numberOfArrays + j;
+    return numberOfTaskGroups * 2 + i * numberOfArrays + j;
   }
 
   int getOffloadVertexIndex(int i, int j) {
-    return numberOfLogicalNodes * 2 + numberOfLogicalNodes * numberOfArrays + i * numberOfArrays + j;
+    return numberOfTaskGroups * 2 + numberOfTaskGroups * numberOfArrays + i * numberOfArrays + j;
   }
 
   void preprocessSecondStepInput() {
-    numberOfLogicalNodes = input.nodeDurations.size();
+    numberOfTaskGroups = input.taskGroupRunningTimes.size();
     numberOfArrays = input.arraySizes.size();
-    numberOfVertices = numberOfLogicalNodes * 2 + numberOfLogicalNodes * numberOfArrays * 2;
+    numberOfVertices = numberOfTaskGroups * 2 + numberOfTaskGroups * numberOfArrays * 2;
 
     originalTotalRunningTime = input.originalTotalRunningTime;
 
     std::set<int> allDependencies, currentDependencies;
-    for (int i = 0; i < numberOfLogicalNodes; i++) {
+    for (int i = 0; i < numberOfTaskGroups; i++) {
       currentDependencies.clear();
       std::set_union(
-        input.nodeInputArrays[i].begin(),
-        input.nodeInputArrays[i].end(),
-        input.nodeOutputArrays[i].begin(),
-        input.nodeOutputArrays[i].end(),
+        input.taskGroupInputArrays[i].begin(),
+        input.taskGroupInputArrays[i].end(),
+        input.taskGroupOutputArrays[i].begin(),
+        input.taskGroupOutputArrays[i].end(),
         std::inserter(currentDependencies, currentDependencies.begin())
       );
       std::set_union(
@@ -91,17 +91,11 @@ struct IntegerProgrammingSolver {
         std::inserter(allDependencies, allDependencies.begin())
       );
     }
-    originalPeakMemoryUsage = 1e-6 * std::accumulate(
-                                       allDependencies.begin(),
-                                       allDependencies.end(),
-                                       static_cast<size_t>(0),
-                                       [&](size_t a, int b) {
-                                         return a + input.arraySizes[b];
-                                       }
-                                     );
+    originalPeakMemoryUsage = 1e-6 * std::accumulate(allDependencies.begin(), allDependencies.end(), static_cast<size_t>(0), [&](size_t a, int b) {
+                                return a + input.arraySizes[b];
+                              });
 
-    originalPeakMemoryUsageToTotalRunningTimeRatio =
-      static_cast<double>(originalPeakMemoryUsage) / static_cast<double>(originalTotalRunningTime);
+    originalPeakMemoryUsageToTotalRunningTimeRatio = static_cast<double>(originalPeakMemoryUsage) / static_cast<double>(originalTotalRunningTime);
 
     shouldAllocate.clear();
     std::vector<int> arrayFirstWritingKernel(numberOfArrays, std::numeric_limits<int>::max());
@@ -110,8 +104,8 @@ struct IntegerProgrammingSolver {
       arrayFirstWritingKernel[arr] = -1;
     }
 
-    for (int i = 0; i < numberOfLogicalNodes; i++) {
-      for (auto arr : input.nodeOutputArrays[i]) {
+    for (int i = 0; i < numberOfTaskGroups; i++) {
+      for (auto arr : input.taskGroupOutputArrays[i]) {
         if (i < arrayFirstWritingKernel[arr]) {
           arrayFirstWritingKernel[arr] = i;
           shouldAllocate[std::make_pair(i, arr)] = true;
@@ -123,11 +117,11 @@ struct IntegerProgrammingSolver {
     std::vector<int> arrayLastReadingKernel(numberOfArrays, -1);
 
     for (auto arr : input.applicationOutputArrays) {
-      arrayLastReadingKernel[arr] = numberOfLogicalNodes;
+      arrayLastReadingKernel[arr] = numberOfTaskGroups;
     }
 
-    for (int i = numberOfLogicalNodes - 1; i >= 0; i--) {
-      for (auto arr : input.nodeInputArrays[i]) {
+    for (int i = numberOfTaskGroups - 1; i >= 0; i--) {
+      for (auto arr : input.taskGroupInputArrays[i]) {
         if (i > arrayLastReadingKernel[arr]) {
           arrayLastReadingKernel[arr] = i;
           shouldDeallocate[std::make_pair(i, arr)] = true;
@@ -159,7 +153,7 @@ struct IntegerProgrammingSolver {
 
     // Add decision variables for prefetching
     p.clear();
-    for (int i = 0; i < numberOfLogicalNodes; i++) {
+    for (int i = 0; i < numberOfTaskGroups; i++) {
       p.push_back({});
       for (int j = 0; j < numberOfArrays; j++) {
         p[i].push_back(solver->MakeBoolVar(fmt::format("p_{{{}, {}}}", i, j)));
@@ -171,7 +165,7 @@ struct IntegerProgrammingSolver {
 
     // Add decision variables for offloading
     o.clear();
-    for (int i = 0; i < numberOfLogicalNodes; i++) {
+    for (int i = 0; i < numberOfTaskGroups; i++) {
       o.push_back({});
       for (int j = 0; j < numberOfArrays; j++) {
         o[i].push_back({});
@@ -180,7 +174,7 @@ struct IntegerProgrammingSolver {
 
         sumLessThanOneConstraint->SetCoefficient(p[i][j], 1);
 
-        for (int k = 0; k < numberOfLogicalNodes; k++) {
+        for (int k = 0; k < numberOfTaskGroups; k++) {
           o[i][j].push_back(solver->MakeBoolVar(fmt::format("o_{{{},{},{}}}", i, j, k)));
 
           sumLessThanOneConstraint->SetCoefficient(o[i][j][k], 1);
@@ -204,7 +198,7 @@ struct IntegerProgrammingSolver {
   void defineXAndY() {
     // Define the variables representing whether the memory for an array is allocated on the device
     x.clear();
-    for (int i = 0; i < numberOfLogicalNodes; i++) {
+    for (int i = 0; i < numberOfTaskGroups; i++) {
       x.push_back({});
       for (int j = 0; j < numberOfArrays; j++) {
         x[i].push_back(solver->MakeBoolVar(fmt::format("x_{{{}, {}}}", i, j)));
@@ -225,7 +219,7 @@ struct IntegerProgrammingSolver {
 
     // Define the variables representing whether an array is available
     y.clear();
-    for (int i = 0; i < numberOfLogicalNodes; i++) {
+    for (int i = 0; i < numberOfTaskGroups; i++) {
       y.push_back({});
       for (int j = 0; j < numberOfArrays; j++) {
         y[i].push_back(solver->MakeBoolVar(fmt::format("y_{{{}, {}}}", i, j)));
@@ -237,14 +231,14 @@ struct IntegerProgrammingSolver {
           constraint->SetCoefficient(p[u][j], 1);
         }
         for (int u = 0; u <= i - 1; u++) {
-          for (int v = u + 1; v < numberOfLogicalNodes; v++) {
+          for (int v = u + 1; v < numberOfTaskGroups; v++) {
             constraint->SetCoefficient(o[u][j][v], -1);
           }
         }
 
         auto offloadingConstraint = solver->MakeRowConstraint(0, 1);
         offloadingConstraint->SetCoefficient(y[i][j], 1);
-        for (int k = i + 1; k < numberOfLogicalNodes; k++) {
+        for (int k = i + 1; k < numberOfTaskGroups; k++) {
           offloadingConstraint->SetCoefficient(o[i][j][k], -1);
         }
       }
@@ -256,12 +250,12 @@ struct IntegerProgrammingSolver {
     w.resize(numberOfVertices);
 
     // Add weights for kernel vertices
-    for (int i = 0; i < numberOfLogicalNodes; i++) {
-      w[getLogicalNodeStartVertexIndex(i)] = solver->MakeNumVar(0, 0, fmt::format("w_{{{}}}", getLogicalNodeStartVertexIndex(i)));
-      w[getLogicalNodeVertexIndex(i)] = solver->MakeNumVar(
-        input.nodeDurations[i],
-        input.nodeDurations[i],
-        fmt::format("w_{{{}}}", getLogicalNodeVertexIndex(i))
+    for (int i = 0; i < numberOfTaskGroups; i++) {
+      w[getTaskGroupStartVertexIndex(i)] = solver->MakeNumVar(0, 0, fmt::format("w_{{{}}}", getTaskGroupStartVertexIndex(i)));
+      w[getTaskGroupVertexIndex(i)] = solver->MakeNumVar(
+        input.taskGroupRunningTimes[i],
+        input.taskGroupRunningTimes[i],
+        fmt::format("w_{{{}}}", getTaskGroupVertexIndex(i))
       );
     }
 
@@ -274,7 +268,7 @@ struct IntegerProgrammingSolver {
     }
 
     // Add weights for prefetches
-    for (int i = 0; i < numberOfLogicalNodes; i++) {
+    for (int i = 0; i < numberOfTaskGroups; i++) {
       for (int j = 0; j < numberOfArrays; j++) {
         if (shouldAllocate[std::make_pair(i, j)]) {
           w[getPrefetchVertexIndex(i, j)] = solver->MakeNumVar(0, 0, fmt::format("w_{{{}}}", getPrefetchVertexIndex(i, j)));
@@ -288,7 +282,7 @@ struct IntegerProgrammingSolver {
     }
 
     // Add weights for offloadings
-    for (int i = 0; i < numberOfLogicalNodes; i++) {
+    for (int i = 0; i < numberOfTaskGroups; i++) {
       for (int j = 0; j < numberOfArrays; j++) {
         if (shouldDeallocate[std::make_pair(i, j)]) {
           w[getOffloadVertexIndex(i, j)] = solver->MakeNumVar(0, 0, fmt::format("w_{{{}}}", getOffloadVertexIndex(i, j)));
@@ -297,7 +291,7 @@ struct IntegerProgrammingSolver {
 
           auto constraint = solver->MakeRowConstraint(0, 0);
           constraint->SetCoefficient(w[getOffloadVertexIndex(i, j)], -1);
-          for (int k = 0; k < numberOfLogicalNodes; k++) {
+          for (int k = 0; k < numberOfTaskGroups; k++) {
             constraint->SetCoefficient(o[i][j][k], arrayOffloadingTimes[j]);
           }
         }
@@ -313,27 +307,27 @@ struct IntegerProgrammingSolver {
     e.resize(numberOfVertices, std::vector<MPVariable *>(numberOfVertices, zeroConstant));
 
     // Add edges between kernel and kernel start vertices
-    for (int i = 0; i < numberOfLogicalNodes; i++) {
-      e[getLogicalNodeStartVertexIndex(i)][getLogicalNodeVertexIndex(i)] = oneConstant;
+    for (int i = 0; i < numberOfTaskGroups; i++) {
+      e[getTaskGroupStartVertexIndex(i)][getTaskGroupVertexIndex(i)] = oneConstant;
       if (i > 0) {
-        e[getLogicalNodeVertexIndex(i - 1)][getLogicalNodeStartVertexIndex(i)] = oneConstant;
+        e[getTaskGroupVertexIndex(i - 1)][getTaskGroupStartVertexIndex(i)] = oneConstant;
       }
     }
 
     // Add edges for prefetching vertices
-    for (int i = 0; i < numberOfLogicalNodes; i++) {
+    for (int i = 0; i < numberOfTaskGroups; i++) {
       for (int j = 0; j < numberOfArrays; j++) {
-        e[getLogicalNodeStartVertexIndex(i)][getPrefetchVertexIndex(i, j)] = p[i][j];
-        for (int k = i; k < numberOfLogicalNodes; k++) {
-          if (input.nodeInputArrays[k].count(j) != 0 || input.nodeOutputArrays[k].count(j) != 0) {
-            e[getPrefetchVertexIndex(i, j)][getLogicalNodeVertexIndex(k)] = oneConstant;
+        e[getTaskGroupStartVertexIndex(i)][getPrefetchVertexIndex(i, j)] = p[i][j];
+        for (int k = i; k < numberOfTaskGroups; k++) {
+          if (input.taskGroupInputArrays[k].count(j) != 0 || input.taskGroupOutputArrays[k].count(j) != 0) {
+            e[getPrefetchVertexIndex(i, j)][getTaskGroupVertexIndex(k)] = oneConstant;
           }
         }
       }
     }
 
     // Serialize prefetches
-    for (int i = 0; i < numberOfLogicalNodes; i++) {
+    for (int i = 0; i < numberOfTaskGroups; i++) {
       for (int j = 0; j < numberOfArrays; j++) {
         if (j == 0) {
           if (i != 0) {
@@ -346,24 +340,24 @@ struct IntegerProgrammingSolver {
     }
 
     // Add edges for offloading vertices
-    for (int i = 0; i < numberOfLogicalNodes; i++) {
+    for (int i = 0; i < numberOfTaskGroups; i++) {
       for (int j = 0; j < numberOfArrays; j++) {
-        e[getLogicalNodeVertexIndex(i)][getOffloadVertexIndex(i, j)] = solver->MakeBoolVar("");
+        e[getTaskGroupVertexIndex(i)][getOffloadVertexIndex(i, j)] = solver->MakeBoolVar("");
 
         auto constraint = solver->MakeRowConstraint(0, 0);
-        constraint->SetCoefficient(e[getLogicalNodeVertexIndex(i)][getOffloadVertexIndex(i, j)], -1);
-        for (int k = 0; k < numberOfLogicalNodes; k++) {
+        constraint->SetCoefficient(e[getTaskGroupVertexIndex(i)][getOffloadVertexIndex(i, j)], -1);
+        for (int k = 0; k < numberOfTaskGroups; k++) {
           constraint->SetCoefficient(o[i][j][k], 1);
         }
 
-        for (int k = i + 1; k < numberOfLogicalNodes; k++) {
-          e[getOffloadVertexIndex(i, j)][getLogicalNodeStartVertexIndex(k)] = o[i][j][k];
+        for (int k = i + 1; k < numberOfTaskGroups; k++) {
+          e[getOffloadVertexIndex(i, j)][getTaskGroupStartVertexIndex(k)] = o[i][j][k];
         }
       }
     }
 
     // Serialize offloadings
-    for (int i = 0; i < numberOfLogicalNodes; i++) {
+    for (int i = 0; i < numberOfTaskGroups; i++) {
       for (int j = 0; j < numberOfArrays; j++) {
         if (j == 0) {
           if (i != 0) {
@@ -380,7 +374,7 @@ struct IntegerProgrammingSolver {
     z.clear();
 
     for (int u = 0; u < numberOfVertices; u++) {
-      if (u == getLogicalNodeStartVertexIndex(0)) {
+      if (u == getTaskGroupStartVertexIndex(0)) {
         z.push_back(solver->MakeNumVar(0, 0, ""));
       } else {
         z.push_back(solver->MakeNumVar(0, infinity, ""));
@@ -390,7 +384,7 @@ struct IntegerProgrammingSolver {
     const float infinityForTime = 10.0 * originalTotalRunningTime;
 
     for (int u = 0; u < numberOfVertices; u++) {
-      if (u != getLogicalNodeStartVertexIndex(0)) {
+      if (u != getTaskGroupStartVertexIndex(0)) {
         for (int v = 0; v < numberOfVertices; v++) {
           auto constraint = solver->MakeRowConstraint(-infinityForTime, infinity);
           constraint->SetCoefficient(z[u], 1);
@@ -402,18 +396,18 @@ struct IntegerProgrammingSolver {
     }
 
     auto zLastKernelConstraint = solver->MakeRowConstraint(0, originalTotalRunningTime * ConfigurationManager::getConfig().acceptableRunningTimeFactor);
-    zLastKernelConstraint->SetCoefficient(z[getLogicalNodeVertexIndex(numberOfLogicalNodes - 1)], 1);
+    zLastKernelConstraint->SetCoefficient(z[getTaskGroupVertexIndex(numberOfTaskGroups - 1)], 1);
   }
 
   void addKernelDataDependencyConstraints() {
     std::set<int> nodeInputOutputUnion;
-    for (int i = 0; i < numberOfLogicalNodes; i++) {
+    for (int i = 0; i < numberOfTaskGroups; i++) {
       nodeInputOutputUnion.clear();
       std::set_union(
-        input.nodeInputArrays[i].begin(),
-        input.nodeInputArrays[i].end(),
-        input.nodeOutputArrays[i].begin(),
-        input.nodeOutputArrays[i].end(),
+        input.taskGroupInputArrays[i].begin(),
+        input.taskGroupInputArrays[i].end(),
+        input.taskGroupOutputArrays[i].begin(),
+        input.taskGroupOutputArrays[i].end(),
         std::inserter(nodeInputOutputUnion, nodeInputOutputUnion.begin())
       );
       for (auto &arr : nodeInputOutputUnion) {
@@ -426,7 +420,7 @@ struct IntegerProgrammingSolver {
   void definePeakMemoryUsage() {
     // Represent the peak memory usage in MByte
     peakMemoryUsage = solver->MakeNumVar(0, infinity, "");
-    for (int i = 0; i < numberOfLogicalNodes; i++) {
+    for (int i = 0; i < numberOfTaskGroups; i++) {
       auto constraint = solver->MakeRowConstraint(0, infinity);
       constraint->SetCoefficient(peakMemoryUsage, 1);
       for (int j = 0; j < numberOfArrays; j++) {
@@ -440,15 +434,15 @@ struct IntegerProgrammingSolver {
     auto constraint = solver->MakeRowConstraint(0, infinity);
     constraint->SetCoefficient(numberOfDataMovements, 1);
 
-    for (int i = 0; i < numberOfLogicalNodes; i++) {
+    for (int i = 0; i < numberOfTaskGroups; i++) {
       for (int j = 0; j < numberOfArrays; j++) {
         constraint->SetCoefficient(p[i][j], -1);
       }
     }
 
-    for (int i = 0; i < numberOfLogicalNodes; i++) {
+    for (int i = 0; i < numberOfTaskGroups; i++) {
       for (int j = 0; j < numberOfArrays; j++) {
-        for (int k = i + 1; k < numberOfLogicalNodes; k++) {
+        for (int k = i + 1; k < numberOfTaskGroups; k++) {
           constraint->SetCoefficient(o[i][j][k], -1);
         }
       }
@@ -461,7 +455,7 @@ struct IntegerProgrammingSolver {
     auto fp = fopen("secondStepSolver.out", "w");
 
     auto optimizedPeakMemoryUsage = peakMemoryUsage->solution_value();
-    auto totalRunningTime = z[getLogicalNodeVertexIndex(numberOfLogicalNodes - 1)]->solution_value();
+    auto totalRunningTime = z[getTaskGroupVertexIndex(numberOfTaskGroups - 1)]->solution_value();
 
     fmt::print(fp, "Original peak memory usage (MByte): {:.6f}\n", originalPeakMemoryUsage);
     fmt::print(fp, "Optimal peak memory usage (MByte): {:.6f}\n", optimizedPeakMemoryUsage);
@@ -473,17 +467,17 @@ struct IntegerProgrammingSolver {
 
     fmt::print(fp, "Solution:\n");
 
-    for (int i = 0; i < numberOfLogicalNodes; i++) {
+    for (int i = 0; i < numberOfTaskGroups; i++) {
       fmt::print(fp, "{}:\n", i);
 
       fmt::print(fp, "  Inputs: ");
-      for (auto arrayIndex : input.nodeInputArrays[i]) {
+      for (auto arrayIndex : input.taskGroupInputArrays[i]) {
         fmt::print(fp, "{}, ", arrayIndex);
       }
       fmt::print(fp, "\n");
 
       fmt::print(fp, "  Outputs: ");
-      for (auto arrayIndex : input.nodeOutputArrays[i]) {
+      for (auto arrayIndex : input.taskGroupOutputArrays[i]) {
         fmt::print(fp, "{}, ", arrayIndex);
       }
       fmt::print(fp, "\n");
@@ -499,7 +493,7 @@ struct IntegerProgrammingSolver {
 
     fmt::print(fp, "\n");
 
-    for (int i = 0; i < numberOfLogicalNodes; i++) {
+    for (int i = 0; i < numberOfTaskGroups; i++) {
       for (int j = 0; j < numberOfArrays; j++) {
         if (p[i][j]->solution_value() > 0) {
           fmt::print(fp, "p_{{{}, {}}} = {}; w = {}; z = {}\n", i, j, true, w[getPrefetchVertexIndex(i, j)]->solution_value(), z[getPrefetchVertexIndex(i, j)]->solution_value());
@@ -509,9 +503,9 @@ struct IntegerProgrammingSolver {
 
     fmt::print(fp, "\n");
 
-    for (int i = 0; i < numberOfLogicalNodes; i++) {
+    for (int i = 0; i < numberOfTaskGroups; i++) {
       for (int j = 0; j < numberOfArrays; j++) {
-        for (int k = 0; k < numberOfLogicalNodes; k++) {
+        for (int k = 0; k < numberOfTaskGroups; k++) {
           if (o[i][j][k]->solution_value() > 0) {
             fmt::print(fp, "o_{{{}, {}, {}}} = {}; w = {}; z = {}\n", i, j, k, true, w[getOffloadVertexIndex(i, j)]->solution_value(), z[getOffloadVertexIndex(i, j)]->solution_value());
           }
@@ -529,11 +523,11 @@ struct IntegerProgrammingSolver {
     auto fp = fopen("secondStepSolverInput.out", "w");
     float minDuration = std::numeric_limits<float>::max();
     float maxDuration = 0;
-    for (int i = 0; i < numberOfLogicalNodes; i++) {
-      auto duration = input.nodeDurations[i];
+    for (int i = 0; i < numberOfTaskGroups; i++) {
+      auto duration = input.taskGroupRunningTimes[i];
       minDuration = std::min(minDuration, duration);
       maxDuration = std::max(maxDuration, duration);
-      fmt::print(fp, "nodeDurations[{}] = {}\n", i, duration);
+      fmt::print(fp, "taskGroupRunningTimes[{}] = {}\n", i, duration);
     }
 
     size_t minSize = std::numeric_limits<size_t>::max();
@@ -586,7 +580,7 @@ struct IntegerProgrammingSolver {
     objective->SetCoefficient(peakMemoryUsage, 1);
     objective->SetCoefficient(numberOfDataMovements, totalNumberOfDataMovementWeight);
     objective->SetCoefficient(
-      z[getLogicalNodeVertexIndex(numberOfLogicalNodes - 1)],
+      z[getTaskGroupVertexIndex(numberOfTaskGroups - 1)],
       originalPeakMemoryUsageToTotalRunningTimeRatio * totalRunningTimeWeight
     );
     objective->SetMinimization();
@@ -614,7 +608,7 @@ struct IntegerProgrammingSolver {
         }
       }
 
-      for (int i = 0; i < numberOfLogicalNodes; i++) {
+      for (int i = 0; i < numberOfTaskGroups; i++) {
         for (int j = 0; j < numberOfArrays; j++) {
           if (p[i][j]->solution_value() > 0) {
             output.prefetches.push_back(std::make_tuple(i, j));
@@ -622,9 +616,9 @@ struct IntegerProgrammingSolver {
         }
       }
 
-      for (int i = 0; i < numberOfLogicalNodes; i++) {
+      for (int i = 0; i < numberOfTaskGroups; i++) {
         for (int j = 0; j < numberOfArrays; j++) {
-          for (int k = 0; k < numberOfLogicalNodes; k++) {
+          for (int k = 0; k < numberOfTaskGroups; k++) {
             if (o[i][j][k]->solution_value() > 0) {
               output.offloadings.push_back(std::make_tuple(i, j, k));
             }

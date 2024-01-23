@@ -14,15 +14,15 @@
 #include "../utilities/logger.hpp"
 #include "optimizer.hpp"
 #include "strategies/strategies.hpp"
-#include "taskManager.hpp"
 
-Optimizer *Optimizer::instance = nullptr;
+static CUfunction dummyKernelFuncHandle;
 
-Optimizer *Optimizer::getInstance() {
-  if (instance == nullptr) {
-    instance = new Optimizer();
-  }
-  return instance;
+void registerDummyKernelFuncHandle(cudaGraph_t graph) {
+  // The graph is assumed to have only one root
+  // and that root is supposed to be an annotation node
+  CUDA_KERNEL_NODE_PARAMS rootNodeParams;
+  getKernelNodeParams(getRootNode(graph), rootNodeParams);
+  dummyKernelFuncHandle = rootNodeParams.func;
 }
 
 CudaGraphExecutionTimeline getCudaGraphExecutionTimeline(cudaGraph_t graph) {
@@ -104,7 +104,7 @@ void dfs(
       CUDA_KERNEL_NODE_PARAMS nodeParams;
       checkCudaErrors(cuGraphKernelNodeGetParams(currentNode, &nodeParams));
 
-      if (nodeParams.func == TaskManager::getInstance()->getDummyKernelHandle()) {
+      if (nodeParams.func == dummyKernelFuncHandle) {
         isAnnotationNode = true;
       }
     }
@@ -142,43 +142,47 @@ void mergeNodesWithSameAnnotation(
   }
 }
 
-OptimizationInput::LogicalNode::DataDependency
-convertTaskAnnotationToKernelDataDependency(const TaskAnnotation &kernelIO) {
-  OptimizationInput::LogicalNode::DataDependency dep;
+OptimizationInput::TaskGroup::DataDependency convertTaskAnnotationToTaskGroupDataDependency(
+  const TaskAnnotation &taskAnnotation
+) {
+  OptimizationInput::TaskGroup::DataDependency dep;
   for (int i = 0; i < TaskAnnotation::MAX_NUM_PTR; i++) {
-    void *ptr = kernelIO.inputs[i];
+    void *ptr = taskAnnotation.inputs[i];
     if (ptr == nullptr) break;
     dep.inputs.insert(ptr);
   }
   for (int i = 0; i < TaskAnnotation::MAX_NUM_PTR; i++) {
-    void *ptr = kernelIO.outputs[i];
+    void *ptr = taskAnnotation.outputs[i];
     if (ptr == nullptr) break;
     dep.outputs.insert(ptr);
   }
   return dep;
 }
 
-void mergeDataDependency(OptimizationInput::LogicalNode &logicalNode, cudaGraphNode_t annotationNode) {
-  cudaGraphNodeType nodeType;
-  checkCudaErrors(cudaGraphNodeGetType(annotationNode, &nodeType));
-  assert(nodeType == cudaGraphNodeTypeKernel);
-
-  // Why switch to driver API:
-  // https://forums.developer.nvidia.com/t/cuda-runtime-api-error-for-cuda-graph-and-opencv/215408/13
+TaskId getTaskId(cudaGraphNode_t annotationNode) {
   CUDA_KERNEL_NODE_PARAMS nodeParams;
-  checkCudaErrors(cuGraphKernelNodeGetParams(annotationNode, &nodeParams));
+  getKernelNodeParams(annotationNode, nodeParams);
+  assert(nodeParams.func == dummyKernelFuncHandle);
 
-  assert(nodeParams.func == TaskManager::getInstance()->getDummyKernelHandle());
+  auto taskAnnotationPtr = reinterpret_cast<TaskAnnotation *>(nodeParams.kernelParams[0]);
+  return taskAnnotationPtr->taskId;
+}
 
-  auto kernelIOPtr = reinterpret_cast<TaskAnnotation *>(nodeParams.kernelParams[0]);
-  auto dataDependencyByAnnotation = convertTaskAnnotationToKernelDataDependency(*kernelIOPtr);
+void mergeDataDependency(OptimizationInput::TaskGroup &taskGroup, cudaGraphNode_t annotationNode) {
+  CUDA_KERNEL_NODE_PARAMS nodeParams;
+  getKernelNodeParams(annotationNode, nodeParams);
+  assert(nodeParams.func == dummyKernelFuncHandle);
 
-  logicalNode.dataDependency.inputs.insert(dataDependencyByAnnotation.inputs.begin(), dataDependencyByAnnotation.inputs.end());
-  logicalNode.dataDependency.outputs.insert(dataDependencyByAnnotation.outputs.begin(), dataDependencyByAnnotation.outputs.end());
+  auto taskAnnotationPtr = reinterpret_cast<TaskAnnotation *>(nodeParams.kernelParams[0]);
+  auto taskDataDependency = convertTaskAnnotationToTaskGroupDataDependency(*taskAnnotationPtr);
+
+  taskGroup.dataDependency.inputs.insert(taskDataDependency.inputs.begin(), taskDataDependency.inputs.end());
+  taskGroup.dataDependency.outputs.insert(taskDataDependency.outputs.begin(), taskDataDependency.outputs.end());
 }
 
 OptimizationInput constructOptimizationInput(
   cudaGraph_t originalGraph,
+  std::vector<cudaGraphNode_t> &nodes,
   std::map<cudaGraphNode_t, std::vector<cudaGraphNode_t>> &edges,
   CudaGraphExecutionTimeline &timeline,
   DisjointSet<cudaGraphNode_t> &disjointSet,
@@ -188,71 +192,98 @@ OptimizationInput constructOptimizationInput(
 
   OptimizationInput optimizationInput;
 
-  std::map<cudaGraphNode_t, OptimizationInput::NodeId> disjointSetRootToLogicalNodeIndexMap;
+  std::map<cudaGraphNode_t, TaskGroupId> disjointSetRootToTaskGroupIdMap;
 
-  auto getLogicalNodeId = [&](cudaGraphNode_t u) {
+  auto getTaskGroupId = [&](cudaGraphNode_t u) {
+    auto uTaskId = getTaskId(nodeToAnnotationMap[u]);
     auto uRoot = disjointSet.findRoot(u);
 
-    size_t uLogicalNodeId;
-    if (disjointSetRootToLogicalNodeIndexMap.find(uRoot) == disjointSetRootToLogicalNodeIndexMap.end()) {
+    size_t uTaskGroupId;
+    if (disjointSetRootToTaskGroupIdMap.count(uRoot) == 0) {
       optimizationInput.nodes.emplace_back();
-      uLogicalNodeId = optimizationInput.nodes.size() - 1;
-      disjointSetRootToLogicalNodeIndexMap[uRoot] = uLogicalNodeId;
+      uTaskGroupId = optimizationInput.nodes.size() - 1;
+      disjointSetRootToTaskGroupIdMap[uRoot] = uTaskGroupId;
     } else {
-      uLogicalNodeId = disjointSetRootToLogicalNodeIndexMap[uRoot];
+      uTaskGroupId = disjointSetRootToTaskGroupIdMap[uRoot];
     }
 
-    optimizationInput.nodes[uLogicalNodeId].nodes.insert(u);
+    optimizationInput.nodes[uTaskGroupId].nodes.insert(uTaskId);
 
-    return uLogicalNodeId;
+    return uTaskGroupId;
   };
 
-  // Add nodes and edges, both logical nodes and actual nodes
-  std::set<std::pair<OptimizationInput::NodeId, OptimizationInput::NodeId>> existingEdges;
+  // Add nodes and edges for both task groups and tasks
+  std::set<std::pair<TaskGroupId, TaskGroupId>> existingEdges;
   for (const auto &[u, destinations] : edges) {
-    auto uLogicalNodeId = getLogicalNodeId(u);
+    auto uTaskId = getTaskId(nodeToAnnotationMap[u]);
+    auto uTaskGroupId = getTaskGroupId(u);
 
     for (auto v : destinations) {
-      auto vLogicalNodeId = getLogicalNodeId(v);
-      if (uLogicalNodeId == vLogicalNodeId) {
-        optimizationInput.nodes[uLogicalNodeId].edges[u].push_back(v);
+      auto vTaskId = getTaskId(nodeToAnnotationMap[v]);
+      auto vTaskGroupId = getTaskGroupId(v);
+      if (uTaskGroupId == vTaskGroupId) {
+        optimizationInput.nodes[uTaskGroupId].edges[uTaskId].push_back(vTaskId);
       } else {
-        // Logical node edges needs deduping
-        if (existingEdges.count(std::make_pair(uLogicalNodeId, vLogicalNodeId)) == 0) {
-          existingEdges.insert(std::make_pair(uLogicalNodeId, vLogicalNodeId));
-          optimizationInput.edges[uLogicalNodeId].push_back(vLogicalNodeId);
+        // Edges between task groups need deduping
+        if (existingEdges.count(std::make_pair(uTaskGroupId, vTaskGroupId)) == 0) {
+          existingEdges.insert(std::make_pair(uTaskGroupId, vTaskGroupId));
+          optimizationInput.edges[uTaskGroupId].push_back(vTaskGroupId);
         }
       }
     }
   }
 
-  // Add duration and data dependency
+  // Gather information about tasks
+  std::map<TaskId, cudaGraphNode_t> taskIdToAnnotationNodeMap;
+  std::map<TaskId, uint64_t> taskIdToMinStartTimestampMap;
+  std::map<TaskId, uint64_t> taskIdToMaxEndTimestampMap;
+  for (cudaGraphNode_t u : nodes) {
+    auto uTaskId = getTaskId(nodeToAnnotationMap[u]);
+
+    if (taskIdToAnnotationNodeMap.count(uTaskId) == 0) {
+      taskIdToAnnotationNodeMap[uTaskId] = nodeToAnnotationMap[u];
+      taskIdToMinStartTimestampMap[uTaskId] = std::numeric_limits<uint64_t>::max();
+      taskIdToMaxEndTimestampMap[uTaskId] = 0;
+    }
+
+    // Ignore annotation node
+    const bool isAnnotationNode = nodeToAnnotationMap[u] == u;
+    if (isAnnotationNode) continue;
+
+    // Ignore mem alloc node and mem free node
+    cudaGraphNodeType nodeType;
+    checkCudaErrors(cudaGraphNodeGetType(u, &nodeType));
+    if (nodeType == cudaGraphNodeTypeMemAlloc || nodeType == cudaGraphNodeTypeMemFree) {
+      continue;
+    }
+
+    taskIdToMinStartTimestampMap[uTaskId] = std::min(
+      taskIdToMinStartTimestampMap[uTaskId],
+      timeline[u].first
+    );
+
+    taskIdToMaxEndTimestampMap[uTaskId] = std::max(
+      taskIdToMaxEndTimestampMap[uTaskId],
+      timeline[u].second
+    );
+  }
+
+  // Add task group running time and data dependency
   uint64_t globalMinStart = std::numeric_limits<uint64_t>::max(), globalMaxEnd = 0;
-  for (auto &logicalNode : optimizationInput.nodes) {
+  for (auto &taskGroup : optimizationInput.nodes) {
     uint64_t minStart = std::numeric_limits<uint64_t>::max(), maxEnd = 0;
 
-    for (auto node : logicalNode.nodes) {
-      // Ignore annotation node
-      const auto isAnnotationNode = nodeToAnnotationMap[node] == node;
-      if (isAnnotationNode) continue;
+    for (auto taskId : taskGroup.nodes) {
+      minStart = std::min(minStart, taskIdToMinStartTimestampMap[taskId]);
+      maxEnd = std::max(maxEnd, taskIdToMaxEndTimestampMap[taskId]);
 
-      // Ignore mem alloc node and mem free node
-      cudaGraphNodeType nodeType;
-      checkCudaErrors(cudaGraphNodeGetType(node, &nodeType));
-      if (nodeType == cudaGraphNodeTypeMemAlloc || nodeType == cudaGraphNodeTypeMemFree) {
-        continue;
-      }
-
-      minStart = std::min(minStart, timeline[node].first);
-      maxEnd = std::max(maxEnd, timeline[node].second);
-
-      mergeDataDependency(logicalNode, nodeToAnnotationMap[node]);
+      mergeDataDependency(taskGroup, taskIdToAnnotationNodeMap[taskId]);
     }
 
     globalMinStart = std::min(globalMinStart, minStart);
     globalMaxEnd = std::max(globalMaxEnd, maxEnd);
 
-    logicalNode.duration = static_cast<float>(maxEnd - minStart) * 1e-9f;
+    taskGroup.runningTime = static_cast<float>(maxEnd - minStart) * 1e-9f;
   }
 
   optimizationInput.originalTotalRunningTime = static_cast<float>(globalMaxEnd - globalMinStart) * 1e-9f;
@@ -260,9 +291,17 @@ OptimizationInput constructOptimizationInput(
   return optimizationInput;
 }
 
-CustomGraph Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
-  auto taskManager = TaskManager::getInstance();
-  taskManager->registerDummyKernelHandle(originalGraph);
+Optimizer *Optimizer::instance = nullptr;
+
+Optimizer *Optimizer::getInstance() {
+  if (instance == nullptr) {
+    instance = new Optimizer();
+  }
+  return instance;
+}
+
+OptimizationOutput Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
+  registerDummyKernelFuncHandle(originalGraph);
 
   auto timeline = getCudaGraphExecutionTimeline(originalGraph);
 
@@ -281,7 +320,7 @@ CustomGraph Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
 
   mergeNodesWithSameAnnotation(nodes, nodeToAnnotationMap, disjointSet);
 
-  auto optimizationInput = constructOptimizationInput(originalGraph, edges, timeline, disjointSet, nodeToAnnotationMap);
+  auto optimizationInput = constructOptimizationInput(originalGraph, nodes, edges, timeline, disjointSet, nodeToAnnotationMap);
 
   auto optimizedGraph = this->optimize<TwoStepOptimizationStrategy>(optimizationInput);
 

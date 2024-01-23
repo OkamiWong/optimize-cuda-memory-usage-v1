@@ -32,7 +32,7 @@ void FirstStepSolver::dfs(size_t currentTotalOverlap) {
   if (this->currentTopologicalSort.size() == this->input.n) {
     if (currentTotalOverlap > this->maxTotalOverlap) {
       this->maxTotalOverlap = currentTotalOverlap;
-      this->output.nodeExecutionOrder = this->currentTopologicalSort;
+      this->output.taskGroupExecutionOrder = this->currentTopologicalSort;
     }
     return;
   }
@@ -69,7 +69,7 @@ void FirstStepSolver::printSolution() {
   fmt::print(fp, "maxTotalOverlap = {}\n", this->maxTotalOverlap);
 
   for (int i = 0; i < this->input.n; i++) {
-    fmt::print(fp, "nodeExecutionOrder[{}] = {}\n", i, this->output.nodeExecutionOrder[i]);
+    fmt::print(fp, "taskGroupExecutionOrder[{}] = {}\n", i, this->output.taskGroupExecutionOrder[i]);
   }
 
   fclose(fp);

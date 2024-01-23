@@ -6,27 +6,27 @@
 #include "../../utilities/logger.hpp"
 #include "strategyUtilities.hpp"
 
-inline std::string getLogicalNodeName(OptimizationInput::NodeId index) {
-  return fmt::format("logical_node_{}", index);
+inline std::string getTaskGroupName(TaskGroupId index) {
+  return fmt::format("task_group_{}", index);
 }
 
 void printEdges(FILE *fp, OptimizationInput &input) {
   for (const auto &[u, destinations] : input.edges) {
     for (auto v : destinations) {
-      fmt::print(fp, "{} -> {}\n", getLogicalNodeName(u), getLogicalNodeName(v));
+      fmt::print(fp, "{} -> {}\n", getTaskGroupName(u), getTaskGroupName(v));
     }
   }
 }
 
-void printLogicalNode(FILE *fp, int index, OptimizationInput::LogicalNode &node) {
-  fmt::print(fp, "subgraph {} {{\n", getLogicalNodeName(index));
-  fmt::print(fp, "label=\"{} (size={})\"\n", getLogicalNodeName(index), node.nodes.size());
+void printTaskGroup(FILE *fp, int index, OptimizationInput::TaskGroup &taskGroup) {
+  fmt::print(fp, "subgraph {} {{\n", getTaskGroupName(index));
+  fmt::print(fp, "label=\"{} (size={})\"\n", getTaskGroupName(index), taskGroup.nodes.size());
   fmt::print(fp, "}}\n");
 }
 
-void printLogicalNodes(FILE *fp, OptimizationInput &input) {
+void printTaskGroups(FILE *fp, OptimizationInput &input) {
   for (int i = 0; i < input.nodes.size(); i++) {
-    printLogicalNode(fp, i, input.nodes[i]);
+    printTaskGroup(fp, i, input.nodes[i]);
   }
 }
 
@@ -37,7 +37,7 @@ void printOptimizationInput(OptimizationInput &input) {
 
   fmt::print(fp, "digraph G {{\n");
 
-  printLogicalNodes(fp, input);
+  printTaskGroups(fp, input);
   printEdges(fp, input);
 
   fmt::print(fp, "}}\n");

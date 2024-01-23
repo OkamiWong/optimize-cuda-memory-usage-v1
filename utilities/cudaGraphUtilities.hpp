@@ -10,3 +10,5 @@ void extractGraphNodesAndEdges(
 );
 
 cudaGraphNode_t getRootNode(cudaGraph_t graph);
+
+void getKernelNodeParams(cudaGraphNode_t kernelNode, CUDA_KERNEL_NODE_PARAMS &nodeParams);

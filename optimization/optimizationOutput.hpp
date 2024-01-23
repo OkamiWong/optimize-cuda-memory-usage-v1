@@ -1,18 +1,15 @@
 #pragma once
 
-#include <cuda.h>
-
 #include <map>
 #include <utility>
 #include <vector>
 
-struct CustomGraph {
-  // The domain of NodeId is [0, the total number of nodes).
-  typedef int NodeId;
+#include "../utilities/types.hpp"
 
+struct OptimizationOutput {
   enum class NodeType {
     empty,
-    kernel,
+    task,
     dataMovement
   };
 
@@ -28,37 +25,36 @@ struct CustomGraph {
 
   bool optimal;
 
-  cudaGraph_t originalGraph;
-  std::vector<NodeId> nodes;
-  std::map<NodeId, std::vector<NodeId>> edges;
-  std::map<NodeId, NodeType> nodeIdToNodeTypeMap;
-  std::map<NodeId, cudaGraphNode_t> nodeIdToCuGraphNodeMap;
-  std::map<NodeId, DataMovement> nodeIdToDataMovementMap;
+  std::vector<int> nodes;
+  std::map<int, std::vector<int>> edges;
+  std::map<int, NodeType> nodeIdToNodeTypeMap;
+  std::map<int, TaskId> nodeIdToTaskIdMap;
+  std::map<int, DataMovement> nodeIdToDataMovementMap;
 
   std::vector<std::pair<void*, size_t>> arraysInitiallyAllocatedOnDevice;
 
-  NodeId addEmptyNode() {
+  int addEmptyNode() {
     auto u = this->nodes.size();
     this->nodes.push_back(u);
     this->nodeIdToNodeTypeMap[u] = NodeType::empty;
     return u;
   }
 
-  NodeId addKernelNode(cudaGraphNode_t nodeInOriginalGraph) {
+  int addTaskNode(TaskId taskId) {
     auto u = this->addEmptyNode();
-    this->nodeIdToNodeTypeMap[u] = NodeType::kernel;
-    this->nodeIdToCuGraphNodeMap[u] = nodeInOriginalGraph;
+    this->nodeIdToNodeTypeMap[u] = NodeType::task;
+    this->nodeIdToTaskIdMap[u] = taskId;
     return u;
   }
 
-  NodeId addDataMovementNode(DataMovement dataMovement) {
+  int addDataMovementNode(DataMovement dataMovement) {
     auto u = this->addEmptyNode();
     this->nodeIdToNodeTypeMap[u] = NodeType::dataMovement;
     this->nodeIdToDataMovementMap[u] = dataMovement;
     return u;
   }
 
-  NodeId addDataMovementNode(DataMovement::Direction direction, void* address, size_t size, NodeId start, NodeId end) {
+  int addDataMovementNode(DataMovement::Direction direction, void* address, size_t size, int start, int end) {
     DataMovement dataMovement;
     dataMovement.direction = direction;
     dataMovement.address = address;
@@ -71,7 +67,7 @@ struct CustomGraph {
     return u;
   }
 
-  void addEdge(NodeId from, NodeId to) {
+  void addEdge(int from, int to) {
     this->edges[from].push_back(to);
   }
 };

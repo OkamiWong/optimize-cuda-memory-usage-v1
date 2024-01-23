@@ -7,27 +7,28 @@
 #include "../../utilities/configurationManager.hpp"
 #include "../../utilities/constants.hpp"
 #include "../../utilities/logger.hpp"
+#include "../../utilities/types.hpp"
 #include "firstStepSolver.hpp"
 #include "secondStepSolver.hpp"
 #include "strategies.hpp"
 #include "strategyUtilities.hpp"
 
 FirstStepSolver::Input convertToFirstStepInput(OptimizationInput &optimizationInput) {
-  const auto numLogicalNodes = optimizationInput.nodes.size();
+  const auto numTaskGroups = optimizationInput.nodes.size();
 
   FirstStepSolver::Input firstStepInput;
 
-  firstStepInput.n = numLogicalNodes;
-  firstStepInput.edges.resize(numLogicalNodes);
-  firstStepInput.dataDependencyOverlapInBytes.resize(numLogicalNodes, std::vector<size_t>(numLogicalNodes, 0));
+  firstStepInput.n = numTaskGroups;
+  firstStepInput.edges.resize(numTaskGroups);
+  firstStepInput.dataDependencyOverlapInBytes.resize(numTaskGroups, std::vector<size_t>(numTaskGroups, 0));
 
   // Copy edges
-  for (int i = 0; i < numLogicalNodes; i++) {
+  for (int i = 0; i < numTaskGroups; i++) {
     firstStepInput.edges[i] = optimizationInput.edges[i];
   }
 
   // Calculate data dependency overlaps
-  for (int i = 0; i < numLogicalNodes; i++) {
+  for (int i = 0; i < numTaskGroups; i++) {
     const auto &u = optimizationInput.nodes[i];
     std::set<void *> uTotalDataDependency;
     std::set_union(
@@ -38,7 +39,7 @@ FirstStepSolver::Input convertToFirstStepInput(OptimizationInput &optimizationIn
       std::inserter(uTotalDataDependency, uTotalDataDependency.begin())
     );
 
-    for (int j = i + 1; j < numLogicalNodes; j++) {
+    for (int j = i + 1; j < numTaskGroups; j++) {
       const auto &v = optimizationInput.nodes[j];
 
       std::set<void *> vTotalDataDependency;
@@ -79,21 +80,21 @@ SecondStepSolver::Input convertToSecondStepInput(OptimizationInput &optimization
   secondStepInput.offloadingBandwidth = ConfigurationManager::getConfig().prefetchingBandwidthInGB * 1e9;
   secondStepInput.originalTotalRunningTime = optimizationInput.originalTotalRunningTime;
 
-  secondStepInput.nodeDurations.resize(optimizationInput.nodes.size());
-  secondStepInput.nodeInputArrays.resize(optimizationInput.nodes.size());
-  secondStepInput.nodeOutputArrays.resize(optimizationInput.nodes.size());
+  secondStepInput.taskGroupRunningTimes.resize(optimizationInput.nodes.size());
+  secondStepInput.taskGroupInputArrays.resize(optimizationInput.nodes.size());
+  secondStepInput.taskGroupOutputArrays.resize(optimizationInput.nodes.size());
 
   for (int i = 0; i < optimizationInput.nodes.size(); i++) {
-    // Second step assumes logical nodes are sorted in execution order.
-    auto &node = optimizationInput.nodes[firstStepOutput.nodeExecutionOrder[i]];
+    // Second step assumes task groups are sorted in execution order.
+    auto &node = optimizationInput.nodes[firstStepOutput.taskGroupExecutionOrder[i]];
 
-    secondStepInput.nodeDurations[i] = node.duration;
+    secondStepInput.taskGroupRunningTimes[i] = node.runningTime;
 
     for (auto arrayAddress : node.dataDependency.inputs) {
-      secondStepInput.nodeInputArrays[i].insert(MemoryManager::managedMemoryAddressToIndexMap[arrayAddress]);
+      secondStepInput.taskGroupInputArrays[i].insert(MemoryManager::managedMemoryAddressToIndexMap[arrayAddress]);
     }
     for (auto arrayAddress : node.dataDependency.outputs) {
-      secondStepInput.nodeOutputArrays[i].insert(MemoryManager::managedMemoryAddressToIndexMap[arrayAddress]);
+      secondStepInput.taskGroupOutputArrays[i].insert(MemoryManager::managedMemoryAddressToIndexMap[arrayAddress]);
     }
   }
 
@@ -112,12 +113,12 @@ SecondStepSolver::Input convertToSecondStepInput(OptimizationInput &optimization
   return secondStepInput;
 }
 
-CustomGraph convertToCustomGraph(
+OptimizationOutput convertToCustomGraph(
   OptimizationInput &optimizationInput,
   FirstStepSolver::Output &firstStepOutput,
   SecondStepSolver::Output &secondStepOutput
 ) {
-  CustomGraph optimizedGraph;
+  OptimizationOutput optimizedGraph;
 
   if (!secondStepOutput.optimal) {
     optimizedGraph.optimal = false;
@@ -125,7 +126,6 @@ CustomGraph convertToCustomGraph(
   }
 
   optimizedGraph.optimal = true;
-  optimizedGraph.originalGraph = optimizationInput.originalGraph;
 
   // Add arrays that should be on device initially
   for (auto index : secondStepOutput.indicesOfArraysInitiallyOnDevice) {
@@ -136,50 +136,50 @@ CustomGraph convertToCustomGraph(
     ));
   }
 
-  // Add logical nodes
-  std::vector<CustomGraph::NodeId> logicalNodeStarts, logicalNodeBodies, logicalNodeEnds;
+  // Add task groups
+  std::vector<int> taskGroupStartNodes, taskGroupBodyNodes, taskGroupEndNodes;
   for (int i = 0; i < optimizationInput.nodes.size(); i++) {
-    logicalNodeStarts.push_back(optimizedGraph.addEmptyNode());
-    logicalNodeBodies.push_back(optimizedGraph.addEmptyNode());
-    logicalNodeEnds.push_back(optimizedGraph.addEmptyNode());
+    taskGroupStartNodes.push_back(optimizedGraph.addEmptyNode());
+    taskGroupBodyNodes.push_back(optimizedGraph.addEmptyNode());
+    taskGroupEndNodes.push_back(optimizedGraph.addEmptyNode());
   }
 
-  // Add edges between logical ndoes
-  for (int i = 1; i < firstStepOutput.nodeExecutionOrder.size(); i++) {
-    const auto previousNodeIndex = firstStepOutput.nodeExecutionOrder[i - 1];
-    const auto currentNodeIndex = firstStepOutput.nodeExecutionOrder[i];
+  // Add edges between task groups
+  for (int i = 1; i < firstStepOutput.taskGroupExecutionOrder.size(); i++) {
+    const auto previousTaskGroupId = firstStepOutput.taskGroupExecutionOrder[i - 1];
+    const auto currentTaskGroupId = firstStepOutput.taskGroupExecutionOrder[i];
     optimizedGraph.addEdge(
-      logicalNodeEnds[previousNodeIndex],
-      logicalNodeStarts[currentNodeIndex]
+      taskGroupEndNodes[previousTaskGroupId],
+      taskGroupStartNodes[currentTaskGroupId]
     );
   }
 
-  // Add nodes and edges inside logical nodes
+  // Add nodes and edges inside task groups
   for (int i = 0; i < optimizationInput.nodes.size(); i++) {
-    auto &logicalNode = optimizationInput.nodes[i];
+    auto &taskGroup = optimizationInput.nodes[i];
 
-    std::map<cudaGraphNode_t, CustomGraph::NodeId> cudaGraphNodeToCustomGraphNodeIdMap;
-    std::map<cudaGraphNode_t, bool> cudaGraphNodeHasIncomingEdgeMap;
-    for (auto u : logicalNode.nodes) {
-      cudaGraphNodeToCustomGraphNodeIdMap[u] = optimizedGraph.addKernelNode(u);
+    std::map<TaskId, int> taskIdToOutputNodeIdMap;
+    std::map<TaskId, bool> taskHasIncomingEdgeMap;
+    for (auto u : taskGroup.nodes) {
+      taskIdToOutputNodeIdMap[u] = optimizedGraph.addTaskNode(u);
     }
 
-    for (const auto &[u, destinations] : logicalNode.edges) {
+    for (const auto &[u, destinations] : taskGroup.edges) {
       for (auto v : destinations) {
-        optimizedGraph.addEdge(cudaGraphNodeToCustomGraphNodeIdMap[u], cudaGraphNodeToCustomGraphNodeIdMap[v]);
-        cudaGraphNodeHasIncomingEdgeMap[v] = true;
+        optimizedGraph.addEdge(taskIdToOutputNodeIdMap[u], taskIdToOutputNodeIdMap[v]);
+        taskHasIncomingEdgeMap[v] = true;
       }
     }
 
-    optimizedGraph.addEdge(logicalNodeStarts[i], logicalNodeBodies[i]);
+    optimizedGraph.addEdge(taskGroupStartNodes[i], taskGroupBodyNodes[i]);
 
-    for (auto u : logicalNode.nodes) {
-      if (!cudaGraphNodeHasIncomingEdgeMap[u]) {
-        optimizedGraph.addEdge(logicalNodeBodies[i], cudaGraphNodeToCustomGraphNodeIdMap[u]);
+    for (auto u : taskGroup.nodes) {
+      if (!taskHasIncomingEdgeMap[u]) {
+        optimizedGraph.addEdge(taskGroupBodyNodes[i], taskIdToOutputNodeIdMap[u]);
       }
 
-      if (logicalNode.edges[u].size() == 0) {
-        optimizedGraph.addEdge(cudaGraphNodeToCustomGraphNodeIdMap[u], logicalNodeEnds[i]);
+      if (taskGroup.edges[u].size() == 0) {
+        optimizedGraph.addEdge(taskIdToOutputNodeIdMap[u], taskGroupEndNodes[i]);
       }
     }
   }
@@ -190,25 +190,25 @@ CustomGraph convertToCustomGraph(
     size_t arraySize = MemoryManager::managedMemoryAddressToSizeMap[arrayAddress];
 
     int endingNodeIndex = startingNodeIndex;
-    while (endingNodeIndex < firstStepOutput.nodeExecutionOrder.size()) {
-      auto &logicalNode = optimizationInput.nodes[firstStepOutput.nodeExecutionOrder[endingNodeIndex]];
-      if (logicalNode.dataDependency.inputs.count(arrayAddress) > 0 || logicalNode.dataDependency.outputs.count(arrayAddress) > 0) {
+    while (endingNodeIndex < firstStepOutput.taskGroupExecutionOrder.size()) {
+      auto &taskGroup = optimizationInput.nodes[firstStepOutput.taskGroupExecutionOrder[endingNodeIndex]];
+      if (taskGroup.dataDependency.inputs.count(arrayAddress) > 0 || taskGroup.dataDependency.outputs.count(arrayAddress) > 0) {
         break;
       }
       endingNodeIndex++;
     }
 
     // Ignore unnecessary prefetch, which has no dependent kernels after it.
-    if (endingNodeIndex == firstStepOutput.nodeExecutionOrder.size()) {
+    if (endingNodeIndex == firstStepOutput.taskGroupExecutionOrder.size()) {
       continue;
     }
 
     optimizedGraph.addDataMovementNode(
-      CustomGraph::DataMovement::Direction::hostToDevice,
+      OptimizationOutput::DataMovement::Direction::hostToDevice,
       arrayAddress,
       arraySize,
-      logicalNodeStarts[firstStepOutput.nodeExecutionOrder[startingNodeIndex]],
-      logicalNodeBodies[firstStepOutput.nodeExecutionOrder[endingNodeIndex]]
+      taskGroupStartNodes[firstStepOutput.taskGroupExecutionOrder[startingNodeIndex]],
+      taskGroupBodyNodes[firstStepOutput.taskGroupExecutionOrder[endingNodeIndex]]
     );
   }
 
@@ -218,18 +218,18 @@ CustomGraph convertToCustomGraph(
     size_t arraySize = MemoryManager::managedMemoryAddressToSizeMap[arrayAddress];
 
     optimizedGraph.addDataMovementNode(
-      CustomGraph::DataMovement::Direction::deviceToHost,
+      OptimizationOutput::DataMovement::Direction::deviceToHost,
       arrayAddress,
       arraySize,
-      logicalNodeEnds[firstStepOutput.nodeExecutionOrder[startingNodeIndex]],
-      logicalNodeStarts[firstStepOutput.nodeExecutionOrder[endingNodeIndex]]
+      taskGroupEndNodes[firstStepOutput.taskGroupExecutionOrder[startingNodeIndex]],
+      taskGroupStartNodes[firstStepOutput.taskGroupExecutionOrder[endingNodeIndex]]
     );
   }
 
   return optimizedGraph;
 }
 
-CustomGraph TwoStepOptimizationStrategy::run(OptimizationInput &input) {
+OptimizationOutput TwoStepOptimizationStrategy::run(OptimizationInput &input) {
   LOG_TRACE();
 
   printOptimizationInput(input);
