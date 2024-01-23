@@ -395,11 +395,13 @@ void tiledCholesky(bool optimize, bool verify) {
   clock.start();
 
   // Initialize data
+  clock.logWithCurrentTime("Initialzing host data");
   auto h_originalMatrix = std::make_unique<double[]>(N * N);  // Column-major
   initializeHostData(h_originalMatrix.get());
   clock.logWithCurrentTime("Host data initialized");
 
   // Initialize device data
+  clock.logWithCurrentTime("Initialzing device data");
   double *d_matrix;
   checkCudaErrors(cudaMallocManaged(&d_matrix, N * N * sizeof(double)));
   initializeDeviceData(h_originalMatrix.get(), d_matrix);
