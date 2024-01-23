@@ -18,6 +18,9 @@ struct Configuration {
   double prefetchingBandwidthInGB = 281.0;
   double acceptableRunningTimeFactor = 10.0;
 
+  // Execution
+  bool useNvlink = false;
+
   // Tiled Cholesky
   int tiledCholeskyN = 256;
   int tiledCholeskyT = 4;
@@ -30,6 +33,7 @@ struct Configuration {
     mergeConcurrentCudaGraphNodes,
     prefetchingBandwidthInGB,
     acceptableRunningTimeFactor,
+    useNvlink,
     tiledCholeskyN,
     tiledCholeskyT
   );

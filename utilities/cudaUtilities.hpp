@@ -19,6 +19,10 @@ void warmUpCudaDevice();
 
 void initializeCudaDevice(bool displayDeviceInfo = false);
 
+void enablePeerAccessForNvlink(int deviceA, int deviceB);
+
+void disablePeerAccessForNvlink(int deviceA, int deviceB);
+
 class CudaEventClock {
  public:
   CudaEventClock();

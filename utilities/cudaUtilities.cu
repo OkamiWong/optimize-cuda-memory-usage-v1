@@ -1,3 +1,5 @@
+#include <cassert>
+
 #include "cudaUtilities.hpp"
 
 __global__ void warmUp() {
@@ -23,6 +25,37 @@ void initializeCudaDevice(bool displayDeviceInfo) {
   }
 
   warmUpCudaDevice();
+}
+
+void enablePeerAccessForNvlink(int deviceA, int deviceB) {
+  int currentDevice;
+  checkCudaErrors(cudaGetDevice(&currentDevice));
+
+  int canAccessPeerAToB, canAccessPeerBToA;
+  checkCudaErrors(cudaDeviceCanAccessPeer(&canAccessPeerAToB, deviceA, deviceB));
+  checkCudaErrors(cudaDeviceCanAccessPeer(&canAccessPeerBToA, deviceB, deviceA));
+
+  assert(canAccessPeerAToB);
+  assert(canAccessPeerBToA);
+
+  checkCudaErrors(cudaSetDevice(deviceA));
+  checkCudaErrors(cudaDeviceEnablePeerAccess(deviceB, 0));
+  checkCudaErrors(cudaSetDevice(deviceB));
+  checkCudaErrors(cudaDeviceEnablePeerAccess(deviceA, 0));
+
+  checkCudaErrors(cudaSetDevice(currentDevice));
+}
+
+void disablePeerAccessForNvlink(int deviceA, int deviceB) {
+  int currentDevice;
+  checkCudaErrors(cudaGetDevice(&currentDevice));
+
+  checkCudaErrors(cudaSetDevice(deviceA));
+  checkCudaErrors(cudaDeviceDisablePeerAccess(deviceB));
+  checkCudaErrors(cudaSetDevice(deviceB));
+  checkCudaErrors(cudaDeviceDisablePeerAccess(deviceA));
+
+  checkCudaErrors(cudaSetDevice(currentDevice));
 }
 
 CudaEventClock::CudaEventClock() {

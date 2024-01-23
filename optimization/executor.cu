@@ -3,6 +3,8 @@
 #include <queue>
 
 #include "../profiling/memoryManager.hpp"
+#include "../utilities/configurationManager.hpp"
+#include "../utilities/constants.hpp"
 #include "../utilities/cudaUtilities.hpp"
 #include "../utilities/logger.hpp"
 #include "executor.hpp"
@@ -99,9 +101,21 @@ float Executor::executeOptimizedGraph(OptimizationOutput &optimizedGraph, Execut
     }
   }
 
+  int storageDeviceId = ConfigurationManager::getConfig().useNvlink ? Constants::STORAGE_DEVICE_ID : cudaCpuDeviceId;
+  cudaMemcpyKind prefetchMemcpyKind = ConfigurationManager::getConfig().useNvlink ? cudaMemcpyDeviceToDevice : cudaMemcpyHostToDevice;
+  cudaMemcpyKind offloadMemcpyKind = ConfigurationManager::getConfig().useNvlink ? cudaMemcpyDeviceToDevice : cudaMemcpyDeviceToHost;
+
+  if (ConfigurationManager::getConfig().useNvlink) {
+    enablePeerAccessForNvlink(Constants::DEVICE_ID, Constants::STORAGE_DEVICE_ID);
+  }
+
   LOG_TRACE_WITH_INFO("Initialize managed data distribution");
   for (auto ptr : MemoryManager::managedMemoryAddresses) {
-    checkCudaErrors(cudaMemPrefetchAsync(ptr, MemoryManager::managedMemoryAddressToSizeMap[ptr], cudaCpuDeviceId));
+    checkCudaErrors(cudaMemPrefetchAsync(
+      ptr,
+      MemoryManager::managedMemoryAddressToSizeMap[ptr],
+      storageDeviceId
+    ));
   }
   checkCudaErrors(cudaDeviceSynchronize());
 
@@ -111,10 +125,12 @@ float Executor::executeOptimizedGraph(OptimizationOutput &optimizedGraph, Execut
   LOG_TRACE_WITH_INFO("Record nodes to a new CUDA Graph");
 
   checkCudaErrors(cudaStreamBeginCapture(stream, cudaStreamCaptureModeGlobal));
-  for (const auto &[ptr, size] : optimizedGraph.arraysInitiallyAllocatedOnDevice) {
+  for (auto ptr : optimizedGraph.arraysInitiallyAllocatedOnDevice) {
+    auto size = MemoryManager::managedMemoryAddressToSizeMap[ptr];
+
     void *devicePtr;
     checkCudaErrors(cudaMallocAsync(&devicePtr, size, stream));
-    checkCudaErrors(cudaMemcpyAsync(devicePtr, ptr, size, cudaMemcpyHostToDevice, stream));
+    checkCudaErrors(cudaMemcpyAsync(devicePtr, ptr, size, prefetchMemcpyKind, stream));
     addressUpdate[ptr] = devicePtr;
   }
   cudaGraph_t graphForInitialDataDistribution;
@@ -140,11 +156,11 @@ float Executor::executeOptimizedGraph(OptimizationOutput &optimizedGraph, Execut
       if (dataMovement.direction == OptimizationOutput::DataMovement::Direction::hostToDevice) {
         void *devicePtr;
         checkCudaErrors(cudaMallocAsync(&devicePtr, dataMovementSize, stream));
-        checkCudaErrors(cudaMemcpyAsync(devicePtr, dataMovement.address, dataMovementSize, cudaMemcpyHostToDevice, stream));
+        checkCudaErrors(cudaMemcpyAsync(devicePtr, dataMovement.address, dataMovementSize, prefetchMemcpyKind, stream));
         addressUpdate[dataMovement.address] = devicePtr;
       } else {
         void *devicePtr = addressUpdate[dataMovement.address];
-        checkCudaErrors(cudaMemcpyAsync(dataMovement.address, devicePtr, dataMovementSize, cudaMemcpyDeviceToHost, stream));
+        checkCudaErrors(cudaMemcpyAsync(dataMovement.address, devicePtr, dataMovementSize, offloadMemcpyKind, stream));
         checkCudaErrors(cudaFreeAsync(devicePtr, stream));
         addressUpdate.erase(dataMovement.address);
       }
@@ -194,7 +210,7 @@ float Executor::executeOptimizedGraph(OptimizationOutput &optimizedGraph, Execut
 
   LOG_TRACE_WITH_INFO("Clean up");
   for (auto &[oldAddr, newAddr] : addressUpdate) {
-    checkCudaErrors(cudaMemcpy(oldAddr, newAddr, MemoryManager::managedMemoryAddressToSizeMap[oldAddr], cudaMemcpyDeviceToHost));
+    checkCudaErrors(cudaMemcpy(oldAddr, newAddr, MemoryManager::managedMemoryAddressToSizeMap[oldAddr], offloadMemcpyKind));
     checkCudaErrors(cudaFree(newAddr));
   }
   checkCudaErrors(cudaDeviceSynchronize());
@@ -204,6 +220,10 @@ float Executor::executeOptimizedGraph(OptimizationOutput &optimizedGraph, Execut
   checkCudaErrors(cudaGraphDestroy(graphForInitialDataDistribution));
   checkCudaErrors(cudaGraphDestroy(graph));
   checkCudaErrors(cudaStreamDestroy(stream));
+
+  if (ConfigurationManager::getConfig().useNvlink) {
+    disablePeerAccessForNvlink(Constants::DEVICE_ID, Constants::STORAGE_DEVICE_ID);
+  }
 
   return cudaEventClock.getTimeInSeconds();
 }

@@ -394,6 +394,8 @@ void tiledCholesky(bool optimize, bool verify) {
   SystemWallClock clock;
   clock.start();
 
+  initializeCudaDevice();
+
   // Initialize data
   clock.logWithCurrentTime("Initialzing host data");
   auto h_originalMatrix = std::make_unique<double[]>(N * N);  // Column-major

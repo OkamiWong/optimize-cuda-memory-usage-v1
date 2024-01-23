@@ -130,10 +130,7 @@ OptimizationOutput convertToCustomGraph(
   // Add arrays that should be on device initially
   for (auto index : secondStepOutput.indicesOfArraysInitiallyOnDevice) {
     auto addr = MemoryManager::managedMemoryAddresses[index];
-    optimizedGraph.arraysInitiallyAllocatedOnDevice.push_back(std::make_pair(
-      addr,
-      MemoryManager::managedMemoryAddressToSizeMap[addr]
-    ));
+    optimizedGraph.arraysInitiallyAllocatedOnDevice.push_back(addr);
   }
 
   // Add task groups

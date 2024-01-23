@@ -13,8 +13,8 @@ OptimizationOutput NoOptimizationStrategy::run(OptimizationInput &input) {
   output.optimal = true;
 
   // All managed data initially on device
-  for (const auto &[ptr, size] : MemoryManager::managedMemoryAddressToSizeMap) {
-    output.arraysInitiallyAllocatedOnDevice.push_back({ptr, size});
+  for (auto ptr : MemoryManager::managedMemoryAddresses) {
+    output.arraysInitiallyAllocatedOnDevice.push_back(ptr);
   }
 
   // Add task groups

@@ -30,7 +30,7 @@ struct OptimizationOutput {
   std::map<int, TaskId> nodeIdToTaskIdMap;
   std::map<int, DataMovement> nodeIdToDataMovementMap;
 
-  std::vector<std::pair<void*, size_t>> arraysInitiallyAllocatedOnDevice;
+  std::vector<void*> arraysInitiallyAllocatedOnDevice;
 
   int addEmptyNode() {
     auto u = this->nodes.size();
