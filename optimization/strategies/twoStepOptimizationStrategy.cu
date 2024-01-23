@@ -242,5 +242,9 @@ OptimizationOutput TwoStepOptimizationStrategy::run(OptimizationInput &input) {
   SecondStepSolver secondStepSolver;
   auto secondStepOutput = secondStepSolver.solve(std::move(secondStepInput));
 
-  return convertToCustomGraph(input, firstStepOutput, secondStepOutput);
+  auto output = convertToCustomGraph(input, firstStepOutput, secondStepOutput);
+
+  printOptimizationOutput(output);
+
+  return output;
 }

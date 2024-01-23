@@ -131,7 +131,7 @@ struct IntegerProgrammingSolver {
   }
 
   void initialize() {
-    solver = std::unique_ptr<MPSolver>(MPSolver::CreateSolver("CLP"));
+    solver = std::unique_ptr<MPSolver>(MPSolver::CreateSolver("SCIP"));
 
     if (!solver) {
       fmt::print("Solver not available\n");
@@ -585,7 +585,7 @@ struct IntegerProgrammingSolver {
     );
     objective->SetMinimization();
 
-    solver->set_time_limit(1000 * 30);
+    solver->set_time_limit(1000 * 60 * 5);
 
     MPSolverParameters solverParam;
     solverParam.SetIntegerParam(

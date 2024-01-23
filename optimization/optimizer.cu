@@ -324,7 +324,7 @@ OptimizationOutput Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
 
   auto optimizationInput = constructOptimizationInput(originalGraph, nodes, edges, timeline, disjointSet, nodeToAnnotationMap);
 
-  auto optimizedGraph = this->optimize<NoOptimizationStrategy>(optimizationInput);
+  auto optimizedGraph = this->optimize<TwoStepOptimizationStrategy>(optimizationInput);
 
   if (optimizedGraph.optimal) {
     return optimizedGraph;

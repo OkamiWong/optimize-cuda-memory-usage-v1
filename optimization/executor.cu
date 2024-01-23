@@ -110,22 +110,20 @@ float Executor::executeOptimizedGraph(OptimizationOutput &optimizedGraph, Execut
 
   LOG_TRACE_WITH_INFO("Record nodes to a new CUDA Graph");
 
-  optimizedCudaGraphCreator->beginCaptureOperation(std::vector<cudaGraphNode_t>());
+  checkCudaErrors(cudaStreamBeginCapture(stream, cudaStreamCaptureModeGlobal));
   for (const auto &[ptr, size] : optimizedGraph.arraysInitiallyAllocatedOnDevice) {
     void *devicePtr;
     checkCudaErrors(cudaMallocAsync(&devicePtr, size, stream));
     checkCudaErrors(cudaMemcpyAsync(devicePtr, ptr, size, cudaMemcpyHostToDevice, stream));
     addressUpdate[ptr] = devicePtr;
   }
-  auto initialMemOperationLeafNodes = optimizedCudaGraphCreator->endCaptureOperation();
+  cudaGraph_t graphForInitialDataDistribution;
+  checkCudaErrors(cudaStreamEndCapture(stream, &graphForInitialDataDistribution));
 
-  for (auto u : rootNodes) {
-    nodeToDependentNodesMap[u].insert(
-      nodeToDependentNodesMap[u].begin(),
-      initialMemOperationLeafNodes.begin(),
-      initialMemOperationLeafNodes.end()
-    );
-  }
+  cudaGraphExec_t graphExecForInitialDataDistribution;
+  checkCudaErrors(cudaGraphInstantiate(&graphExecForInitialDataDistribution, graphForInitialDataDistribution, nullptr, nullptr, 0));
+  checkCudaErrors(cudaGraphLaunch(graphExecForInitialDataDistribution, stream));
+  checkCudaErrors(cudaDeviceSynchronize());
 
   // Kahn Algorithm
   while (!nodesToExecute.empty()) {
@@ -200,7 +198,9 @@ float Executor::executeOptimizedGraph(OptimizationOutput &optimizedGraph, Execut
   }
   checkCudaErrors(cudaDeviceSynchronize());
 
+  checkCudaErrors(cudaGraphExecDestroy(graphExecForInitialDataDistribution));
   checkCudaErrors(cudaGraphExecDestroy(graphExec));
+  checkCudaErrors(cudaGraphDestroy(graphForInitialDataDistribution));
   checkCudaErrors(cudaGraphDestroy(graph));
   checkCudaErrors(cudaStreamDestroy(stream));
 
