@@ -206,7 +206,6 @@ OptimizationOutput convertToCustomGraph(
     optimizedGraph.addDataMovementNode(
       OptimizationOutput::DataMovement::Direction::hostToDevice,
       arrayAddress,
-      arraySize,
       taskGroupStartNodes[firstStepOutput.taskGroupExecutionOrder[startingNodeIndex]],
       taskGroupBodyNodes[firstStepOutput.taskGroupExecutionOrder[endingNodeIndex]]
     );
@@ -220,7 +219,6 @@ OptimizationOutput convertToCustomGraph(
     optimizedGraph.addDataMovementNode(
       OptimizationOutput::DataMovement::Direction::deviceToHost,
       arrayAddress,
-      arraySize,
       taskGroupEndNodes[firstStepOutput.taskGroupExecutionOrder[startingNodeIndex]],
       taskGroupStartNodes[firstStepOutput.taskGroupExecutionOrder[endingNodeIndex]]
     );

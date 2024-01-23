@@ -136,14 +136,15 @@ float Executor::executeOptimizedGraph(OptimizationOutput &optimizedGraph, Execut
     if (nodeType == OptimizationOutput::NodeType::dataMovement) {
       optimizedCudaGraphCreator->beginCaptureOperation(nodeToDependentNodesMap[u]);
       auto &dataMovement = optimizedGraph.nodeIdToDataMovementMap[u];
+      auto dataMovementSize = MemoryManager::managedMemoryAddressToSizeMap[dataMovement.address];
       if (dataMovement.direction == OptimizationOutput::DataMovement::Direction::hostToDevice) {
         void *devicePtr;
-        checkCudaErrors(cudaMallocAsync(&devicePtr, dataMovement.size, stream));
-        checkCudaErrors(cudaMemcpyAsync(devicePtr, dataMovement.address, dataMovement.size, cudaMemcpyHostToDevice, stream));
+        checkCudaErrors(cudaMallocAsync(&devicePtr, dataMovementSize, stream));
+        checkCudaErrors(cudaMemcpyAsync(devicePtr, dataMovement.address, dataMovementSize, cudaMemcpyHostToDevice, stream));
         addressUpdate[dataMovement.address] = devicePtr;
       } else {
         void *devicePtr = addressUpdate[dataMovement.address];
-        checkCudaErrors(cudaMemcpyAsync(dataMovement.address, devicePtr, dataMovement.size, cudaMemcpyDeviceToHost, stream));
+        checkCudaErrors(cudaMemcpyAsync(dataMovement.address, devicePtr, dataMovementSize, cudaMemcpyDeviceToHost, stream));
         checkCudaErrors(cudaFreeAsync(devicePtr, stream));
         addressUpdate.erase(dataMovement.address);
       }

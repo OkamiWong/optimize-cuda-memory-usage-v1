@@ -20,7 +20,6 @@ struct OptimizationOutput {
     };
     Direction direction;
     void* address;
-    size_t size;
   };
 
   bool optimal;
@@ -54,11 +53,10 @@ struct OptimizationOutput {
     return u;
   }
 
-  int addDataMovementNode(DataMovement::Direction direction, void* address, size_t size, int start, int end) {
+  int addDataMovementNode(DataMovement::Direction direction, void* address, int start, int end) {
     DataMovement dataMovement;
     dataMovement.direction = direction;
     dataMovement.address = address;
-    dataMovement.size = size;
 
     auto u = this->addDataMovementNode(dataMovement);
     this->addEdge(start, u);
