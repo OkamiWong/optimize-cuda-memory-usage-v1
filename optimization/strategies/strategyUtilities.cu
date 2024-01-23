@@ -44,3 +44,47 @@ void printOptimizationInput(OptimizationInput &input) {
 
   fclose(fp);
 }
+
+inline std::string getNodeName(OptimizationOutput &output, int u) {
+  return fmt::format("node_{}", u);
+}
+
+void printNodes(FILE *fp, OptimizationOutput &output) {
+  for (auto u : output.nodes) {
+    std::string nodeDescription;
+    if (output.nodeIdToNodeTypeMap[u] == OptimizationOutput::NodeType::dataMovement) {
+      nodeDescription = "type=dataMovement";
+    } else if (output.nodeIdToNodeTypeMap[u] == OptimizationOutput::NodeType::task) {
+      nodeDescription = fmt::format("type=task, taskId={}", output.nodeIdToTaskIdMap[u]);
+    } else if (output.nodeIdToNodeTypeMap[u] == OptimizationOutput::NodeType::empty) {
+      nodeDescription = "type=empty";
+    } else {
+      nodeDescription = "type=UNKNOWN";
+    }
+
+    fmt::print(fp, "{} [label=\"{} {}\"]\n", getNodeName(output, u), getNodeName(output, u), nodeDescription);
+  }
+}
+
+void printEdges(FILE *fp, OptimizationOutput &output) {
+  for (const auto &[u, destinations] : output.edges) {
+    for (auto v : destinations) {
+      fmt::print(fp, "{} -> {}\n", getNodeName(output, u), getNodeName(output, v));
+    }
+  }
+}
+
+void printOptimizationOutput(OptimizationOutput &output) {
+  LOG_TRACE_WITH_INFO("Printing OptimizationOutput to optimizationOutput.dot");
+
+  auto fp = fopen("optimizationOutput.dot", "w");
+
+  fmt::print(fp, "digraph G {{\n");
+
+  printNodes(fp, output);
+  printEdges(fp, output);
+
+  fmt::print(fp, "}}\n");
+
+  fclose(fp);
+}
