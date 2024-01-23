@@ -588,20 +588,23 @@ void tiledCholesky(bool optimize, bool verify) {
   clock.logWithCurrentTime("Graph printed");
 
   if (optimize) {
+    initializeDeviceData(h_originalMatrix.get(), d_matrix);
     auto optimizedGraph = profileAndOptimize(graph);
 
-    initializeDeviceData(h_originalMatrix.get(), d_matrix);
+    for (int i = 0; i < ConfigurationManager::getConfig().repeat; i++) {
+      initializeDeviceData(h_originalMatrix.get(), d_matrix);
 
-    float runningTime = executeOptimizedGraph(
-      optimizedGraph,
-      [&](int taskId, std::map<void *, void *> addressUpdate, cudaStream_t stream) {
-        tiledCholeskyTaskManager->executeRandomTask(getMatrixBlock, taskId, addressUpdate, stream);
-      }
-    );
+      float runningTime = executeOptimizedGraph(
+        optimizedGraph,
+        [&](int taskId, std::map<void *, void *> addressUpdate, cudaStream_t stream) {
+          tiledCholeskyTaskManager->executeRandomTask(getMatrixBlock, taskId, addressUpdate, stream);
+        }
+      );
 
-    checkCudaErrors(cudaDeviceSynchronize());
+      checkCudaErrors(cudaDeviceSynchronize());
 
-    fmt::print("Total time used (s): {}\n", runningTime);
+      fmt::print("Total time used (s): {}\n", runningTime);
+    }
   } else {
     CudaEventClock cudaEventClock;
     cudaGraphExec_t graphExec;
@@ -609,15 +612,17 @@ void tiledCholesky(bool optimize, bool verify) {
 
     clock.logWithCurrentTime("Graph instantiated, start execution");
 
-    cudaEventClock.start();
-    checkCudaErrors(cudaGraphLaunch(graphExec, s));
-    cudaEventClock.end();
+    for (int i = 0; i < ConfigurationManager::getConfig().repeat; i++) {
+      initializeDeviceData(h_originalMatrix.get(), d_matrix);
 
-    clock.logWithCurrentTime("Graph launched, waiting for synchronization");
+      cudaEventClock.start();
+      checkCudaErrors(cudaGraphLaunch(graphExec, s));
+      cudaEventClock.end();
 
-    checkCudaErrors(cudaDeviceSynchronize());
+      checkCudaErrors(cudaDeviceSynchronize());
 
-    fmt::print("Total time used (s): {}\n", cudaEventClock.getTimeInSeconds());
+      fmt::print("Total time used (s): {}\n", cudaEventClock.getTimeInSeconds());
+    }
   }
 
   clock.logWithCurrentTime("Synchronization done");

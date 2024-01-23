@@ -11,6 +11,7 @@ struct Configuration {
   // Generic
   bool optimize = false;
   bool verify = false;
+  int repeat = 1;
 
   // Optimization
   bool mergeConcurrentCudaGraphNodes = true;
@@ -25,6 +26,7 @@ struct Configuration {
     Configuration,
     optimize,
     verify,
+    repeat,
     mergeConcurrentCudaGraphNodes,
     prefetchingBandwidthInGB,
     acceptableRunningTimeFactor,
