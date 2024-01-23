@@ -11,6 +11,7 @@
 #include "../../utilities/configurationManager.hpp"
 #include "../../utilities/constants.hpp"
 #include "../../utilities/logger.hpp"
+#include "../../utilities/utilities.hpp"
 
 using namespace operations_research;
 
@@ -593,7 +594,13 @@ struct IntegerProgrammingSolver {
       MPSolverParameters::LpAlgorithmValues::PRIMAL
     );
 
+    SystemWallClock clock;
+
+    clock.start();
     auto resultStatus = solver->Solve(solverParam);
+    clock.end();
+
+    LOG_TRACE_WITH_INFO("Time for solving the MIP problem (seconds): %.2f", clock.getTimeInSeconds());
 
     SecondStepSolver::Output output;
 

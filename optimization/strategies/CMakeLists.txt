@@ -24,6 +24,7 @@ target_link_libraries(
 add_library(secondStepSolver SHARED secondStepSolver.cpp)
 target_link_libraries(
   secondStepSolver
+  utilities
   logger
   fmt::fmt
   ortools::ortools
