@@ -586,7 +586,7 @@ struct IntegerProgrammingSolver {
     );
     objective->SetMinimization();
 
-    solver->set_time_limit(1000 * 60 * 5);
+    solver->set_time_limit(1000 * 60 * 10);
 
     MPSolverParameters solverParam;
     solverParam.SetIntegerParam(
