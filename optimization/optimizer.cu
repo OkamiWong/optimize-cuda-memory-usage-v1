@@ -221,7 +221,9 @@ OptimizationInput constructOptimizationInput(
     for (auto v : destinations) {
       auto vTaskId = getTaskId(nodeToAnnotationMap[v]);
       auto vTaskGroupId = getTaskGroupId(v);
-      if (uTaskGroupId == vTaskGroupId) {
+      if (uTaskId == vTaskId) {
+        continue;
+      } else if (uTaskGroupId == vTaskGroupId) {
         optimizationInput.nodes[uTaskGroupId].edges[uTaskId].push_back(vTaskId);
       } else {
         // Edges between task groups need deduping
@@ -322,7 +324,7 @@ OptimizationOutput Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
 
   auto optimizationInput = constructOptimizationInput(originalGraph, nodes, edges, timeline, disjointSet, nodeToAnnotationMap);
 
-  auto optimizedGraph = this->optimize<TwoStepOptimizationStrategy>(optimizationInput);
+  auto optimizedGraph = this->optimize<NoOptimizationStrategy>(optimizationInput);
 
   if (optimizedGraph.optimal) {
     return optimizedGraph;

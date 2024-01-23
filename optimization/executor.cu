@@ -116,7 +116,6 @@ float Executor::executeOptimizedGraph(OptimizationOutput &optimizedGraph, Execut
     checkCudaErrors(cudaMallocAsync(&devicePtr, size, stream));
     checkCudaErrors(cudaMemcpyAsync(devicePtr, ptr, size, cudaMemcpyHostToDevice, stream));
     addressUpdate[ptr] = devicePtr;
-    printf("prefetch: %p %p\n", ptr, devicePtr);
   }
   auto initialMemOperationLeafNodes = optimizedCudaGraphCreator->endCaptureOperation();
 
@@ -144,10 +143,8 @@ float Executor::executeOptimizedGraph(OptimizationOutput &optimizedGraph, Execut
         checkCudaErrors(cudaMallocAsync(&devicePtr, dataMovement.size, stream));
         checkCudaErrors(cudaMemcpyAsync(devicePtr, dataMovement.address, dataMovement.size, cudaMemcpyHostToDevice, stream));
         addressUpdate[dataMovement.address] = devicePtr;
-        printf("prefetch: %p %p\n", dataMovement.address, devicePtr);
       } else {
         void *devicePtr = addressUpdate[dataMovement.address];
-        printf("offload: %p %p\n", dataMovement.address, devicePtr);
         checkCudaErrors(cudaMemcpyAsync(dataMovement.address, devicePtr, dataMovement.size, cudaMemcpyDeviceToHost, stream));
         checkCudaErrors(cudaFreeAsync(devicePtr, stream));
         addressUpdate.erase(dataMovement.address);
@@ -183,6 +180,9 @@ float Executor::executeOptimizedGraph(OptimizationOutput &optimizedGraph, Execut
       }
     }
   }
+
+  LOG_TRACE_WITH_INFO("Printing the new CUDA Graph to newGraph.dot");
+  checkCudaErrors(cudaGraphDebugDotPrint(graph, "newGraph.dot", 0));
 
   LOG_TRACE_WITH_INFO("Execute the new CUDA Graph");
   CudaEventClock cudaEventClock;

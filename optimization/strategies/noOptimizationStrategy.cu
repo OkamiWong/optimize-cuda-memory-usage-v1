@@ -1,3 +1,4 @@
+#include "../../profiling/memoryManager.hpp"
 #include "../../utilities/logger.hpp"
 #include "../../utilities/types.hpp"
 #include "strategies.hpp"
@@ -6,8 +7,15 @@
 OptimizationOutput NoOptimizationStrategy::run(OptimizationInput &input) {
   LOG_TRACE();
 
+  printOptimizationInput(input);
+
   OptimizationOutput output;
   output.optimal = true;
+
+  // All managed data initially on device
+  for (const auto &[ptr, size] : MemoryManager::managedMemoryAddressToSizeMap) {
+    output.arraysInitiallyAllocatedOnDevice.push_back({ptr, size});
+  }
 
   // Add task groups
   std::vector<int> taskGroupStartNodes, taskGroupEndNodes;
@@ -50,6 +58,8 @@ OptimizationOutput NoOptimizationStrategy::run(OptimizationInput &input) {
       }
     }
   }
+
+  printOptimizationOutput(output);
 
   return output;
 }
