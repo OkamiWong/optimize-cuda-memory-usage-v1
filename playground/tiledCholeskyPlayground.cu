@@ -97,7 +97,7 @@ bool verifyCholeskyDecomposition(double *A, double *L, const int n) {
   return error <= 1e-6;
 }
 
-// Only verify the first row of L * L^T = A
+// Only verify the last row of L * L^T = A
 bool verifyCholeskyDecompositionPartially(double *A, double *L, const int n) {
   auto getAEntry = [&](int row, int col) {
     return A[row * n + col];
@@ -110,6 +110,9 @@ bool verifyCholeskyDecompositionPartially(double *A, double *L, const int n) {
     return L[col * n + row];
   };
 
+  // Only check the last row;
+  const int rowIndex = n - 1;
+
   // Only check the first 256 entries
   const int rowLength = std::min(256, n);
 
@@ -117,13 +120,13 @@ bool verifyCholeskyDecompositionPartially(double *A, double *L, const int n) {
   memset(firstRow.get(), 0, rowLength * sizeof(double));
   for (int j = 0; j < rowLength; j++) {
     for (int k = 0; k < n; k++) {
-      firstRow[j] += getLEntry(0, k) * getLEntry(j, k);
+      firstRow[j] += getLEntry(rowIndex, k) * getLEntry(j, k);
     }
   }
 
   double error = 0;
   for (int j = 0; j < rowLength; j++) {
-    error += fabs(getAEntry(0, j) - firstRow[j]);
+    error += fabs(getAEntry(rowIndex, j) - firstRow[j]);
   }
 
   fmt::print("error = {:.6f}\n", error);
