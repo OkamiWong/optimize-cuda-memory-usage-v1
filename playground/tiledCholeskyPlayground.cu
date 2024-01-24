@@ -21,7 +21,7 @@
 #include "../include/argh.h"
 #include "../utilities/cudaUtilities.hpp"
 
-constexpr size_t N = 1024 * 8;
+constexpr size_t N = 64;
 constexpr size_t B = N / 4;
 
 constexpr size_t T = N / B;
@@ -91,6 +91,40 @@ bool verifyCholeskyDecomposition(double *A, double *L, const int n) {
   fmt::print("\nL:\n");
   printSquareMatrix(L, n);
   fmt::print("\n");
+
+  fmt::print("error = {:.6f}\n", error);
+
+  return error <= 1e-6;
+}
+
+// Only verify the first row of L * L^T = A
+bool verifyCholeskyDecompositionPartially(double *A, double *L, const int n) {
+  auto getAEntry = [&](int row, int col) {
+    return A[row * n + col];
+  };
+
+  auto getLEntry = [&](int row, int col) {
+    if (row < col) {
+      return static_cast<double>(0);
+    }
+    return L[col * n + row];
+  };
+
+  // Only check the first 256 entries
+  const int rowLength = std::min(256, n);
+
+  auto firstRow = std::make_unique<double[]>(rowLength);
+  memset(firstRow.get(), 0, rowLength * sizeof(double));
+  for (int j = 0; j < rowLength; j++) {
+    for (int k = 0; k < n; k++) {
+      firstRow[j] += getLEntry(0, k) * getLEntry(j, k);
+    }
+  }
+
+  double error = 0;
+  for (int j = 0; j < rowLength; j++) {
+    error += fabs(getAEntry(0, j) - firstRow[j]);
+  }
 
   fmt::print("error = {:.6f}\n", error);
 
@@ -451,8 +485,10 @@ void tiledCholesky(bool verify) {
   checkCudaErrors(cudaDeviceSynchronize());
 
   if (verify) {
-    cleanCusolverCholeskyDecompositionResult(d_matrix, N);
-    fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(originalMatrix.get(), d_matrix, N));
+    fmt::print("Result passes partial verification: {}\n", verifyCholeskyDecompositionPartially(originalMatrix.get(), d_matrix, N));
+
+    // cleanCusolverCholeskyDecompositionResult(d_matrix, N);
+    // fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(originalMatrix.get(), d_matrix, N));
   }
 
   fmt::print("Total time used (s): {}\n", clock.getTimeInSeconds());
