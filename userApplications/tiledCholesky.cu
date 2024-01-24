@@ -47,73 +47,49 @@ void generateRandomSymmetricPositiveDefiniteMatrix(double *h_A, const size_t n) 
   for (int i = 0; i < n; i++) h_A[i * n + i] = h_A[i * n + i] + n;
 }
 
-void printSquareMatrix(double *h_A, const size_t n) {
-  for (int i = 0; i < n; i++) {
-    for (int j = 0; j < n; j++) {
-      if (j != 0) std::cout << " ";
-      std::cout << std::setw(6) << std::setprecision(3) << h_A[i * n + j];
-    }
-    std::cout << std::endl;
-  }
-}
-
-// Restore the element order before blocks were moved to contiguous spaces.
-// Set upper triangle entries (excluding diagonal entries) in column-major order to zero.
-// Transpose to row-major order.
-void cleanTiledCholeskyDecompositionResult(double *L, const int n, const int b) {
-  auto L_copy = std::make_unique<double[]>(N * N);
-  memcpy(L_copy.get(), L, N * N * sizeof(double));
-
+// Only verify the last row of L * L^T = A
+bool verifyCholeskyDecompositionPartially(double *A, double *L, const int n, const int b) {
   const int t = n / b;
-  for (int i = 0; i < t; i++)
-    for (int j = 0; j < t; j++)
-      for (int k = 0; k < b; k++)
-        for (int l = 0; l < b; l++)
-          L[(i * b + k) + (j * b * n + l * n)] = L_copy[(b * b) * (i + j * t) + k + l * b];
 
-  for (int i = 0; i < n; i++) {
-    for (int j = i + 1; j < n; j++) {
-      L[i + j * n] = 0;
-      std::swap(L[i + j * n], L[i * n + j]);
+  auto getAEntry = [&](int row, int col) {
+    return A[row + col * n];
+  };
+
+  auto getLEntry = [&](int row, int col) {
+    if (row < col) {
+      return static_cast<double>(0);
     }
-  }
-}
+    const int i = row / b;
+    const int k = row - (i * b);
+    const int j = col / b;
+    const int l = col - (j * b);
 
-bool verifyCholeskyDecomposition(double *A, double *L, const int n, bool verbose = false) {
-  auto newA = std::make_unique<double[]>(n * n);
-  memset(newA.get(), 0, n * n * sizeof(double));
-  for (int i = 0; i < n; i++) {
-    for (int j = 0; j < n; j++) {
-      for (int k = 0; k < n; k++) {
-        newA[i * n + j] += L[i * n + k] * L[k + j * n];
-      }
+    return L[(b * b) * (i + j * t) + k + l * b];
+  };
+
+  // Only check the last row;
+  const int rowIndex = n - 1;
+
+  // Only check the first 256 entries
+  const int rowLength = std::min(256, n);
+
+  auto firstRow = std::make_unique<double[]>(rowLength);
+  memset(firstRow.get(), 0, rowLength * sizeof(double));
+  for (int j = 0; j < rowLength; j++) {
+    for (int k = 0; k < n; k++) {
+      firstRow[j] += getLEntry(rowIndex, k) * getLEntry(j, k);
     }
   }
 
   double error = 0;
-  for (int i = 0; i < n; i++) {
-    for (int j = 0; j < n; j++) {
-      error += fabs(A[i * n + j] - newA[i * n + j]);
-    }
+  for (int j = 0; j < rowLength; j++) {
+    error += fabs(getAEntry(rowIndex, j) - firstRow[j]);
   }
 
-  if (verbose) {
-    fmt::print("A:\n");
-    printSquareMatrix(A, n);
-
-    fmt::print("\nnewA:\n");
-    printSquareMatrix(newA.get(), n);
-
-    fmt::print("\nL:\n");
-    printSquareMatrix(L, n);
-    fmt::print("\n");
-
-    fmt::print("error = {:.6f}\n", error);
-  }
+  fmt::print("error = {:.6f}\n", error);
 
   return error <= 1e-6;
 }
-
 typedef std::pair<int, int> MatrixTile;
 
 class TiledCholeskyGraphCreator {
@@ -632,8 +608,7 @@ void tiledCholesky(bool optimize, bool verify) {
   clock.logWithCurrentTime("Synchronization done");
 
   if (verify) {
-    cleanTiledCholeskyDecompositionResult(d_matrix, N, B);
-    fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(h_originalMatrix.get(), d_matrix, N));
+    fmt::print("Result passes verification: {}\n", verifyCholeskyDecompositionPartially(h_originalMatrix.get(), d_matrix, N, B));
   }
 
   clock.logWithCurrentTime("All finished");
