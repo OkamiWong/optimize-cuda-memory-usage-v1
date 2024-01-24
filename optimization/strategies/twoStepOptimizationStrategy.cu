@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <iterator>
 #include <numeric>
+#include <queue>
 #include <utility>
 
 #include "../../profiling/memoryManager.hpp"
@@ -113,7 +114,45 @@ SecondStepSolver::Input convertToSecondStepInput(OptimizationInput &optimization
   return secondStepInput;
 }
 
-OptimizationOutput convertToCustomGraph(
+float calculateLongestPath(OptimizationOutput &optimizedGraph, std::map<int, float> nodeWeight) {
+  std::map<int, int> inDegree;
+  for (auto u : optimizedGraph.nodes) {
+    for (auto v : optimizedGraph.edges[u]) {
+      inDegree[v]++;
+    }
+  }
+
+  std::map<int, float> dis;
+
+  std::queue<int> q;
+  for (auto u : optimizedGraph.nodes) {
+    if (inDegree[u] == 0) {
+      dis[u] = nodeWeight[u];
+      q.push(u);
+    }
+  }
+
+  while (!q.empty()) {
+    int u = q.front();
+    q.pop();
+
+    for (auto v : optimizedGraph.edges[u]) {
+      dis[v] = std::max(dis[v], dis[u] + nodeWeight[v]);
+      inDegree[v]--;
+      if(inDegree[v] == 0){
+        q.push(v);
+      }
+    }
+  }
+
+  float longestPathLength = 0;
+  for(auto u : optimizedGraph.nodes){
+    longestPathLength = std::max(longestPathLength, dis[u]);
+  }
+  return longestPathLength;
+}
+
+OptimizationOutput convertToOptimizationOutput(
   OptimizationInput &optimizationInput,
   FirstStepSolver::Output &firstStepOutput,
   SecondStepSolver::Output &secondStepOutput
@@ -133,12 +172,18 @@ OptimizationOutput convertToCustomGraph(
     optimizedGraph.arraysInitiallyAllocatedOnDevice.push_back(addr);
   }
 
+  std::map<int, float> nodeWeight;
+
   // Add task groups
   std::vector<int> taskGroupStartNodes, taskGroupBodyNodes, taskGroupEndNodes;
   for (int i = 0; i < optimizationInput.nodes.size(); i++) {
     taskGroupStartNodes.push_back(optimizedGraph.addEmptyNode());
     taskGroupBodyNodes.push_back(optimizedGraph.addEmptyNode());
     taskGroupEndNodes.push_back(optimizedGraph.addEmptyNode());
+
+    nodeWeight[taskGroupStartNodes[i]] = 0;
+    nodeWeight[taskGroupBodyNodes[i]] = optimizationInput.nodes[i].runningTime;
+    nodeWeight[taskGroupEndNodes[i]] = 0;
   }
 
   // Add edges between task groups
@@ -159,6 +204,7 @@ OptimizationOutput convertToCustomGraph(
     std::map<TaskId, bool> taskHasIncomingEdgeMap;
     for (auto u : taskGroup.nodes) {
       taskIdToOutputNodeIdMap[u] = optimizedGraph.addTaskNode(u);
+      nodeWeight[taskIdToOutputNodeIdMap[u]] = 0;
     }
 
     for (const auto &[u, destinations] : taskGroup.edges) {
@@ -200,12 +246,15 @@ OptimizationOutput convertToCustomGraph(
       continue;
     }
 
-    optimizedGraph.addDataMovementNode(
+    auto dataMovementNode = optimizedGraph.addDataMovementNode(
       OptimizationOutput::DataMovement::Direction::hostToDevice,
       arrayAddress,
       taskGroupStartNodes[firstStepOutput.taskGroupExecutionOrder[startingNodeIndex]],
       taskGroupBodyNodes[firstStepOutput.taskGroupExecutionOrder[endingNodeIndex]]
     );
+
+    nodeWeight[dataMovementNode] = static_cast<float>(MemoryManager::managedMemoryAddressToSizeMap[arrayAddress])
+                                   / (ConfigurationManager::getConfig().prefetchingBandwidthInGB * 1e9);
   }
 
   // Add offloadings
@@ -213,13 +262,18 @@ OptimizationOutput convertToCustomGraph(
     void *arrayAddress = MemoryManager::managedMemoryAddresses[arrayIndex];
     size_t arraySize = MemoryManager::managedMemoryAddressToSizeMap[arrayAddress];
 
-    optimizedGraph.addDataMovementNode(
+    auto dataMovementNode = optimizedGraph.addDataMovementNode(
       OptimizationOutput::DataMovement::Direction::deviceToHost,
       arrayAddress,
       taskGroupEndNodes[firstStepOutput.taskGroupExecutionOrder[startingNodeIndex]],
       taskGroupStartNodes[firstStepOutput.taskGroupExecutionOrder[endingNodeIndex]]
     );
+
+    nodeWeight[dataMovementNode] = static_cast<float>(MemoryManager::managedMemoryAddressToSizeMap[arrayAddress])
+                                   / (ConfigurationManager::getConfig().prefetchingBandwidthInGB * 1e9);
   }
+
+  LOG_TRACE_WITH_INFO("Longest path in optimized graph (s): %.6f", calculateLongestPath(optimizedGraph, nodeWeight));
 
   return optimizedGraph;
 }
@@ -237,7 +291,7 @@ OptimizationOutput TwoStepOptimizationStrategy::run(OptimizationInput &input) {
   SecondStepSolver secondStepSolver;
   auto secondStepOutput = secondStepSolver.solve(std::move(secondStepInput));
 
-  auto output = convertToCustomGraph(input, firstStepOutput, secondStepOutput);
+  auto output = convertToOptimizationOutput(input, firstStepOutput, secondStepOutput);
 
   printOptimizationOutput(output);
 
