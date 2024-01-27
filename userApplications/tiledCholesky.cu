@@ -70,8 +70,7 @@ bool verifyCholeskyDecompositionPartially(double *A, double *L, const int n, con
   // Only check the last row;
   const int rowIndex = n - 1;
 
-  // Only check the first 256 entries
-  const int rowLength = std::min(256, n);
+  const int rowLength = n;
 
   auto firstRow = std::make_unique<double[]>(rowLength);
   memset(firstRow.get(), 0, rowLength * sizeof(double));
