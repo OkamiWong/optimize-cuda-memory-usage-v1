@@ -20,8 +20,9 @@
 
 #include "../include/argh.h"
 #include "../utilities/cudaUtilities.hpp"
+#include "../utilities/utilities.hpp"
 
-constexpr size_t N = 64;
+constexpr size_t N = 1024 * 40;
 constexpr size_t B = N / 4;
 
 constexpr size_t T = N / B;
@@ -113,8 +114,7 @@ bool verifyCholeskyDecompositionPartially(double *A, double *L, const int n) {
   // Only check the last row;
   const int rowIndex = n - 1;
 
-  // Only check the first 256 entries
-  const int rowLength = std::min(256, n);
+  const int rowLength = n;
 
   auto firstRow = std::make_unique<double[]>(rowLength);
   memset(firstRow.get(), 0, rowLength * sizeof(double));
@@ -328,14 +328,21 @@ class TiledCholeskyGraphCreator {
 };
 
 void tiledCholesky(bool verify) {
+  SystemWallClock clock;
+  clock.start();
+
   // Initialize data
+  clock.logWithCurrentTime("Initialize host data");
   auto originalMatrix = std::make_unique<double[]>(N * N);  // Column-major
   generateRandomSymmetricPositiveDefiniteMatrix(originalMatrix.get(), N);
+  clock.logWithCurrentTime("Host data initialized");
 
   // Copy to device
+  clock.logWithCurrentTime("Initialize device data");
   double *d_matrix;
   checkCudaErrors(cudaMallocManaged(&d_matrix, N * N * sizeof(double)));
   checkCudaErrors(cudaMemcpy(d_matrix, originalMatrix.get(), N * N * sizeof(double), cudaMemcpyHostToDevice));
+  clock.logWithCurrentTime("Device data initialized");
 
   auto getMatrixBlock = [&](int i, int j) {
     return d_matrix + i * B + j * B * N;
@@ -384,6 +391,8 @@ void tiledCholesky(bool verify) {
 
   checkCudaErrors(cusolverDnSetStream(cusolverDnHandle, s));
   checkCudaErrors(cublasSetStream(cublasHandle, s));
+
+  clock.logWithCurrentTime("Start to record graph");
 
   auto tiledCholeskyGraphCreator = std::make_unique<TiledCholeskyGraphCreator>(s, graph);
 
@@ -474,27 +483,34 @@ void tiledCholesky(bool verify) {
     }
   }
 
+  clock.logWithCurrentTime("Graph recorded");
+
   checkCudaErrors(cudaGraphDebugDotPrint(graph, "./graph.dot", 0));
 
   cudaGraphExec_t graphExec;
   checkCudaErrors(cudaGraphInstantiate(&graphExec, graph, nullptr, nullptr, 0));
 
-  CudaEventClock clock;
+  CudaEventClock cudaEventClock;
 
-  clock.start();
+  clock.logWithCurrentTime("Launch graph");
+  cudaEventClock.start();
   checkCudaErrors(cudaGraphLaunch(graphExec, s));
-  clock.end();
+  cudaEventClock.end();
+  clock.logWithCurrentTime("Graph launched");
 
   checkCudaErrors(cudaDeviceSynchronize());
+  clock.logWithCurrentTime("Synchronization done");
 
   if (verify) {
+    clock.logWithCurrentTime("Start to verify");
     fmt::print("Result passes partial verification: {}\n", verifyCholeskyDecompositionPartially(originalMatrix.get(), d_matrix, N));
+    clock.logWithCurrentTime("Verification done");
 
     // cleanCusolverCholeskyDecompositionResult(d_matrix, N);
     // fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(originalMatrix.get(), d_matrix, N));
   }
 
-  fmt::print("Total time used (s): {}\n", clock.getTimeInSeconds());
+  fmt::print("Total time used (s): {}\n", cudaEventClock.getTimeInSeconds());
 
   free(h_workspace);
   cudaFree(d_matrix);
