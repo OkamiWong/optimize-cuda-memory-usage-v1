@@ -450,10 +450,12 @@ struct IntegerProgrammingSolver {
     }
   }
 
-  void printSolution() {
+  void printSolution(MPSolver::ResultStatus resultStatus) {
     LOG_TRACE_WITH_INFO("Printing solution to secondStepSolver.out");
 
     auto fp = fopen("secondStepSolver.out", "w");
+
+    fmt::print(fp, "resultStatus = {}\n", resultStatus == MPSolver::OPTIMAL ? "OPTIMAL" : "FEASIBLE");
 
     auto optimizedPeakMemoryUsage = peakMemoryUsage->solution_value();
     auto totalRunningTime = z[getTaskGroupVertexIndex(numberOfTaskGroups - 1)]->solution_value();
@@ -604,8 +606,8 @@ struct IntegerProgrammingSolver {
 
     SecondStepSolver::Output output;
 
-    if (resultStatus == MPSolver::OPTIMAL) {
-      printSolution();
+    if (resultStatus == MPSolver::OPTIMAL || resultStatus == MPSolver::FEASIBLE) {
+      printSolution(resultStatus);
 
       output.optimal = true;
 
