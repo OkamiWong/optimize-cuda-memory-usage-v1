@@ -607,7 +607,9 @@ void tiledCholesky(bool optimize, bool verify) {
   clock.logWithCurrentTime("Synchronization done");
 
   if (verify) {
+    clock.logWithCurrentTime("Start verification");
     fmt::print("Result passes verification: {}\n", verifyCholeskyDecompositionPartially(h_originalMatrix.get(), d_matrix, N, B));
+    clock.logWithCurrentTime("Verification done");
   }
 
   clock.logWithCurrentTime("All finished");
