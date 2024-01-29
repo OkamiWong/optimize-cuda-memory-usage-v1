@@ -6,6 +6,9 @@ target_link_libraries(captureGraph cudaUtilities)
 add_executable(modifyKernelNodeParams modifyKernelNodeParams.cu)
 target_link_libraries(modifyKernelNodeParams cudaUtilities cudaGraphUtilities -lcuda)
 
+add_executable(monitorMemoryUsage monitorMemoryUsage.cu)
+target_link_libraries(monitorMemoryUsage cudaUtilities fmt::fmt)
+
 add_executable(assertion assertion.cu)
 
 add_executable(orToolsPlayground orToolsPlayground.cpp)
