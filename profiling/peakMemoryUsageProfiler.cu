@@ -1,9 +1,12 @@
 #include <chrono>
 
+#include "../utilities/constants.hpp"
 #include "../utilities/cudaUtilities.hpp"
 #include "peakMemoryUsageProfiler.hpp"
 
 void PeakMemoryUsageProfiler::periodicallyCheckMemoryUsage() {
+  checkCudaErrors(cudaSetDevice(Constants::DEVICE_ID));
+
   size_t peakMemoryUsage = 0;
 
   size_t free, total;
