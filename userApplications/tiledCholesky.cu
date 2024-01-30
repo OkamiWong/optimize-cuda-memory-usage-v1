@@ -594,7 +594,10 @@ void tiledCholesky(bool optimize, bool verify) {
     clock.logWithCurrentTime("Graph instantiated, start execution");
 
     for (int i = 0; i < ConfigurationManager::getConfig().repeat; i++) {
-      peakMemoryUsageProfiler.start();
+      if (ConfigurationManager::getConfig().measurePeakMemoryUsage) {
+        peakMemoryUsageProfiler.start();
+      }
+
       initializeDeviceData(h_originalMatrix.get(), d_matrix);
 
       cudaEventClock.start();
@@ -603,11 +606,15 @@ void tiledCholesky(bool optimize, bool verify) {
 
       checkCudaErrors(cudaDeviceSynchronize());
 
+      if (ConfigurationManager::getConfig().measurePeakMemoryUsage) {
+        const auto peakMemoryUsage = peakMemoryUsageProfiler.end();
+        fmt::print(
+          "Peak memory usage (MiB): {:.2f}\n",
+          static_cast<float>(peakMemoryUsage) / 1024.0 / 1024.0
+        );
+      }
+
       fmt::print("Total time used (s): {}\n", cudaEventClock.getTimeInSeconds());
-      fmt::print(
-        "Peak memory usage (MiB): {:.2f}\n",
-        static_cast<float>(peakMemoryUsageProfiler.end()) / 1024.0 / 1024.0
-      );
     }
   }
 

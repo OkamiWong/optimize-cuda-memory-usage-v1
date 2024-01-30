@@ -20,6 +20,7 @@ struct Configuration {
 
   // Execution
   bool useNvlink = false;
+  bool measurePeakMemoryUsage = false;
 
   // Tiled Cholesky
   int tiledCholeskyN = 256;
@@ -34,6 +35,7 @@ struct Configuration {
     prefetchingBandwidthInGB,
     acceptableRunningTimeFactor,
     useNvlink,
+    measurePeakMemoryUsage,
     tiledCholeskyN,
     tiledCholeskyT
   );
