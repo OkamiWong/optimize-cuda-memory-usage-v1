@@ -28,104 +28,6 @@
 #include "../utilities/logger.hpp"
 #include "../utilities/utilities.hpp"
 
-size_t N;
-size_t B;
-size_t T;
-
-__global__ void makeMatrixSymmetric(double *d_matrix, size_t n) {
-  size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-  size_t x = idx / n;
-  size_t y = idx % n;
-
-  if (x >= y || x >= n || y >= n) {
-    return;
-  }
-
-  double average = 0.5 * (d_matrix[x * n + y] + d_matrix[y * n + x]);
-  d_matrix[x * n + y] = average;
-  d_matrix[y * n + x] = average;
-}
-
-__global__ void addIdenticalMatrix(double *d_matrix, size_t n) {
-  size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-  if (idx >= n) {
-    return;
-  }
-  d_matrix[idx * n + idx] += n;
-}
-
-// Credit to: https://math.stackexchange.com/questions/357980/how-to-generate-random-symmetric-positive-definite-matrices-using-matlab
-void generateRandomSymmetricPositiveDefiniteMatrix(double *h_A, const size_t n) {
-  double *d_A;
-  checkCudaErrors(cudaMalloc(&d_A, n * n * sizeof(double)));
-
-  // Generate random matrix d_A
-  curandGenerator_t prng;
-  curandCreateGenerator(&prng, CURAND_RNG_PSEUDO_XORWOW);
-  curandSetPseudoRandomGeneratorSeed(prng, (unsigned long long)clock());
-  curandGenerateUniformDouble(prng, d_A, n * n);
-
-  // d_A = (d_A + d_A^T) / 2
-  size_t numThreads = 1024;
-  size_t numBlocks = (N * N + numThreads) / numThreads;
-  makeMatrixSymmetric<<<numBlocks, numThreads>>>(d_A, N);
-
-  // d_A = d_A + n * I
-  numThreads = 1024;
-  numBlocks = (N + numThreads) / numThreads;
-  addIdenticalMatrix<<<numBlocks, numThreads>>>(d_A, N);
-
-  checkCudaErrors(cudaDeviceSynchronize());
-
-  checkCudaErrors(cudaMemcpy(h_A, d_A, n * n * sizeof(double), cudaMemcpyDefault));
-
-  checkCudaErrors(cudaDeviceSynchronize());
-  checkCudaErrors(cudaFree(d_A));
-}
-
-// Only verify the last row of L * L^T = A
-bool verifyCholeskyDecompositionPartially(double *A, double *L, const int n, const int b) {
-  const int t = n / b;
-
-  auto getAEntry = [&](int row, int col) {
-    return A[row + col * n];
-  };
-
-  auto getLEntry = [&](int row, int col) {
-    if (row < col) {
-      return static_cast<double>(0);
-    }
-    const int i = row / b;
-    const int k = row - (i * b);
-    const int j = col / b;
-    const int l = col - (j * b);
-
-    return L[(b * b) * (i + j * t) + k + l * b];
-  };
-
-  // Only check the last row;
-  const int rowIndex = n - 1;
-
-  const int rowLength = n;
-
-  auto firstRow = std::make_unique<double[]>(rowLength);
-  memset(firstRow.get(), 0, rowLength * sizeof(double));
-  for (int j = 0; j < rowLength; j++) {
-    for (int k = 0; k < n; k++) {
-      firstRow[j] += getLEntry(rowIndex, k) * getLEntry(j, k);
-    }
-  }
-
-  double error = 0;
-  for (int j = 0; j < rowLength; j++) {
-    error += fabs(getAEntry(rowIndex, j) - firstRow[j]);
-  }
-
-  fmt::print("error = {:.6f}\n", error);
-
-  return error <= 1e-6;
-}
-
 typedef std::pair<int, int> MatrixTile;
 
 class TiledCholeskyGraphCreator {
@@ -366,11 +268,104 @@ class TiledCholeskyTaskManager {
   }
 };
 
-void initializeHostData(double *h_originalMatrix) {
-  generateRandomSymmetricPositiveDefiniteMatrix(h_originalMatrix, N);
+__global__ void makeMatrixSymmetric(double *d_matrix, size_t n) {
+  size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+  size_t x = idx / n;
+  size_t y = idx % n;
+
+  if (x >= y || x >= n || y >= n) {
+    return;
+  }
+
+  double average = 0.5 * (d_matrix[x * n + y] + d_matrix[y * n + x]);
+  d_matrix[x * n + y] = average;
+  d_matrix[y * n + x] = average;
 }
 
-__global__ void storeBlockMatrixInContiguousSpace(double *d_matrix, double *d_originalMatrix, int N, int B, int T) {
+__global__ void addIdenticalMatrix(double *d_matrix, size_t n) {
+  size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx >= n) {
+    return;
+  }
+  d_matrix[idx * n + idx] += n;
+}
+
+void generateRandomMatrix(curandGenerator_t curandGenerator, double *d_matrix, const size_t n) {
+  checkCudaErrors(curandGenerateUniformDouble(curandGenerator, d_matrix, n * n));
+}
+
+// Credit to: https://math.stackexchange.com/questions/357980/how-to-generate-random-symmetric-positive-definite-matrices-using-matlab
+void generateRandomSymmetricPositiveDefiniteMatrix(curandGenerator_t curandGenerator, double *d_matrix, const size_t n) {
+  // Generate random matrix d_A
+  generateRandomMatrix(curandGenerator, d_matrix, n);
+
+  // d_A = (d_A + d_A^T) / 2
+  size_t numThreads = 1024;
+  size_t numBlocks = (n * n + numThreads) / numThreads;
+  makeMatrixSymmetric<<<numBlocks, numThreads>>>(d_matrix, n);
+
+  // d_A = d_A + n * I
+  numThreads = 1024;
+  numBlocks = (n + numThreads) / numThreads;
+  addIdenticalMatrix<<<numBlocks, numThreads>>>(d_matrix, n);
+}
+
+std::vector<std::unique_ptr<double[]>> initializeHostData(size_t n, size_t t) {
+  const size_t b = n / t;
+  const size_t numberOfUsefulTiles = t * t / 2 + t / 2;
+
+  double *deviceEntries;
+  checkCudaErrors(cudaMalloc(&deviceEntries, numberOfUsefulTiles * b * b * sizeof(double)));
+
+  curandGenerator_t prng;
+  curandCreateGenerator(&prng, CURAND_RNG_PSEUDO_XORWOW);
+  curandSetPseudoRandomGeneratorSeed(prng, (unsigned long long)clock());
+
+  int tileCount = 0;
+  for (int i = 0; i < t; i++) {
+    for (int j = 0; j < t; j++) {
+      if (j > i)
+        break;
+      else if (j == i) {
+        generateRandomSymmetricPositiveDefiniteMatrix(
+          prng,
+          deviceEntries + (tileCount * b * b),
+          b
+        );
+        tileCount++;
+      } else {
+        generateRandomMatrix(
+          prng,
+          deviceEntries + (tileCount * b * b),
+          b
+        );
+        tileCount++;
+      }
+    }
+  }
+
+  std::vector<std::unique_ptr<double>> tiles;
+  for (int i = 0; i < tileCount; i++) {
+    tiles.push_back(std::make_unique<double[]>(b * b));
+  }
+
+  checkCudaErrors(cudaDeviceSynchronize());
+
+  for (int i = 0; i < tileCount; i++) {
+    checkCudaErrors(cudaMemcpy(
+      tiles[i].get(),
+      deviceEntries + (i * b * b),
+      b * b * sizeof(double),
+      cudaMemcpyDefault
+    ));
+  }
+
+  checkCudaErrors(cudaFree(deviceEntries));
+
+  return tiles;
+}
+
+__global__ void storeBlockMatrixInContiguousSpace(double *d_matrix, double *d_originalMatrix, int N, int T, int B) {
   size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
 
   size_t i = (idx % N) / B;
@@ -394,7 +389,7 @@ void initializeDeviceData(double *h_originalMatrix, double *d_matrix) {
   storeBlockMatrixInContiguousSpace<<<NUM_BLOCKS, NUM_THREADS>>>(
     d_matrix,
     d_originalMatrix,
-    N, B, T
+    N, T, B
   );
 
   checkCudaErrors(cudaDeviceSynchronize());
@@ -404,7 +399,52 @@ void initializeDeviceData(double *h_originalMatrix, double *d_matrix) {
   checkCudaErrors(cudaMemPrefetchAsync(d_matrix, N * N * sizeof(double), Constants::DEVICE_ID));
 }
 
-void tiledCholesky(bool optimize, bool verify) {
+// Only verify the last row of L * L^T = A
+bool verifyCholeskyDecompositionPartially(double *A, double *L, const int n, const int b) {
+  const int t = n / b;
+
+  auto getAEntry = [&](int row, int col) {
+    return A[row + col * n];
+  };
+
+  auto getLEntry = [&](int row, int col) {
+    if (row < col) {
+      return static_cast<double>(0);
+    }
+    const int i = row / b;
+    const int k = row - (i * b);
+    const int j = col / b;
+    const int l = col - (j * b);
+
+    return L[(b * b) * (i + j * t) + k + l * b];
+  };
+
+  // Only check the last row;
+  const int rowIndex = n - 1;
+
+  const int rowLength = n;
+
+  auto firstRow = std::make_unique<double[]>(rowLength);
+  memset(firstRow.get(), 0, rowLength * sizeof(double));
+  for (int j = 0; j < rowLength; j++) {
+    for (int k = 0; k < n; k++) {
+      firstRow[j] += getLEntry(rowIndex, k) * getLEntry(j, k);
+    }
+  }
+
+  double error = 0;
+  for (int j = 0; j < rowLength; j++) {
+    error += fabs(getAEntry(rowIndex, j) - firstRow[j]);
+  }
+
+  fmt::print("error = {:.6f}\n", error);
+
+  return error <= 1e-6;
+}
+
+void tiledCholesky(bool optimize, bool verify, const size_t n, const size_t t) {
+  const size_t b = n / t;
+
   SystemWallClock clock;
   clock.start();
 
@@ -412,12 +452,12 @@ void tiledCholesky(bool optimize, bool verify) {
 
   // Initialize data
   clock.logWithCurrentTime("Initialzing host data");
-  auto h_originalMatrix = std::make_unique<double[]>(N * N);  // Column-major
-  initializeHostData(h_originalMatrix.get());
+  auto hostTiles = initializeHostData(n, t);
   clock.logWithCurrentTime("Host data initialized");
 
   // Initialize device data
   clock.logWithCurrentTime("Initialzing device data");
+  auto deviceTiles = std::make_unique
   double *d_matrix;
   checkCudaErrors(cudaMallocManaged(&d_matrix, N * N * sizeof(double)));
   initializeDeviceData(h_originalMatrix.get(), d_matrix);
@@ -676,13 +716,15 @@ int main(int argc, char **argv) {
 
   ConfigurationManager::initialize(argc, argv);
 
-  N = ConfigurationManager::getConfig().tiledCholeskyN;
-  T = ConfigurationManager::getConfig().tiledCholeskyT;
-  B = N / T;
+  size_t n = ConfigurationManager::getConfig().tiledCholeskyN;
+  size_t t = ConfigurationManager::getConfig().tiledCholeskyT;
+  assert(n % t == 0);
 
   tiledCholesky(
     ConfigurationManager::getConfig().optimize,
-    ConfigurationManager::getConfig().verify
+    ConfigurationManager::getConfig().verify,
+    n,
+    t
   );
 
   return 0;

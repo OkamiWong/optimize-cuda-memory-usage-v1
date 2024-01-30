@@ -85,7 +85,6 @@ void testCudaMemGetInfo() {
 
   fmt::print("Allocate unified memory\n");
   checkCudaErrors(cudaMallocManaged(&dev_p, BYTES_TO_ALLOC));
-  checkCudaErrors(cudaMemPrefetchAsync(dev_p, BYTES_TO_ALLOC, 0));
 
   fmt::print("Allocated\n");
   printMemInfo();
