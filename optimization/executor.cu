@@ -3,6 +3,7 @@
 #include <queue>
 
 #include "../profiling/memoryManager.hpp"
+#include "../profiling/peakMemoryUsageProfiler.hpp"
 #include "../utilities/configurationManager.hpp"
 #include "../utilities/constants.hpp"
 #include "../utilities/cudaUtilities.hpp"
@@ -200,13 +201,27 @@ float Executor::executeOptimizedGraph(OptimizationOutput &optimizedGraph, Execut
   checkCudaErrors(cudaGraphDebugDotPrint(graph, "newGraph.dot", 0));
 
   LOG_TRACE_WITH_INFO("Execute the new CUDA Graph");
+  PeakMemoryUsageProfiler peakMemoryUsageProfiler;
   CudaEventClock cudaEventClock;
   cudaGraphExec_t graphExec;
   checkCudaErrors(cudaGraphInstantiate(&graphExec, graph, nullptr, nullptr, 0));
+
+  if (ConfigurationManager::getConfig().measurePeakMemoryUsage) {
+    peakMemoryUsageProfiler.start();
+  }
+
   cudaEventClock.start();
   checkCudaErrors(cudaGraphLaunch(graphExec, stream));
   cudaEventClock.end();
   checkCudaErrors(cudaDeviceSynchronize());
+
+  if (ConfigurationManager::getConfig().measurePeakMemoryUsage) {
+    const auto peakMemoryUsage = peakMemoryUsageProfiler.end();
+    LOG_TRACE_WITH_INFO(
+      "Peak memory usage (MiB): %.2f\n",
+      static_cast<float>(peakMemoryUsage) / 1024.0 / 1024.0
+    );
+  }
 
   LOG_TRACE_WITH_INFO("Clean up");
   for (auto &[oldAddr, newAddr] : addressUpdate) {
