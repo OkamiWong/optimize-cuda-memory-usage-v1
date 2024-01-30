@@ -1,6 +1,7 @@
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
 #include <cuda_runtime_api.h>
+#include <curand.h>
 #include <cusolverDn.h>
 #include <fmt/core.h>
 
@@ -9,7 +10,6 @@
 #include <cmath>
 #include <cstdlib>
 #include <initializer_list>
-#include <iomanip>
 #include <iostream>
 #include <limits>
 #include <map>
@@ -31,21 +31,55 @@ size_t N;
 size_t B;
 size_t T;
 
+__global__ void makeMatrixSymmetric(double *d_matrix, int n) {
+  size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+  int x = idx / n;
+  int y = idx % n;
+
+  if (x >= y || x >= n || y >= n) {
+    return;
+  }
+
+  double average = 0.5 * (d_matrix[x * n + y] + d_matrix[y * n + x]);
+  d_matrix[x * n + y] = average;
+  d_matrix[y * n + x] = average;
+}
+
+__global__ void addIdenticalMatrix(double *d_matrix, int n) {
+  size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx >= n) {
+    return;
+  }
+  d_matrix[idx * n + idx] += n;
+}
+
 // Credit to: https://math.stackexchange.com/questions/357980/how-to-generate-random-symmetric-positive-definite-matrices-using-matlab
 void generateRandomSymmetricPositiveDefiniteMatrix(double *h_A, const size_t n) {
-  srand(time(NULL));
+  double *d_A;
+  checkCudaErrors(cudaMalloc(&d_A, n * n * sizeof(double)));
 
-  double *h_A_temp = (double *)malloc(n * n * sizeof(double));
+  // Generate random matrix d_A
+  curandGenerator_t prng;
+  curandCreateGenerator(&prng, CURAND_RNG_PSEUDO_XORWOW);
+  curandSetPseudoRandomGeneratorSeed(prng, (unsigned long long)clock());
+  curandGenerateUniformDouble(prng, d_A, n * n);
 
-  for (int i = 0; i < n; i++)
-    for (int j = 0; j < n; j++)
-      h_A_temp[i * n + j] = (float)rand() / (float)RAND_MAX;
+  // d_A = (d_A + d_A^T) / 2
+  size_t numThreads = 1024;
+  size_t numBlocks = (N * N + numThreads) / numThreads;
+  makeMatrixSymmetric<<<numBlocks, numThreads>>>(d_A, N);
 
-  for (int i = 0; i < n; i++)
-    for (int j = 0; j < n; j++)
-      h_A[i * n + j] = 0.5 * (h_A_temp[i * n + j] + h_A_temp[j * n + i]);
+  // d_A = d_A + n * I
+  numThreads = 1024;
+  numBlocks = (N + numThreads) / numThreads;
+  addIdenticalMatrix<<<numBlocks, numThreads>>>(d_A, N);
 
-  for (int i = 0; i < n; i++) h_A[i * n + i] = h_A[i * n + i] + n;
+  checkCudaErrors(cudaDeviceSynchronize());
+
+  checkCudaErrors(cudaMemcpy(h_A, d_A, n * n * sizeof(double), cudaMemcpyDefault));
+
+  checkCudaErrors(cudaDeviceSynchronize());
+  checkCudaErrors(cudaFree(d_A));
 }
 
 // Only verify the last row of L * L^T = A
@@ -90,6 +124,7 @@ bool verifyCholeskyDecompositionPartially(double *A, double *L, const int n, con
 
   return error <= 1e-6;
 }
+
 typedef std::pair<int, int> MatrixTile;
 
 class TiledCholeskyGraphCreator {

@@ -9,5 +9,6 @@ target_link_libraries(
   logger
   CUDA::cublas
   CUDA::cusolver
+  CUDA::curand
   fmt::fmt
 )
