@@ -31,10 +31,10 @@ size_t N;
 size_t B;
 size_t T;
 
-__global__ void makeMatrixSymmetric(double *d_matrix, int n) {
+__global__ void makeMatrixSymmetric(double *d_matrix, size_t n) {
   size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-  int x = idx / n;
-  int y = idx % n;
+  size_t x = idx / n;
+  size_t y = idx % n;
 
   if (x >= y || x >= n || y >= n) {
     return;
@@ -45,7 +45,7 @@ __global__ void makeMatrixSymmetric(double *d_matrix, int n) {
   d_matrix[y * n + x] = average;
 }
 
-__global__ void addIdenticalMatrix(double *d_matrix, int n) {
+__global__ void addIdenticalMatrix(double *d_matrix, size_t n) {
   size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx >= n) {
     return;
