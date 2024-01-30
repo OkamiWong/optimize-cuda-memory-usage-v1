@@ -140,7 +140,7 @@ void testPeakMemoryUsageProfiler() {
 }
 
 int main() {
-  // testCudaMemGetInfo();
+  testCudaMemGetInfo();
 
   testPeakMemoryUsageProfiler();
 
