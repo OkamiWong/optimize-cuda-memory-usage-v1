@@ -23,6 +23,7 @@
 #include "../profiling/memoryManager.hpp"
 #include "../profiling/peakMemoryUsageProfiler.hpp"
 #include "../utilities/configurationManager.hpp"
+#include "../utilities/constants.hpp"
 #include "../utilities/cudaUtilities.hpp"
 #include "../utilities/logger.hpp"
 #include "../utilities/utilities.hpp"
@@ -399,6 +400,8 @@ void initializeDeviceData(double *h_originalMatrix, double *d_matrix) {
   checkCudaErrors(cudaDeviceSynchronize());
 
   checkCudaErrors(cudaFree(d_originalMatrix));
+
+  checkCudaErrors(cudaMemPrefetchAsync(d_matrix, N * N * sizeof(double), Constants::DEVICE_ID));
 }
 
 void tiledCholesky(bool optimize, bool verify) {
