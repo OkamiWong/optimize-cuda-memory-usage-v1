@@ -1,5 +1,6 @@
 #include <cuda.h>
 
+#include <algorithm>
 #include <cassert>
 #include <limits>
 #include <utility>
@@ -237,15 +238,13 @@ OptimizationInput constructOptimizationInput(
 
   // Gather information about tasks
   std::map<TaskId, cudaGraphNode_t> taskIdToAnnotationNodeMap;
-  std::map<TaskId, uint64_t> taskIdToMinStartTimestampMap;
-  std::map<TaskId, uint64_t> taskIdToMaxEndTimestampMap;
+  std::map<TaskId, std::vector<std::pair<uint64_t, uint64_t>>> taskIdToNodeLifetimes;
+  uint64_t globalMinStart = std::numeric_limits<uint64_t>::max(), globalMaxEnd = 0;
   for (cudaGraphNode_t u : nodes) {
     auto uTaskId = getTaskId(nodeToAnnotationMap[u]);
 
     if (taskIdToAnnotationNodeMap.count(uTaskId) == 0) {
       taskIdToAnnotationNodeMap[uTaskId] = nodeToAnnotationMap[u];
-      taskIdToMinStartTimestampMap[uTaskId] = std::numeric_limits<uint64_t>::max();
-      taskIdToMaxEndTimestampMap[uTaskId] = 0;
     }
 
     // Ignore annotation node
@@ -259,33 +258,37 @@ OptimizationInput constructOptimizationInput(
       continue;
     }
 
-    taskIdToMinStartTimestampMap[uTaskId] = std::min(
-      taskIdToMinStartTimestampMap[uTaskId],
-      timeline[u].first
-    );
+    taskIdToNodeLifetimes[uTaskId].push_back(timeline[u]);
 
-    taskIdToMaxEndTimestampMap[uTaskId] = std::max(
-      taskIdToMaxEndTimestampMap[uTaskId],
-      timeline[u].second
-    );
+    globalMinStart = std::min(globalMinStart, timeline[u].first);
+    globalMaxEnd = std::max(globalMaxEnd, timeline[u].second);
   }
 
   // Add task group running time and data dependency
-  uint64_t globalMinStart = std::numeric_limits<uint64_t>::max(), globalMaxEnd = 0;
   for (auto &taskGroup : optimizationInput.nodes) {
-    uint64_t minStart = std::numeric_limits<uint64_t>::max(), maxEnd = 0;
-
+    std::vector<std::pair<uint64_t, uint64_t>> nodeLifetimes;
     for (auto taskId : taskGroup.nodes) {
-      minStart = std::min(minStart, taskIdToMinStartTimestampMap[taskId]);
-      maxEnd = std::max(maxEnd, taskIdToMaxEndTimestampMap[taskId]);
-
       mergeDataDependency(taskGroup, taskIdToAnnotationNodeMap[taskId]);
+      nodeLifetimes.insert(nodeLifetimes.end(), taskIdToNodeLifetimes[taskId].begin(), taskIdToNodeLifetimes[taskId].end());
     }
 
-    globalMinStart = std::min(globalMinStart, minStart);
-    globalMaxEnd = std::max(globalMaxEnd, maxEnd);
+    std::sort(nodeLifetimes.begin(), nodeLifetimes.end());
 
-    taskGroup.runningTime = static_cast<float>(maxEnd - minStart) * 1e-9f;
+    uint64_t accumulatedRunningTime = 0;
+    uint64_t currentWindowEnd = 0;
+    for (auto nodeLifetime : nodeLifetimes) {
+      if (currentWindowEnd < nodeLifetime.first) {
+        accumulatedRunningTime += nodeLifetime.second - nodeLifetime.first;
+        currentWindowEnd = nodeLifetime.second;
+      } else {
+        if (currentWindowEnd < nodeLifetime.second) {
+          accumulatedRunningTime += nodeLifetime.second - currentWindowEnd;
+          currentWindowEnd = nodeLifetime.second;
+        }
+      }
+    }
+
+    taskGroup.runningTime = static_cast<float>(accumulatedRunningTime) * 1e-9f;
   }
 
   optimizationInput.originalTotalRunningTime = static_cast<float>(globalMaxEnd - globalMinStart) * 1e-9f;
