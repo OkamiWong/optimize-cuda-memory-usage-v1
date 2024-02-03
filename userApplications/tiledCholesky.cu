@@ -146,10 +146,8 @@ class TiledCholeskyGraphCreator {
   }
 
   void endCaptureOperation() {
-    assert(this->lastModifiedTile.first != -1 && this->lastModifiedTile.second != -1);
     checkCudaErrors(cudaStreamEndCapture(this->stream, &this->graph));
     this->tileLastModifiedByMap[this->lastModifiedTile] = this->getTailOfLastCapturedNodeChain();
-    this->lastModifiedTile = std::make_pair(-1, -1);
   };
 
  private:
@@ -162,6 +160,14 @@ class TiledCholeskyGraphCreator {
 
   std::vector<cudaGraphNode_t> getDependencies(std::vector<MatrixTile> tiles) {
     std::vector<cudaGraphNode_t> dependencies;
+
+    if (ConfigurationManager::getConfig().mergeConcurrentCudaGraphNodes == false) {
+      if (this->lastModifiedTile.first != -1) {
+        dependencies.push_back(this->tileLastModifiedByMap[this->lastModifiedTile]);
+      }
+      return dependencies;
+    }
+
     for (auto tile : tiles) {
       auto it = this->tileLastModifiedByMap.find(tile);
       if (it != this->tileLastModifiedByMap.end()) {
