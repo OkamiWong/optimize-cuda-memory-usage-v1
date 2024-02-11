@@ -91,26 +91,27 @@ bool verifyCholeskyDecompositionPartially(double *A, std::vector<double *> &d_ti
   for (int i = 0; i < t * t; i++) {
     h_tiles.push_back(std::move(std::make_unique<double[]>(b * b)));
     checkCudaErrors(cudaMemcpy(h_tiles[i].get(), d_tiles[i], b * b * sizeof(double), cudaMemcpyDefault));
+    checkCudaErrors(cudaDeviceSynchronize());
   }
 
-  auto getAEntry = [&](int row, int col) {
+  auto getAEntry = [&](size_t row, size_t col) {
     return A[row + col * n];
   };
 
-  auto getLEntry = [&](int row, int col) {
+  auto getLEntry = [&](size_t row, size_t col) {
     if (row < col) {
       return static_cast<double>(0);
     }
-    const int i = row / b;
-    const int k = row - (i * b);
-    const int j = col / b;
-    const int l = col - (j * b);
+    const size_t i = row / b;
+    const size_t k = row - (i * b);
+    const size_t j = col / b;
+    const size_t l = col - (j * b);
 
     return h_tiles[i + j * t][k + l * b];
   };
 
   // Only check the last row;
-  const int rowIndex = n - 1;
+  const size_t rowIndex = n - 1;
 
   const size_t rowLength = n;
 
@@ -646,6 +647,8 @@ void tiledCholesky(bool optimize, bool verify) {
         }
         oldManagedDeviceArrayToNewManagedDeviceArrayMap[oldPtr] = d_tiles[j];
       }
+
+      checkCudaErrors(cudaDeviceSynchronize());
 
       updateManagedMemoryAddress(oldManagedDeviceArrayToNewManagedDeviceArrayMap);
 
