@@ -84,8 +84,14 @@ void generateRandomSymmetricPositiveDefiniteMatrix(double *h_A, const size_t n) 
 }
 
 // Only verify the last row of L * L^T = A
-bool verifyCholeskyDecompositionPartially(double *A, double *L, const int n, const int b) {
-  const int t = n / b;
+bool verifyCholeskyDecompositionPartially(double *A, std::vector<double *> &d_tiles, const size_t n, const size_t b) {
+  const size_t t = n / b;
+
+  std::vector<std::unique_ptr<double[]>> h_tiles;
+  for (int i = 0; i < t * t; i++) {
+    h_tiles.push_back(std::move(std::make_unique<double[]>(b * b)));
+    checkCudaErrors(cudaMemcpy(h_tiles[i].get(), d_tiles[i], b * b * sizeof(double), cudaMemcpyDefault));
+  }
 
   auto getAEntry = [&](int row, int col) {
     return A[row + col * n];
@@ -100,13 +106,13 @@ bool verifyCholeskyDecompositionPartially(double *A, double *L, const int n, con
     const int j = col / b;
     const int l = col - (j * b);
 
-    return L[(b * b) * (i + j * t) + k + l * b];
+    return h_tiles[i + j * t][k + l * b];
   };
 
   // Only check the last row;
   const int rowIndex = n - 1;
 
-  const int rowLength = n;
+  const size_t rowLength = n;
 
   auto firstRow = std::make_unique<double[]>(rowLength);
   memset(firstRow.get(), 0, rowLength * sizeof(double));
@@ -370,7 +376,7 @@ void initializeHostData(double *h_originalMatrix) {
   generateRandomSymmetricPositiveDefiniteMatrix(h_originalMatrix, N);
 }
 
-__global__ void storeBlockMatrixInContiguousSpace(double *d_matrix, double *d_originalMatrix, int N, int B, int T) {
+__global__ void storeMatrixIntoTiles(double *d_originalMatrix, double **d_tilePointers, int N, int B, int T) {
   size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
 
   size_t i = (idx % N) / B;
@@ -380,28 +386,30 @@ __global__ void storeBlockMatrixInContiguousSpace(double *d_matrix, double *d_or
 
   if (i >= T || j >= T || k >= B || l >= B) return;
 
-  d_matrix[(B * B) * (i + j * T) + k + l * B] = d_originalMatrix[(i * B + k) + (j * B * N + l * N)];
+  d_tilePointers[i + j * T][k + l * B] = d_originalMatrix[(i * B + k) + (j * B * N + l * N)];
 }
 
-void initializeDeviceData(double *h_originalMatrix, double *d_matrix) {
+void initializeDeviceData(double *h_originalMatrix, std::vector<double *> &d_tiles) {
   double *d_originalMatrix;
-  checkCudaErrors(cudaMalloc(&d_originalMatrix, N * N * sizeof(double)));
-  checkCudaErrors(cudaMemcpy(d_originalMatrix, h_originalMatrix, N * N * sizeof(double), cudaMemcpyHostToDevice));
+  checkCudaErrors(cudaMallocManaged(&d_originalMatrix, N * N * sizeof(double)));
+  checkCudaErrors(cudaMemcpy(d_originalMatrix, h_originalMatrix, N * N * sizeof(double), cudaMemcpyDefault));
 
-  // Reorder elements in d_matrix, such that each block matrix is stored in a contiguous space
+  double **d_tilePointers;
+  checkCudaErrors(cudaMalloc(&d_tilePointers, T * T * sizeof(double *)));
+  checkCudaErrors(cudaMemcpy(d_tilePointers, d_tiles.data(), T * T * sizeof(double *), cudaMemcpyDefault));
+
   const size_t NUM_THREADS = 1024;
   const size_t NUM_BLOCKS = (N * N + NUM_THREADS) / NUM_THREADS;
-  storeBlockMatrixInContiguousSpace<<<NUM_BLOCKS, NUM_THREADS>>>(
-    d_matrix,
+  storeMatrixIntoTiles<<<NUM_BLOCKS, NUM_THREADS>>>(
     d_originalMatrix,
+    d_tilePointers,
     N, B, T
   );
 
   checkCudaErrors(cudaDeviceSynchronize());
 
   checkCudaErrors(cudaFree(d_originalMatrix));
-
-  checkCudaErrors(cudaMemPrefetchAsync(d_matrix, N * N * sizeof(double), Constants::DEVICE_ID));
+  checkCudaErrors(cudaFree(d_tilePointers));
 }
 
 void tiledCholesky(bool optimize, bool verify) {
@@ -418,13 +426,15 @@ void tiledCholesky(bool optimize, bool verify) {
 
   // Initialize device data
   clock.logWithCurrentTime("Initialzing device data");
-  double *d_matrix;
-  checkCudaErrors(cudaMallocManaged(&d_matrix, N * N * sizeof(double)));
-  initializeDeviceData(h_originalMatrix.get(), d_matrix);
+  std::vector<double *> d_tiles(T * T);
+  for (int i = 0; i < T * T; i++) {
+    checkCudaErrors(cudaMallocManaged(&d_tiles[i], B * B * sizeof(double)));
+  }
+  initializeDeviceData(h_originalMatrix.get(), d_tiles);
   clock.logWithCurrentTime("Device data initialized");
 
   auto getMatrixBlock = [&](int i, int j) {
-    return d_matrix + (B * B) * (i + j * T);
+    return d_tiles[i + j * T];
   };
 
   // Register matrix block addresses
@@ -464,7 +474,7 @@ void tiledCholesky(bool optimize, bool verify) {
     CUBLAS_FILL_MODE_LOWER,
     B,
     CUDA_R_64F,
-    d_matrix,
+    d_tiles[0],
     B,
     CUDA_R_64F,
     &workspaceInBytesOnDevice,
@@ -606,20 +616,39 @@ void tiledCholesky(bool optimize, bool verify) {
   clock.logWithCurrentTime("Graph printed");
 
   if (optimize) {
-    initializeDeviceData(h_originalMatrix.get(), d_matrix);
     auto optimizedGraph = profileAndOptimize(graph);
 
     for (int i = 0; i < ConfigurationManager::getConfig().repeat; i++) {
-      initializeDeviceData(h_originalMatrix.get(), d_matrix);
+      initializeDeviceData(h_originalMatrix.get(), d_tiles);
 
-      float runningTime = executeOptimizedGraph(
+      float runningTime;
+      std::map<void *, void *> managedDeviceArrayToHostArrayMap;
+      executeOptimizedGraph(
         optimizedGraph,
         [&](int taskId, std::map<void *, void *> addressUpdate, cudaStream_t stream) {
           tiledCholeskyTaskManager->executeRandomTask(getMatrixBlock, taskId, addressUpdate, stream);
-        }
+        },
+        runningTime,
+        managedDeviceArrayToHostArrayMap
       );
 
       checkCudaErrors(cudaDeviceSynchronize());
+
+      std::map<void *, void *> oldManagedDeviceArrayToNewManagedDeviceArrayMap;
+      for (int j = 0; j < T * T; j++) {
+        auto oldPtr = d_tiles[j];
+        auto newPtr = managedDeviceArrayToHostArrayMap[oldPtr];
+        checkCudaErrors(cudaMalloc(&d_tiles[j], B * B * sizeof(double)));
+        checkCudaErrors(cudaMemcpy(d_tiles[j], newPtr, B * B * sizeof(double), cudaMemcpyDefault));
+        if (ConfigurationManager::getConfig().useNvlink) {
+          checkCudaErrors(cudaFree(newPtr));
+        } else {
+          free(newPtr);
+        }
+        oldManagedDeviceArrayToNewManagedDeviceArrayMap[oldPtr] = d_tiles[j];
+      }
+
+      updateManagedMemoryAddress(oldManagedDeviceArrayToNewManagedDeviceArrayMap);
 
       fmt::print("Total time used (s): {}\n", runningTime);
     }
@@ -632,11 +661,11 @@ void tiledCholesky(bool optimize, bool verify) {
     clock.logWithCurrentTime("Graph instantiated, start execution");
 
     for (int i = 0; i < ConfigurationManager::getConfig().repeat; i++) {
+      initializeDeviceData(h_originalMatrix.get(), d_tiles);
+
       if (ConfigurationManager::getConfig().measurePeakMemoryUsage) {
         peakMemoryUsageProfiler.start();
       }
-
-      initializeDeviceData(h_originalMatrix.get(), d_matrix);
 
       cudaEventClock.start();
       checkCudaErrors(cudaGraphLaunch(graphExec, s));
@@ -660,15 +689,17 @@ void tiledCholesky(bool optimize, bool verify) {
 
   if (verify) {
     clock.logWithCurrentTime("Start verification");
-    fmt::print("Result passes verification: {}\n", verifyCholeskyDecompositionPartially(h_originalMatrix.get(), d_matrix, N, B));
+    fmt::print("Result passes verification: {}\n", verifyCholeskyDecompositionPartially(h_originalMatrix.get(), d_tiles, N, B));
     clock.logWithCurrentTime("Verification done");
   }
 
   clock.logWithCurrentTime("All finished");
 
   free(h_workspace);
-  cudaFree(d_matrix);
-  cudaFree(d_workspace);
+  checkCudaErrors(cudaFree(d_workspace));
+  for (auto d_tile : d_tiles) {
+    checkCudaErrors(cudaFree(d_tile));
+  }
 }
 
 int main(int argc, char **argv) {

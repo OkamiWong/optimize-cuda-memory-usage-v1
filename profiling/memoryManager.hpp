@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <initializer_list>
 #include <map>
 #include <set>
@@ -15,7 +16,7 @@ struct MemoryManager {
 };
 
 template <typename T>
-__host__ void registerManagedMemoryAddress(T *devPtr, size_t size) {
+void registerManagedMemoryAddress(T *devPtr, size_t size) {
   auto ptr = static_cast<void *>(devPtr);
   if (MemoryManager::managedMemoryAddressToIndexMap.find(ptr) == MemoryManager::managedMemoryAddressToIndexMap.end()) {
     MemoryManager::managedMemoryAddresses.push_back(ptr);
@@ -25,18 +26,13 @@ __host__ void registerManagedMemoryAddress(T *devPtr, size_t size) {
 }
 
 template <typename T>
-__host__ cudaError_t wrappedCudaMallocManaged(T **devPtr, size_t size) {
-  auto err = cudaMallocManaged(devPtr, size);
-  registerManagedMemoryAddress(*devPtr, size);
-  return err;
-}
-
-template <typename T>
-__host__ void registerApplicationInput(T *devPtr) {
+void registerApplicationInput(T *devPtr) {
   MemoryManager::applicationInputs.insert(static_cast<void *>(devPtr));
 }
 
 template <typename T>
-__host__ void registerApplicationOutput(T *devPtr) {
+void registerApplicationOutput(T *devPtr) {
   MemoryManager::applicationOutputs.insert(static_cast<void *>(devPtr));
 }
+
+void updateManagedMemoryAddress(const std::map<void *, void *> oldAddressToNewAddressMap);

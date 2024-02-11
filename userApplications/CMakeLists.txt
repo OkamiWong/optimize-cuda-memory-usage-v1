@@ -4,6 +4,7 @@ target_link_libraries(
   utilities
   cudaUtilities
   annotation
+  memoryManager
   optimization
   peakMemoryUsageProfiler
   logger

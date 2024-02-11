@@ -13,8 +13,12 @@ class Executor {
   Executor(Executor &other) = delete;
   void operator=(const Executor &) = delete;
 
-  // New CUDA Graph running time in seconds is returned
-  float executeOptimizedGraph(OptimizationOutput &optimizedGraph, ExecuteRandomTask executeRandomTask);
+  void executeOptimizedGraph(
+    OptimizationOutput &optimizedGraph,
+    ExecuteRandomTask executeRandomTask,
+    float &runningTime,
+    std::map<void *, void *> &managedDeviceArrayToHostArrayMap
+  );
 
  protected:
   Executor() = default;

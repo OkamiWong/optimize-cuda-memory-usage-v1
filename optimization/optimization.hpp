@@ -4,4 +4,18 @@
 #include "optimizationOutput.hpp"
 
 OptimizationOutput profileAndOptimize(cudaGraph_t originalGraph);
-float executeOptimizedGraph(OptimizationOutput& optimizedGraph, ExecuteRandomTask executeRandomTask);
+
+/// @brief
+/// @param optimizedGraph
+/// @param executeRandomTask
+/// @param runningTime
+///   (Output) The running time
+/// @param managedDeviceArrayToHostArrayMap
+///   (Output) The mapping between old managed device array addresses and
+///   new host array addresses where old arrays are moved to.
+void executeOptimizedGraph(
+  OptimizationOutput &optimizedGraph,
+  ExecuteRandomTask executeRandomTask,
+  float &runningTime,
+  std::map<void *, void *> &managedDeviceArrayToHostArrayMap
+);

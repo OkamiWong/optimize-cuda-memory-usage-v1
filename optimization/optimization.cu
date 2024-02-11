@@ -10,7 +10,17 @@ OptimizationOutput profileAndOptimize(cudaGraph_t originalGraph) {
   return Optimizer::getInstance()->profileAndOptimize(originalGraph);
 }
 
-float executeOptimizedGraph(OptimizationOutput& optimizedGraph, ExecuteRandomTask executeRandomTask) {
+void executeOptimizedGraph(
+  OptimizationOutput &optimizedGraph,
+  ExecuteRandomTask executeRandomTask,
+  float &runningTime,
+  std::map<void *, void *> &managedDeviceArrayToHostArrayMap
+) {
   LOG_TRACE();
-  return Executor::getInstance()->executeOptimizedGraph(optimizedGraph, executeRandomTask);
+  Executor::getInstance()->executeOptimizedGraph(
+    optimizedGraph,
+    executeRandomTask,
+    runningTime,
+    managedDeviceArrayToHostArrayMap
+  );
 }

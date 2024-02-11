@@ -5,3 +5,5 @@ target_link_libraries(cudaGraphExecutionTimelineProfiler cudaUtilities -lcupti)
 
 add_library(peakMemoryUsageProfiler SHARED peakMemoryUsageProfiler.cu)
 target_link_libraries(peakMemoryUsageProfiler cudaUtilities)
+
+add_library(memoryManager SHARED memoryManager.cpp)

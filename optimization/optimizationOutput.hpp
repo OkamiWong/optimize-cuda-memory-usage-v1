@@ -19,7 +19,7 @@ struct OptimizationOutput {
       deviceToHost
     };
     Direction direction;
-    void* address;
+    ArrayId arrayId;
   };
 
   bool optimal;
@@ -30,7 +30,7 @@ struct OptimizationOutput {
   std::map<int, TaskId> nodeIdToTaskIdMap;
   std::map<int, DataMovement> nodeIdToDataMovementMap;
 
-  std::vector<void*> arraysInitiallyAllocatedOnDevice;
+  std::vector<ArrayId> arraysInitiallyAllocatedOnDevice;
 
   int addEmptyNode() {
     auto u = this->nodes.size();
@@ -53,10 +53,10 @@ struct OptimizationOutput {
     return u;
   }
 
-  int addDataMovementNode(DataMovement::Direction direction, void* address, int start, int end) {
+  int addDataMovementNode(DataMovement::Direction direction, ArrayId arrayId, int start, int end) {
     DataMovement dataMovement;
     dataMovement.direction = direction;
-    dataMovement.address = address;
+    dataMovement.arrayId = arrayId;
 
     auto u = this->addDataMovementNode(dataMovement);
     this->addEdge(start, u);

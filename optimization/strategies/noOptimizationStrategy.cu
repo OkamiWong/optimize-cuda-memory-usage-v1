@@ -13,8 +13,8 @@ OptimizationOutput NoOptimizationStrategy::run(OptimizationInput &input) {
   output.optimal = true;
 
   // All managed data initially on device
-  for (auto ptr : MemoryManager::managedMemoryAddresses) {
-    output.arraysInitiallyAllocatedOnDevice.push_back(ptr);
+  for (int i = 0; i < MemoryManager::managedMemoryAddresses.size(); i++) {
+    output.arraysInitiallyAllocatedOnDevice.push_back(i);
   }
 
   // Add task groups

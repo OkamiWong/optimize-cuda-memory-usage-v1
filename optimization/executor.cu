@@ -26,6 +26,7 @@ class OptimizedCudaGraphCreator {
   cudaGraphNode_t addEmptyNode(const std::vector<cudaGraphNode_t> &dependencies) {
     cudaGraphNode_t newEmptyNode;
     checkCudaErrors(cudaGraphAddEmptyNode(&newEmptyNode, this->graph, dependencies.data(), dependencies.size()));
+    visited[newEmptyNode] = true;
     return newEmptyNode;
   }
 
@@ -76,8 +77,16 @@ Executor *Executor::getInstance() {
   return instance;
 }
 
-float Executor::executeOptimizedGraph(OptimizationOutput &optimizedGraph, ExecuteRandomTask executeRandomTask) {
+void Executor::executeOptimizedGraph(
+  OptimizationOutput &optimizedGraph,
+  ExecuteRandomTask executeRandomTask,
+  float &runningTime,
+  std::map<void *, void *> &managedDeviceArrayToHostArrayMap
+) {
   LOG_TRACE_WITH_INFO("Initialize");
+
+  managedDeviceArrayToHostArrayMap.clear();
+
   cudaGraph_t graph;
   checkCudaErrors(cudaGraphCreate(&graph, 0));
 
@@ -111,27 +120,39 @@ float Executor::executeOptimizedGraph(OptimizationOutput &optimizedGraph, Execut
   }
 
   LOG_TRACE_WITH_INFO("Initialize managed data distribution");
+
   for (auto ptr : MemoryManager::managedMemoryAddresses) {
-    checkCudaErrors(cudaMemPrefetchAsync(
+    void *newPtr;
+    if (ConfigurationManager::getConfig().useNvlink) {
+      checkCudaErrors(cudaSetDevice(Constants::STORAGE_DEVICE_ID));
+      checkCudaErrors(cudaMalloc(&newPtr, MemoryManager::managedMemoryAddressToSizeMap[ptr]));
+    } else {
+      newPtr = malloc(MemoryManager::managedMemoryAddressToSizeMap[ptr]);
+    }
+
+    managedDeviceArrayToHostArrayMap[ptr] = newPtr;
+    checkCudaErrors(cudaMemcpy(
+      newPtr,
       ptr,
       MemoryManager::managedMemoryAddressToSizeMap[ptr],
-      storageDeviceId
+      cudaMemcpyDefault
     ));
+    checkCudaErrors(cudaFree(ptr));
   }
+  checkCudaErrors(cudaSetDevice(Constants::DEVICE_ID));
   checkCudaErrors(cudaDeviceSynchronize());
 
   std::map<void *, void *> addressUpdate;
-  std::map<int, std::vector<cudaGraphNode_t>> nodeToDependentNodesMap;
-
-  LOG_TRACE_WITH_INFO("Record nodes to a new CUDA Graph");
 
   checkCudaErrors(cudaStreamBeginCapture(stream, cudaStreamCaptureModeGlobal));
-  for (auto ptr : optimizedGraph.arraysInitiallyAllocatedOnDevice) {
+  for (auto arrayId : optimizedGraph.arraysInitiallyAllocatedOnDevice) {
+    auto ptr = MemoryManager::managedMemoryAddresses[arrayId];
     auto size = MemoryManager::managedMemoryAddressToSizeMap[ptr];
+    auto newPtr = managedDeviceArrayToHostArrayMap[ptr];
 
     void *devicePtr;
     checkCudaErrors(cudaMallocAsync(&devicePtr, size, stream));
-    checkCudaErrors(cudaMemcpyAsync(devicePtr, ptr, size, prefetchMemcpyKind, stream));
+    checkCudaErrors(cudaMemcpyAsync(devicePtr, newPtr, size, prefetchMemcpyKind, stream));
     addressUpdate[ptr] = devicePtr;
   }
   cudaGraph_t graphForInitialDataDistribution;
@@ -141,6 +162,10 @@ float Executor::executeOptimizedGraph(OptimizationOutput &optimizedGraph, Execut
   checkCudaErrors(cudaGraphInstantiate(&graphExecForInitialDataDistribution, graphForInitialDataDistribution, nullptr, nullptr, 0));
   checkCudaErrors(cudaGraphLaunch(graphExecForInitialDataDistribution, stream));
   checkCudaErrors(cudaDeviceSynchronize());
+
+  LOG_TRACE_WITH_INFO("Record nodes to a new CUDA Graph");
+
+  std::map<int, std::vector<cudaGraphNode_t>> nodeToDependentNodesMap;
 
   // Kahn Algorithm
   while (!nodesToExecute.empty()) {
@@ -153,19 +178,34 @@ float Executor::executeOptimizedGraph(OptimizationOutput &optimizedGraph, Execut
     if (nodeType == OptimizationOutput::NodeType::dataMovement) {
       optimizedCudaGraphCreator->beginCaptureOperation(nodeToDependentNodesMap[u]);
       auto &dataMovement = optimizedGraph.nodeIdToDataMovementMap[u];
-      auto dataMovementSize = MemoryManager::managedMemoryAddressToSizeMap[dataMovement.address];
+      auto dataMovementAddress = MemoryManager::managedMemoryAddresses[dataMovement.arrayId];
+      auto dataMovementSize = MemoryManager::managedMemoryAddressToSizeMap[dataMovementAddress];
       if (dataMovement.direction == OptimizationOutput::DataMovement::Direction::hostToDevice) {
         void *devicePtr;
         checkCudaErrors(cudaMallocAsync(&devicePtr, dataMovementSize, stream));
-        checkCudaErrors(cudaMemcpyAsync(devicePtr, dataMovement.address, dataMovementSize, prefetchMemcpyKind, stream));
-        addressUpdate[dataMovement.address] = devicePtr;
+        checkCudaErrors(cudaMemcpyAsync(
+          devicePtr,
+          managedDeviceArrayToHostArrayMap[dataMovementAddress],
+          dataMovementSize,
+          prefetchMemcpyKind,
+          stream
+        ));
+        addressUpdate[dataMovementAddress] = devicePtr;
       } else {
-        void *devicePtr = addressUpdate[dataMovement.address];
-        checkCudaErrors(cudaMemcpyAsync(dataMovement.address, devicePtr, dataMovementSize, offloadMemcpyKind, stream));
+        void *devicePtr = addressUpdate[dataMovementAddress];
+        checkCudaErrors(cudaMemcpyAsync(
+          managedDeviceArrayToHostArrayMap[dataMovementAddress],
+          devicePtr,
+          dataMovementSize,
+          offloadMemcpyKind,
+          stream
+        ));
         checkCudaErrors(cudaFreeAsync(devicePtr, stream));
-        addressUpdate.erase(dataMovement.address);
+        addressUpdate.erase(dataMovementAddress);
       }
+      checkCudaErrors(cudaPeekAtLastError());
       newLeafNodes = optimizedCudaGraphCreator->endCaptureOperation();
+      checkCudaErrors(cudaPeekAtLastError());
     } else if (nodeType == OptimizationOutput::NodeType::task) {
       optimizedCudaGraphCreator->beginCaptureOperation(nodeToDependentNodesMap[u]);
       executeRandomTask(
@@ -185,8 +225,9 @@ float Executor::executeOptimizedGraph(OptimizationOutput &optimizedGraph, Execut
 
     for (auto &v : optimizedGraph.edges[u]) {
       inDegrees[v]--;
+
       nodeToDependentNodesMap[v].insert(
-        nodeToDependentNodesMap[v].begin(),
+        nodeToDependentNodesMap[v].end(),
         newLeafNodes.begin(),
         newLeafNodes.end()
       );
@@ -218,14 +259,19 @@ float Executor::executeOptimizedGraph(OptimizationOutput &optimizedGraph, Execut
   if (ConfigurationManager::getConfig().measurePeakMemoryUsage) {
     const auto peakMemoryUsage = peakMemoryUsageProfiler.end();
     LOG_TRACE_WITH_INFO(
-      "Peak memory usage (MiB): %.2f\n",
+      "Peak memory usage (MiB): %.2f",
       static_cast<float>(peakMemoryUsage) / 1024.0 / 1024.0
     );
   }
 
   LOG_TRACE_WITH_INFO("Clean up");
   for (auto &[oldAddr, newAddr] : addressUpdate) {
-    checkCudaErrors(cudaMemcpy(oldAddr, newAddr, MemoryManager::managedMemoryAddressToSizeMap[oldAddr], offloadMemcpyKind));
+    checkCudaErrors(cudaMemcpy(
+      managedDeviceArrayToHostArrayMap[oldAddr],
+      newAddr,
+      MemoryManager::managedMemoryAddressToSizeMap[oldAddr],
+      offloadMemcpyKind
+    ));
     checkCudaErrors(cudaFree(newAddr));
   }
   checkCudaErrors(cudaDeviceSynchronize());
@@ -240,5 +286,5 @@ float Executor::executeOptimizedGraph(OptimizationOutput &optimizedGraph, Execut
     disablePeerAccessForNvlink(Constants::DEVICE_ID, Constants::STORAGE_DEVICE_ID);
   }
 
-  return cudaEventClock.getTimeInSeconds();
+  runningTime = cudaEventClock.getTimeInSeconds();
 }

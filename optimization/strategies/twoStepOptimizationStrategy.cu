@@ -168,8 +168,7 @@ OptimizationOutput convertToOptimizationOutput(
 
   // Add arrays that should be on device initially
   for (auto index : secondStepOutput.indicesOfArraysInitiallyOnDevice) {
-    auto addr = MemoryManager::managedMemoryAddresses[index];
-    optimizedGraph.arraysInitiallyAllocatedOnDevice.push_back(addr);
+    optimizedGraph.arraysInitiallyAllocatedOnDevice.push_back(index);
   }
 
   std::map<int, float> nodeWeight;
@@ -248,7 +247,7 @@ OptimizationOutput convertToOptimizationOutput(
 
     auto dataMovementNode = optimizedGraph.addDataMovementNode(
       OptimizationOutput::DataMovement::Direction::hostToDevice,
-      arrayAddress,
+      arrayIndex,
       taskGroupStartNodes[firstStepOutput.taskGroupExecutionOrder[startingNodeIndex]],
       taskGroupBodyNodes[firstStepOutput.taskGroupExecutionOrder[endingNodeIndex]]
     );
@@ -264,7 +263,7 @@ OptimizationOutput convertToOptimizationOutput(
 
     auto dataMovementNode = optimizedGraph.addDataMovementNode(
       OptimizationOutput::DataMovement::Direction::deviceToHost,
-      arrayAddress,
+      arrayIndex,
       taskGroupEndNodes[firstStepOutput.taskGroupExecutionOrder[startingNodeIndex]],
       taskGroupStartNodes[firstStepOutput.taskGroupExecutionOrder[endingNodeIndex]]
     );
