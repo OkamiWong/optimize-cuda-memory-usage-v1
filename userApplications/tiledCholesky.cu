@@ -407,7 +407,6 @@ void initializeDeviceData(double *h_originalMatrix, std::vector<double *> &d_til
   );
 
   checkCudaErrors(cudaDeviceSynchronize());
-
   checkCudaErrors(cudaFree(d_originalMatrix));
   checkCudaErrors(cudaFree(d_tilePointers));
 }
@@ -428,7 +427,7 @@ void tiledCholesky(bool optimize, bool verify) {
   clock.logWithCurrentTime("Initialzing device data");
   std::vector<double *> d_tiles(T * T);
   for (int i = 0; i < T * T; i++) {
-    checkCudaErrors(cudaMallocManaged(&d_tiles[i], B * B * sizeof(double)));
+    checkCudaErrors(cudaMalloc(&d_tiles[i], B * B * sizeof(double)));
   }
   initializeDeviceData(h_originalMatrix.get(), d_tiles);
   clock.logWithCurrentTime("Device data initialized");
