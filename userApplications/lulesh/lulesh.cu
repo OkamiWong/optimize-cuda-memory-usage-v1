@@ -79,6 +79,7 @@ Additional BSD Notice
 #include <sstream>
 #include <vector>
 
+#include "../../profiling/annotation.hpp"
 #include "../../utilities/cudaUtilities.hpp"
 #include "lulesh.h"
 #include "sm_utils.inl"
@@ -1378,45 +1379,31 @@ __device__
 }
 
 template <bool hourg_gt_zero>
-__global__
-#ifdef DOUBLE_PRECISION
-__launch_bounds__(64, 4)
-#else
-__launch_bounds__(64, 8)
-#endif
-  void CalcVolumeForceForElems_kernel(
-
-    const Real_t* __restrict__ volo,
-    const Real_t* __restrict__ v,
-    const Real_t* __restrict__ p,
-    const Real_t* __restrict__ q,
-    Real_t hourg,
-    Index_t numElem,
-    Index_t padded_numElem,
-    const Index_t* __restrict__ nodelist,
-    const Real_t* __restrict__ ss,
-    const Real_t* __restrict__ elemMass,
-    const Real_t* __restrict__ x, const Real_t* __restrict__ y, const Real_t* __restrict__ z,
-    const Real_t* __restrict__ xd, const Real_t* __restrict__ yd, const Real_t* __restrict__ zd,
-// TextureObj<Real_t> x,  TextureObj<Real_t> y,  TextureObj<Real_t> z,
-// TextureObj<Real_t> xd,  TextureObj<Real_t> yd,  TextureObj<Real_t> zd,
-// TextureObj<Real_t>* x,  TextureObj<Real_t>* y,  TextureObj<Real_t>* z,
-// TextureObj<Real_t>* xd,  TextureObj<Real_t>* yd,  TextureObj<Real_t>* zd,
-#ifdef DOUBLE_PRECISION  // For floats, use atomicAdd
-    Real_t* __restrict__ fx_elem,
-    Real_t* __restrict__ fy_elem,
-    Real_t* __restrict__ fz_elem,
-#else
-    Real_t* __restrict__ fx_node,
-    Real_t* __restrict__ fy_node,
-    Real_t* __restrict__ fz_node,
-#endif
-    Index_t* __restrict__ bad_vol,
-    const Index_t num_threads
-  )
+__global__ __launch_bounds__(64, 4) void CalcVolumeForceForElems_kernel(
+  const Real_t* __restrict__ volo,
+  const Real_t* __restrict__ v,
+  const Real_t* __restrict__ p,
+  const Real_t* __restrict__ q,
+  Real_t hourg,
+  Index_t numElem,
+  Index_t padded_numElem,
+  const Index_t* __restrict__ nodelist,
+  const Real_t* __restrict__ ss,
+  const Real_t* __restrict__ elemMass,
+  const Real_t* __restrict__ x, const Real_t* __restrict__ y, const Real_t* __restrict__ z,
+  const Real_t* __restrict__ xd, const Real_t* __restrict__ yd, const Real_t* __restrict__ zd,
+  // TextureObj<Real_t> x,  TextureObj<Real_t> y,  TextureObj<Real_t> z,
+  // TextureObj<Real_t> xd,  TextureObj<Real_t> yd,  TextureObj<Real_t> zd,
+  // TextureObj<Real_t>* x,  TextureObj<Real_t>* y,  TextureObj<Real_t>* z,
+  // TextureObj<Real_t>* xd,  TextureObj<Real_t>* yd,  TextureObj<Real_t>* zd,
+  Real_t* __restrict__ fx_elem,
+  Real_t* __restrict__ fy_elem,
+  Real_t* __restrict__ fz_elem,
+  Index_t* __restrict__ bad_vol,
+  const Index_t num_threads
+)
 
 {
-
   /*************************************************
    *     FUNCTION: Calculates the volume forces
    *************************************************/
@@ -1533,41 +1520,34 @@ __launch_bounds__(64, 8)
       CalcElemFBHourglassForce(&xdn[0], &ydn[0], &zdn[0], hourgam[0], hourgam[1], hourgam[2], hourgam[3], hourgam[4], hourgam[5], hourgam[6], hourgam[7], coefficient, &hgfx[0], &hgfy[0], &hgfz[0]);
     }
 
-#ifdef DOUBLE_PRECISION
-  #pragma unroll
+#pragma unroll
     for (int node = 0; node < 8; node++) {
       Index_t store_loc = elem + padded_numElem * node;
       fx_elem[store_loc] = hgfx[node];
       fy_elem[store_loc] = hgfy[node];
       fz_elem[store_loc] = hgfz[node];
     }
-#else
-  #pragma unroll
-    for (int i = 0; i < 8; i++) {
-      Index_t ni = n[i];
-      atomicAdd(&fx_node[ni], hgfx[i]);
-      atomicAdd(&fy_node[ni], hgfy[i]);
-      atomicAdd(&fz_node[ni], hgfz[i]);
-    }
-#endif
 
   }  // If elem < numElem
 }
 
 static inline void CalcVolumeForceForElems(const Real_t hgcoef, Domain* domain) {
+  if (domain->annotate) {
+    annotateNextKernel(
+      0,
+      {domain->volo.raw(), domain->v.raw(), domain->p.raw(), domain->q.raw(), domain->nodelist.raw(), domain->ss.raw(), domain->elemMass.raw(), domain->x.raw(), domain->y.raw(), domain->z.raw(), domain->xd.raw(), domain->yd.raw(), domain->zd.raw(), domain->nodeElemCount.raw(), domain->nodeElemStart.raw(), domain->nodeElemCornerList.raw()},
+      {domain->fx.raw(), domain->fy.raw(), domain->fz.raw()},
+      domain->mainStream
+    );
+  }
+
   Index_t numElem = domain->numElem;
   Index_t padded_numElem = domain->padded_numElem;
 
-#ifdef DOUBLE_PRECISION
   Vector_d<Real_t> fx_elem, fy_elem, fz_elem;
   fx_elem.allocate(padded_numElem * 8, domain->mainStream);
   fy_elem.allocate(padded_numElem * 8, domain->mainStream);
   fz_elem.allocate(padded_numElem * 8, domain->mainStream);
-#else
-  thrust::fill(domain->fx.begin(), domain->fx.end(), 0.);
-  thrust::fill(domain->fy.begin(), domain->fy.end(), 0.);
-  thrust::fill(domain->fz.begin(), domain->fz.end(), 0.);
-#endif
 
   int num_threads = numElem;
   const int block_size = 64;
@@ -1575,24 +1555,11 @@ static inline void CalcVolumeForceForElems(const Real_t hgcoef, Domain* domain) 
 
   bool hourg_gt_zero = hgcoef > Real_t(0.0);
   if (hourg_gt_zero) {
-    CalcVolumeForceForElems_kernel<true><<<dimGrid, block_size, 0, domain->mainStream>>>(domain->volo.raw(), domain->v.raw(), domain->p.raw(), domain->q.raw(), hgcoef, numElem, padded_numElem, domain->nodelist.raw(), domain->ss.raw(), domain->elemMass.raw(), domain->x.raw(), domain->y.raw(), domain->z.raw(), domain->xd.raw(), domain->yd.raw(), domain->zd.raw(),
-#ifdef DOUBLE_PRECISION
-                                                                                         fx_elem.raw(), fy_elem.raw(), fz_elem.raw(),
-#else
-                                                                                         domain->fx.raw(), domain->fy.raw(), domain->fz.raw(),
-#endif
-                                                                                         domain->bad_vol_h, num_threads);
+    CalcVolumeForceForElems_kernel<true><<<dimGrid, block_size, 0, domain->mainStream>>>(domain->volo.raw(), domain->v.raw(), domain->p.raw(), domain->q.raw(), hgcoef, numElem, padded_numElem, domain->nodelist.raw(), domain->ss.raw(), domain->elemMass.raw(), domain->x.raw(), domain->y.raw(), domain->z.raw(), domain->xd.raw(), domain->yd.raw(), domain->zd.raw(), fx_elem.raw(), fy_elem.raw(), fz_elem.raw(), domain->bad_vol_h, num_threads);
   } else {
-    CalcVolumeForceForElems_kernel<false><<<dimGrid, block_size, 0, domain->mainStream>>>(domain->volo.raw(), domain->v.raw(), domain->p.raw(), domain->q.raw(), hgcoef, numElem, padded_numElem, domain->nodelist.raw(), domain->ss.raw(), domain->elemMass.raw(), domain->x.raw(), domain->y.raw(), domain->z.raw(), domain->xd.raw(), domain->yd.raw(), domain->zd.raw(),
-#ifdef DOUBLE_PRECISION
-                                                                                          fx_elem.raw(), fy_elem.raw(), fz_elem.raw(),
-#else
-                                                                                          domain->fx.raw(), domain->fy.raw(), domain->fz.raw(),
-#endif
-                                                                                          domain->bad_vol_h, num_threads);
+    CalcVolumeForceForElems_kernel<false><<<dimGrid, block_size, 0, domain->mainStream>>>(domain->volo.raw(), domain->v.raw(), domain->p.raw(), domain->q.raw(), hgcoef, numElem, padded_numElem, domain->nodelist.raw(), domain->ss.raw(), domain->elemMass.raw(), domain->x.raw(), domain->y.raw(), domain->z.raw(), domain->xd.raw(), domain->yd.raw(), domain->zd.raw(), fx_elem.raw(), fy_elem.raw(), fz_elem.raw(), domain->bad_vol_h, num_threads);
   }
 
-#ifdef DOUBLE_PRECISION
   num_threads = domain->numNode;
 
   // Launch boundary nodes first
@@ -1615,7 +1582,6 @@ static inline void CalcVolumeForceForElems(const Real_t hgcoef, Domain* domain) 
   fy_elem.free(domain->mainStream);
   fz_elem.free(domain->mainStream);
 
-#endif  // ifdef DOUBLE_PRECISION
   return;
 }
 
@@ -1642,6 +1608,15 @@ __global__ void CalcAccelerationForNodes_kernel(int numNode, Real_t* xdd, Real_t
 }
 
 static inline void CalcAccelerationForNodes(Domain* domain) {
+  if (domain->annotate) {
+    annotateNextKernel(
+      1,
+      {domain->fx.raw(), domain->fy.raw(), domain->fz.raw(), domain->nodalMass.raw()},
+      {domain->xdd.raw(), domain->ydd.raw(), domain->zdd.raw()},
+      domain->mainStream
+    );
+  }
+
   Index_t dimBlock = 128;
   Index_t dimGrid = PAD_DIV(domain->numNode, dimBlock);
 
@@ -1665,6 +1640,15 @@ static inline void ApplyAccelerationBoundaryConditionsForNodesInXAxis(Domain* do
   Index_t dimBlock = 128;
   Index_t dimGrid = PAD_DIV(domain->numSymmX, dimBlock);
   if (domain->numSymmX > 0) {
+    if (domain->annotate) {
+      annotateNextKernel(
+        2,
+        {domain->symmX.raw()},
+        {domain->xdd.raw()},
+        domain->mainStream
+      );
+    }
+
     ApplyAccelerationBoundaryConditionsForNodes_kernel<<<dimGrid, dimBlock, 0, domain->mainStream>>>(
       domain->numSymmX,
       domain->xdd.raw(),
@@ -1677,6 +1661,15 @@ static inline void ApplyAccelerationBoundaryConditionsForNodesInYAxis(Domain* do
   Index_t dimBlock = 128;
   Index_t dimGrid = PAD_DIV(domain->numSymmY, dimBlock);
   if (domain->numSymmY > 0) {
+    if (domain->annotate) {
+      annotateNextKernel(
+        3,
+        {domain->symmY.raw()},
+        {domain->ydd.raw()},
+        domain->mainStream
+      );
+    }
+
     ApplyAccelerationBoundaryConditionsForNodes_kernel<<<dimGrid, dimBlock, 0, domain->mainStream>>>(
       domain->numSymmY,
       domain->ydd.raw(),
@@ -1689,6 +1682,15 @@ static inline void ApplyAccelerationBoundaryConditionsForNodesInZAxis(Domain* do
   Index_t dimBlock = 128;
   Index_t dimGrid = PAD_DIV(domain->numSymmZ, dimBlock);
   if (domain->numSymmZ > 0) {
+    if (domain->annotate) {
+      annotateNextKernel(
+        4,
+        {domain->symmZ.raw()},
+        {domain->zdd.raw()},
+        domain->mainStream
+      );
+    }
+
     ApplyAccelerationBoundaryConditionsForNodes_kernel<<<dimGrid, dimBlock, 0, domain->mainStream>>>(
       domain->numSymmZ,
       domain->zdd.raw(),
@@ -1722,6 +1724,15 @@ __global__ void CalcPositionAndVelocityForNodes_kernel(int numNode, const Real_t
 }
 
 static inline void CalcPositionAndVelocityForNodes(const Real_t u_cut, Domain* domain) {
+  if (domain->annotate) {
+    annotateNextKernel(
+      0,
+      {domain->x.raw(), domain->y.raw(), domain->z.raw(), domain->xd.raw(), domain->yd.raw(), domain->zd.raw(), domain->xdd.raw(), domain->ydd.raw(), domain->zdd.raw()},
+      {domain->x.raw(), domain->y.raw(), domain->z.raw(), domain->xd.raw(), domain->yd.raw(), domain->zd.raw()},
+      domain->mainStream
+    );
+  }
+
   Index_t dimBlock = 128;
   Index_t dimGrid = PAD_DIV(domain->numNode, dimBlock);
 
@@ -1889,53 +1900,46 @@ static __device__ __forceinline__ void CalcMonoGradient(Real_t* x, Real_t* y, Re
 #undef SUM4
 }
 
-__global__
-#ifdef DOUBLE_PRECISION
-__launch_bounds__(64, 8)  // 64-bit
-#else
-__launch_bounds__(64, 16)  // 32-bit
-#endif
-  void CalcKinematicsAndMonotonicQGradient_kernel(
-    Index_t numElem, Index_t padded_numElem, const Real_t* dt,
-    const Index_t* __restrict__ nodelist, const Real_t* __restrict__ volo, const Real_t* __restrict__ v,
+__global__ __launch_bounds__(64, 8) void CalcKinematicsAndMonotonicQGradient_kernel(
+  Index_t numElem, Index_t padded_numElem, const Real_t* dt,
+  const Index_t* __restrict__ nodelist, const Real_t* __restrict__ volo, const Real_t* __restrict__ v,
 
-    const Real_t* __restrict__ x,
-    const Real_t* __restrict__ y,
-    const Real_t* __restrict__ z,
-    const Real_t* __restrict__ xd,
-    const Real_t* __restrict__ yd,
-    const Real_t* __restrict__ zd,
+  const Real_t* __restrict__ x,
+  const Real_t* __restrict__ y,
+  const Real_t* __restrict__ z,
+  const Real_t* __restrict__ xd,
+  const Real_t* __restrict__ yd,
+  const Real_t* __restrict__ zd,
 
-    // TextureObj<Real_t> x,
-    // TextureObj<Real_t> y,
-    // TextureObj<Real_t> z,
-    // TextureObj<Real_t> xd,
-    // TextureObj<Real_t> yd,
-    // TextureObj<Real_t> zd,
-    // TextureObj<Real_t>* x,
-    // TextureObj<Real_t>* y,
-    // TextureObj<Real_t>* z,
-    // TextureObj<Real_t>* xd,
-    // TextureObj<Real_t>* yd,
-    // TextureObj<Real_t>* zd,
+  // TextureObj<Real_t> x,
+  // TextureObj<Real_t> y,
+  // TextureObj<Real_t> z,
+  // TextureObj<Real_t> xd,
+  // TextureObj<Real_t> yd,
+  // TextureObj<Real_t> zd,
+  // TextureObj<Real_t>* x,
+  // TextureObj<Real_t>* y,
+  // TextureObj<Real_t>* z,
+  // TextureObj<Real_t>* xd,
+  // TextureObj<Real_t>* yd,
+  // TextureObj<Real_t>* zd,
 
-    Real_t* __restrict__ vnew,
-    Real_t* __restrict__ delv,
-    Real_t* __restrict__ arealg,
-    Real_t* __restrict__ dxx,
-    Real_t* __restrict__ dyy,
-    Real_t* __restrict__ dzz,
-    Real_t* __restrict__ vdov,
-    Real_t* __restrict__ delx_zeta,
-    Real_t* __restrict__ delv_zeta,
-    Real_t* __restrict__ delx_xi,
-    Real_t* __restrict__ delv_xi,
-    Real_t* __restrict__ delx_eta,
-    Real_t* __restrict__ delv_eta,
-    Index_t* __restrict__ bad_vol,
-    const Index_t num_threads
-  ) {
-
+  Real_t* __restrict__ vnew,
+  Real_t* __restrict__ delv,
+  Real_t* __restrict__ arealg,
+  Real_t* __restrict__ dxx,
+  Real_t* __restrict__ dyy,
+  Real_t* __restrict__ dzz,
+  Real_t* __restrict__ vdov,
+  Real_t* __restrict__ delx_zeta,
+  Real_t* __restrict__ delv_zeta,
+  Real_t* __restrict__ delx_xi,
+  Real_t* __restrict__ delv_xi,
+  Real_t* __restrict__ delx_eta,
+  Real_t* __restrict__ delv_eta,
+  Index_t* __restrict__ bad_vol,
+  const Index_t num_threads
+) {
   Real_t B[3][8]; /** shape function derivatives */
   Index_t nodes[8];
   Real_t x_local[8];
@@ -2065,43 +2069,37 @@ static inline void CalcKinematicsAndMonotonicQGradient(Domain* domain) {
   // cudaCheckError();
 }
 
-__global__
-#ifdef DOUBLE_PRECISION
-__launch_bounds__(128, 16)
-#else
-__launch_bounds__(128, 16)
-#endif
-  void CalcMonotonicQRegionForElems_kernel(
-    Real_t qlc_monoq,
-    Real_t qqc_monoq,
-    Real_t monoq_limiter_mult,
-    Real_t monoq_max_slope,
-    Real_t ptiny,
+__global__ __launch_bounds__(128, 16) void CalcMonotonicQRegionForElems_kernel(
+  Real_t qlc_monoq,
+  Real_t qqc_monoq,
+  Real_t monoq_limiter_mult,
+  Real_t monoq_max_slope,
+  Real_t ptiny,
 
-    // the elementset length
-    Index_t elength,
+  // the elementset length
+  Index_t elength,
 
-    Index_t* regElemlist,
-    //    const Index_t* __restrict__ regElemlist,
-    Index_t* elemBC,
-    Index_t* lxim,
-    Index_t* lxip,
-    Index_t* letam,
-    Index_t* letap,
-    Index_t* lzetam,
-    Index_t* lzetap,
-    Real_t* delv_xi,
-    Real_t* delv_eta,
-    Real_t* delv_zeta,
-    Real_t* delx_xi,
-    Real_t* delx_eta,
-    Real_t* delx_zeta,
-    Real_t* vdov, Real_t* elemMass, Real_t* volo, Real_t* vnew,
-    Real_t* qq, Real_t* ql,
-    Real_t* q,
-    Real_t qstop,
-    Index_t* bad_q
-  ) {
+  Index_t* regElemlist,
+  //    const Index_t* __restrict__ regElemlist,
+  Index_t* elemBC,
+  Index_t* lxim,
+  Index_t* lxip,
+  Index_t* letam,
+  Index_t* letap,
+  Index_t* lzetam,
+  Index_t* lzetap,
+  Real_t* delv_xi,
+  Real_t* delv_eta,
+  Real_t* delv_zeta,
+  Real_t* delx_xi,
+  Real_t* delx_eta,
+  Real_t* delx_zeta,
+  Real_t* vdov, Real_t* elemMass, Real_t* volo, Real_t* vnew,
+  Real_t* qq, Real_t* ql,
+  Real_t* q,
+  Real_t qstop,
+  Index_t* bad_q
+) {
   int ielem = blockDim.x * blockIdx.x + threadIdx.x;
 
   if (ielem < elength) {
@@ -2288,7 +2286,16 @@ static inline void CalcMonotonicQRegionForElems(Domain* domain) {
   Index_t dimBlock = 128;
   Index_t dimGrid = PAD_DIV(elength, dimBlock);
 
-  CalcMonotonicQRegionForElems_kernel<<<dimGrid, dimBlock, 0, domain->mainStream>>>(qlc_monoq, qqc_monoq, monoq_limiter_mult, monoq_max_slope, ptiny, elength, domain->regElemlist.raw(), domain->elemBC.raw(), domain->lxim.raw(), domain->lxip.raw(), domain->letam.raw(), domain->letap.raw(), domain->lzetam.raw(), domain->lzetap.raw(), domain->delv_xi.raw(), domain->delv_eta.raw(), domain->delv_zeta.raw(), domain->delx_xi.raw(), domain->delx_eta.raw(), domain->delx_zeta.raw(), domain->vdov.raw(), domain->elemMass.raw(), domain->volo.raw(), domain->vnew.raw(), domain->qq.raw(), domain->ql.raw(), domain->q.raw(), domain->qstop, domain->bad_q_h);
+  CalcMonotonicQRegionForElems_kernel<<<dimGrid, dimBlock, 0, domain->mainStream>>>(
+    qlc_monoq, qqc_monoq, monoq_limiter_mult, monoq_max_slope, ptiny, elength,
+    domain->regElemlist.raw(), domain->elemBC.raw(),
+    domain->lxim.raw(), domain->lxip.raw(), domain->letam.raw(), domain->letap.raw(), domain->lzetam.raw(), domain->lzetap.raw(),
+    domain->delv_xi.raw(), domain->delv_eta.raw(), domain->delv_zeta.raw(),
+    domain->delx_xi.raw(), domain->delx_eta.raw(), domain->delx_zeta.raw(),
+    domain->vdov.raw(), domain->elemMass.raw(), domain->volo.raw(),
+    domain->vnew.raw(), domain->qq.raw(), domain->ql.raw(), domain->q.raw(),
+    domain->qstop, domain->bad_q_h
+  );
 
   // cudaDeviceSynchronize();
   // cudaCheckError();
@@ -2576,14 +2583,32 @@ static inline void ApplyMaterialPropertiesAndUpdateVolume(Domain* domain) {
     Index_t dimBlock = 128;
     Index_t dimGrid = PAD_DIV(length, dimBlock);
 
-    ApplyMaterialPropertiesAndUpdateVolume_kernel<<<dimGrid, dimBlock, 0, domain->mainStream>>>(length, domain->refdens, domain->e_cut, domain->emin, domain->ql.raw(), domain->qq.raw(), domain->vnew.raw(), domain->v.raw(), domain->pmin, domain->p_cut, domain->q_cut, domain->eosvmin, domain->eosvmax, domain->regElemlist.raw(), domain->e.raw(), domain->delv.raw(), domain->p.raw(), domain->q.raw(), domain->ss4o3, domain->ss.raw(), domain->v_cut, domain->bad_vol_h, domain->cost, domain->regCSR.raw(), domain->regReps.raw(), domain->numReg);
+    ApplyMaterialPropertiesAndUpdateVolume_kernel<<<dimGrid, dimBlock, 0, domain->mainStream>>>(
+      length, domain->refdens, domain->e_cut, domain->emin,
+      domain->ql.raw(), domain->qq.raw(), domain->vnew.raw(), domain->v.raw(),
+      domain->pmin, domain->p_cut, domain->q_cut, domain->eosvmin, domain->eosvmax,
+      domain->regElemlist.raw(), domain->e.raw(), domain->delv.raw(), domain->p.raw(), domain->q.raw(),
+      domain->ss4o3, domain->ss.raw(), domain->v_cut, domain->bad_vol_h,
+      domain->cost, domain->regCSR.raw(), domain->regReps.raw(), domain->numReg
+    );
 
     // cudaDeviceSynchronize();
     // cudaCheckError();
   }
 }
 
-static inline void LagrangeElements(Domain* domain) {
+static inline void LagrangeElementsCalcKinematicsAndMonotonicQGradient(Domain* domain) {
+  if (domain->annotate) {
+    annotateNextKernel(
+      6,
+      {domain->nodelist.raw(), domain->volo.raw(), domain->v.raw(),
+       domain->x.raw(), domain->y.raw(), domain->z.raw(),
+       domain->xd.raw(), domain->yd.raw(), domain->zd.raw()},
+      {domain->delv.raw(), domain->arealg.raw(), domain->vdov.raw()},
+      domain->mainStream
+    );
+  }
+
   int allElem = domain->numElem +                   /* local elem */
                 2 * domain->sizeX * domain->sizeY + /* plane ghosts */
                 2 * domain->sizeX * domain->sizeZ + /* row ghosts */
@@ -2606,6 +2631,21 @@ static inline void LagrangeElements(Domain* domain) {
   /*  Calc Kinematics and Monotic Q Gradient   */
   /*********************************************/
   CalcKinematicsAndMonotonicQGradient(domain);
+}
+
+static inline void LagrangeElementsCalcMonotonicQRegionForElems(Domain* domain) {
+  if (domain->annotate) {
+    annotateNextKernel(
+      7,
+      {domain->regElemlist.raw(), domain->elemBC.raw(),
+       domain->lxim.raw(), domain->lxip.raw(), domain->letam.raw(),
+       domain->letap.raw(), domain->lzetam.raw(), domain->lzetap.raw(),
+       domain->vdov.raw(), domain->elemMass.raw(), domain->volo.raw(),
+       domain->q.raw()},
+      {domain->qq.raw(), domain->ql.raw()},
+      domain->mainStream
+    );
+  }
 
   domain->dxx.free(domain->mainStream);
   domain->dyy.free(domain->mainStream);
@@ -2615,6 +2655,19 @@ static inline void LagrangeElements(Domain* domain) {
    *    Calc Monotic Q Region
    **********************************/
   CalcMonotonicQRegionForElems(domain);
+}
+
+static inline void LagrangeElementApplyMaterialPropertiesAndUpdateVolume(Domain* domain) {
+  if (domain->annotate) {
+    annotateNextKernel(
+      8,
+      {domain->ql.raw(), domain->qq.raw(), domain->vnew.raw(), domain->v.raw(),
+       domain->regElemlist.raw(), domain->e.raw(), domain->delv.raw(),
+       domain->p.raw(), domain->q.raw(), domain->regCSR.raw(), domain->regReps.raw()},
+      {domain->v.raw(), domain->e.raw(), domain->p.raw(), domain->q.raw(), domain->ss.raw()},
+      domain->mainStream
+    );
+  }
 
   domain->delx_xi.free(domain->mainStream);
   domain->delx_eta.free(domain->mainStream);
@@ -2631,23 +2684,17 @@ static inline void LagrangeElements(Domain* domain) {
 }
 
 template <int block_size>
-__global__
-#ifdef DOUBLE_PRECISION
-__launch_bounds__(128, 16)
-#else
-__launch_bounds__(128, 16)
-#endif
-  void CalcTimeConstraintsForElems_kernel(
-    Index_t length,
-    Real_t qqc2,
-    Real_t dvovmax,
-    Index_t* matElemlist,
-    Real_t* ss,
-    Real_t* vdov,
-    Real_t* arealg,
-    Real_t* dev_mindtcourant,
-    Real_t* dev_mindthydro
-  ) {
+__global__ __launch_bounds__(128, 16) void CalcTimeConstraintsForElems_kernel(
+  Index_t length,
+  Real_t qqc2,
+  Real_t dvovmax,
+  Index_t* matElemlist,
+  Real_t* ss,
+  Real_t* vdov,
+  Real_t* arealg,
+  Real_t* dev_mindtcourant,
+  Real_t* dev_mindthydro
+) {
   int tid = threadIdx.x;
   int i = blockDim.x * blockIdx.x + tid;
 
@@ -2882,6 +2929,15 @@ __global__ void CalcMinDtOneBlock(Real_t* dev_mindthydro, Real_t* dev_mindtcoura
 }
 
 static inline void CalcTimeConstraintsForElems(Domain* domain) {
+  if (domain->annotate) {
+    annotateNextKernel(
+      9,
+      {domain->matElemlist.raw(), domain->ss.raw(), domain->vdov.raw(), domain->arealg.raw()},
+      {},
+      domain->mainStream
+    );
+  }
+
   Real_t qqc = domain->qqc;
   Real_t qqc2 = Real_t(64.0) * qqc * qqc;
   Real_t dvovmax = domain->dvovmax;
@@ -2906,7 +2962,7 @@ static inline void CalcTimeConstraintsForElems(Domain* domain) {
   dev_mindthydro.free(domain->mainStream);
 }
 
-constexpr int NUM_TASKS = 8;
+constexpr int NUM_TASKS = 10;
 
 void executeRandomTask(Domain* domain, bool annotate, int taskId, const std::map<void*, void*>& addressUpdate, cudaStream_t stream) {
   for (auto v : VolatileVectorManager::volatileDeviceVectors) {
@@ -2936,8 +2992,14 @@ void executeRandomTask(Domain* domain, bool annotate, int taskId, const std::map
     CalcPositionAndVelocityForNodes(domain->u_cut, domain);
   } else if (taskId == 6) {
     // LagrangeLeapFrog / LagrangeElements
-    LagrangeElements(domain);
+    LagrangeElementsCalcKinematicsAndMonotonicQGradient(domain);
   } else if (taskId == 7) {
+    // LagrangeLeapFrog / LagrangeElements
+    LagrangeElementsCalcMonotonicQRegionForElems(domain);
+  } else if (taskId == 8) {
+    // LagrangeLeapFrog / LagrangeElements
+    LagrangeElementApplyMaterialPropertiesAndUpdateVolume(domain);
+  } else if (taskId == 9) {
     // LagrangeLeapFrog / CalcTimeConstraintsForElems
     CalcTimeConstraintsForElems(domain);
   } else {
@@ -3107,6 +3169,11 @@ void VerifyAndWriteFinalOutput(Real_t elapsed_time, Domain& locDom, Int_t its, I
 }
 
 int main(int argc, char* argv[]) {
+#ifndef DOUBLE_PRECISION
+  printf("Single precision is not supported.\n");
+  exit(-1);
+#endif
+
   if (argc < 3) {
     printUsage(argv);
     exit(LFileError);
