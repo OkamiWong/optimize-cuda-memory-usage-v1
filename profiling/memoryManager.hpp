@@ -18,7 +18,7 @@ struct MemoryManager {
 template <typename T>
 void registerManagedMemoryAddress(T *devPtr, size_t size) {
   auto ptr = static_cast<void *>(devPtr);
-  if (MemoryManager::managedMemoryAddressToIndexMap.find(ptr) == MemoryManager::managedMemoryAddressToIndexMap.end()) {
+  if (MemoryManager::managedMemoryAddressToIndexMap.count(ptr) == 0) {
     MemoryManager::managedMemoryAddresses.push_back(ptr);
     MemoryManager::managedMemoryAddressToIndexMap[ptr] = MemoryManager::managedMemoryAddresses.size() - 1;
     MemoryManager::managedMemoryAddressToSizeMap[ptr] = size;
