@@ -551,8 +551,15 @@ void Domain::BuildMesh(Int_t nx, Int_t edgeNodes, Int_t edgeElems, Int_t domNode
   nodelist = nodelist_h;
 }
 
-Domain* NewDomain(char* argv[], Int_t numRanks, Index_t colLoc, Index_t rowLoc, Index_t planeLoc, Index_t nx, int tp, Int_t nr, Int_t balance, Int_t cost) {
-  Domain* domain = new Domain;
+Domain* NewDomain(Domain* oldDomain, Int_t numRanks, Index_t colLoc, Index_t rowLoc, Index_t planeLoc, Index_t nx, int tp, Int_t nr, Int_t balance, Int_t cost) {
+  const bool shouldAllocate = oldDomain == nullptr;
+
+  Domain* domain;
+  if (shouldAllocate) {
+    domain = new Domain;
+  } else {
+    domain = oldDomain;
+  }
 
   Index_t domElems;
   Index_t domNodes;
@@ -587,8 +594,10 @@ Domain* NewDomain(char* argv[], Int_t numRanks, Index_t colLoc, Index_t rowLoc, 
   domNodes = domain->numNode;
   padded_domElems = domain->padded_numElem;
 
-  AllocateElemPersistent(domain, domElems, padded_domElems);
-  AllocateNodalPersistent(domain, domNodes);
+  if (shouldAllocate) {
+    AllocateElemPersistent(domain, domElems, padded_domElems);
+    AllocateNodalPersistent(domain, domNodes);
+  }
 
   domain->SetupCommBuffers(edgeNodes);
 
@@ -605,9 +614,11 @@ Domain* NewDomain(char* argv[], Int_t numRanks, Index_t colLoc, Index_t rowLoc, 
   if (domain->m_planeLoc == 0)
     domain->numSymmZ = (edgeElems + 1) * (edgeElems + 1);
 
-  AllocateSymmX(domain, edgeNodes * edgeNodes);
-  AllocateSymmY(domain, edgeNodes * edgeNodes);
-  AllocateSymmZ(domain, edgeNodes * edgeNodes);
+  if (shouldAllocate) {
+    AllocateSymmX(domain, edgeNodes * edgeNodes);
+    AllocateSymmY(domain, edgeNodes * edgeNodes);
+    AllocateSymmZ(domain, edgeNodes * edgeNodes);
+  }
 
   /* set up symmetry nodesets */
 
@@ -687,9 +698,12 @@ Domain* NewDomain(char* argv[], Int_t numRanks, Index_t colLoc, Index_t rowLoc, 
     }
   }
 
-  domain->nodeElemStart.allocate(nodeElemStart_h.size());
-  domain->nodeElemCount.allocate(nodeElemCount_h.size());
-  domain->nodeElemCornerList.allocate(nodeElemCornerList_h.size());
+  if (shouldAllocate) {
+    domain->nodeElemStart.allocate(nodeElemStart_h.size());
+    domain->nodeElemCount.allocate(nodeElemCount_h.size());
+    domain->nodeElemCornerList.allocate(nodeElemCornerList_h.size());
+  }
+
   domain->nodeElemStart = nodeElemStart_h;
   domain->nodeElemCount = nodeElemCount_h;
   domain->nodeElemCornerList = nodeElemCornerList_h;
@@ -701,11 +715,13 @@ Domain* NewDomain(char* argv[], Int_t numRanks, Index_t colLoc, Index_t rowLoc, 
   }
   domain->matElemlist = matElemlist_h;
 
-  cudaMallocHost(&domain->dtcourant_h, sizeof(Real_t), 0);
-  cudaMallocHost(&domain->dthydro_h, sizeof(Real_t), 0);
-  cudaMallocHost(&domain->bad_vol_h, sizeof(Index_t), 0);
-  cudaMallocHost(&domain->bad_q_h, sizeof(Index_t), 0);
-  cudaMallocHost(&domain->deltatime_h, sizeof(Real_t), 0);
+  if (shouldAllocate) {
+    cudaMallocHost(&domain->dtcourant_h, sizeof(Real_t), 0);
+    cudaMallocHost(&domain->dthydro_h, sizeof(Real_t), 0);
+    cudaMallocHost(&domain->bad_vol_h, sizeof(Index_t), 0);
+    cudaMallocHost(&domain->bad_q_h, sizeof(Index_t), 0);
+    cudaMallocHost(&domain->deltatime_h, sizeof(Real_t), 0);
+  }
 
   *(domain->bad_vol_h) = -1;
   *(domain->bad_q_h) = -1;
@@ -794,11 +810,14 @@ Domain* NewDomain(char* argv[], Int_t numRanks, Index_t colLoc, Index_t rowLoc, 
   *domain->deltatime_h = (.5 * cbrt(volo_h[0])) / sqrt(2 * einit);
 
   domain->cost = cost;
-  domain->regNumList.allocate(domain->numElem);   // material indexset
-  domain->regElemlist.allocate(domain->numElem);  // material indexset
-  domain->regCSR.allocate(nr);
-  domain->regReps.allocate(nr);
-  domain->regSorted.allocate(nr);
+
+  if (shouldAllocate) {
+    domain->regNumList.allocate(domain->numElem);   // material indexset
+    domain->regElemlist.allocate(domain->numElem);  // material indexset
+    domain->regCSR.allocate(nr);
+    domain->regReps.allocate(nr);
+    domain->regSorted.allocate(nr);
+  }
 
   // Setup region index sets. For now, these are constant sized
   // throughout the run, but could be changed every cycle to
@@ -3107,7 +3126,7 @@ int main(int argc, char* argv[]) {
 
   // TODO: modify this constructor to account for new fields
   // TODO: setup communication buffers
-  locDom = NewDomain(argv, numRanks, col, row, plane, nx, side, nr, balance, cost);
+  locDom = NewDomain(nullptr, numRanks, col, row, plane, nx, side, nr, balance, cost);
 
   cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
 
