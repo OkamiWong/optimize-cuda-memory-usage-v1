@@ -1,6 +1,6 @@
-add_executable(tiledCholesky tiledCholesky.cu)
+add_executable(lulesh lulesh.cu)
 target_link_libraries(
-  tiledCholesky
+  lulesh
   utilities
   cudaUtilities
   annotation
@@ -8,10 +8,5 @@ target_link_libraries(
   optimization
   peakMemoryUsageProfiler
   logger
-  CUDA::cublas
-  CUDA::cusolver
-  CUDA::curand
   fmt::fmt
 )
-
-add_subdirectory(lulesh)
