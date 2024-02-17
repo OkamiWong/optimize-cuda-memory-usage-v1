@@ -1619,14 +1619,6 @@ static inline void CalcVolumeForceForElems(const Real_t hgcoef, Domain* domain) 
   return;
 }
 
-static inline void CalcVolumeForceForElems(Domain* domain) {
-  const Real_t hgcoef = domain->hgcoef;
-
-  CalcVolumeForceForElems(hgcoef, domain);
-
-  // CalcVolumeForceForElems_warp_per_4cell(hgcoef,domain);
-}
-
 static inline void checkErrors(Domain* domain, int its, int myRank) {
   if (*(domain->bad_vol_h) != -1) {
     printf("Rank %i: Volume Error in cell %d at iteration %d\n", myRank, *(domain->bad_vol_h), its);
@@ -1637,10 +1629,6 @@ static inline void checkErrors(Domain* domain, int its, int myRank) {
     printf("Rank %i: Q Error in cell %d at iteration %d\n", myRank, *(domain->bad_q_h), its);
     exit(QStopError);
   }
-}
-
-static inline void CalcForceForNodes(Domain* domain) {
-  CalcVolumeForceForElems(domain);
 }
 
 __global__ void CalcAccelerationForNodes_kernel(int numNode, Real_t* xdd, Real_t* ydd, Real_t* zdd, Real_t* fx, Real_t* fy, Real_t* fz, Real_t* nodalMass) {
@@ -1676,14 +1664,17 @@ __global__ void ApplyAccelerationBoundaryConditionsForNodes_kernel(
 static inline void ApplyAccelerationBoundaryConditionsForNodes(Domain* domain) {
   Index_t dimBlock = 128;
 
+  // Task 2
   Index_t dimGrid = PAD_DIV(domain->numSymmX, dimBlock);
   if (domain->numSymmX > 0)
     ApplyAccelerationBoundaryConditionsForNodes_kernel<<<dimGrid, dimBlock, 0, domain->mainStream>>>(domain->numSymmX, domain->xdd.raw(), domain->symmX.raw());
 
   dimGrid = PAD_DIV(domain->numSymmY, dimBlock);
+  // Task 3
   if (domain->numSymmY > 0)
     ApplyAccelerationBoundaryConditionsForNodes_kernel<<<dimGrid, dimBlock, 0, domain->mainStream>>>(domain->numSymmY, domain->ydd.raw(), domain->symmY.raw());
 
+  // Task 4
   dimGrid = PAD_DIV(domain->numSymmZ, dimBlock);
   if (domain->numSymmZ > 0)
     ApplyAccelerationBoundaryConditionsForNodes_kernel<<<dimGrid, dimBlock, 0, domain->mainStream>>>(domain->numSymmZ, domain->zdd.raw(), domain->symmZ.raw());
@@ -1724,12 +1715,16 @@ static inline void CalcPositionAndVelocityForNodes(const Real_t u_cut, Domain* d
 }
 
 static inline void LagrangeNodal(Domain* domain) {
-  CalcForceForNodes(domain);
+  // Task 0
+  CalcVolumeForceForElems(domain->hgcoef, domain);
 
+  // Task 1
   CalcAccelerationForNodes(domain);
 
+  // Task 2 ~ 4
   ApplyAccelerationBoundaryConditionsForNodes(domain);
 
+  // Task 5
   CalcPositionAndVelocityForNodes(domain->u_cut, domain);
 }
 
@@ -2902,7 +2897,6 @@ static inline void CalcTimeConstraintsForElems(Domain* domain) {
 
   CalcTimeConstraintsForElems_kernel<dimBlock><<<dimGrid, dimBlock, 0, domain->mainStream>>>(length, qqc2, dvovmax, domain->matElemlist.raw(), domain->ss.raw(), domain->vdov.raw(), domain->arealg.raw(), dev_mindtcourant.raw(), dev_mindthydro.raw());
 
-  // TODO: if dimGrid < 1024, should launch less threads
   CalcMinDtOneBlock<max_dimGrid><<<2, max_dimGrid, max_dimGrid * sizeof(Real_t), domain->mainStream>>>(dev_mindthydro.raw(), dev_mindtcourant.raw(), domain->dtcourant_h, domain->dthydro_h, dimGrid);
 
   dev_mindtcourant.free(domain->mainStream);
@@ -2910,14 +2904,17 @@ static inline void CalcTimeConstraintsForElems(Domain* domain) {
 }
 
 static inline void LagrangeLeapFrog(Domain* domain) {
-  /* calculate nodal forces, accelerations, velocities, positions, with
-   * applied boundary conditions and slide surface considerations */
+  // Task 0 ~ 5
+  // Calculate nodal forces, accelerations, velocities, positions, with
+  // applied boundary conditions and slide surface considerations
   LagrangeNodal(domain);
 
-  /* calculate element quantities (i.e. velocity gradient & q), and update
-   * material states */
+  // Task 6
+  // Calculate element quantities (i.e. velocity gradient & q), and update
+  // material states
   LagrangeElements(domain);
 
+  // Task 7
   CalcTimeConstraintsForElems(domain);
 }
 
