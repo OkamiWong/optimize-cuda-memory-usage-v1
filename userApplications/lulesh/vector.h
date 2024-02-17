@@ -4,6 +4,7 @@
 
 #include <cassert>
 
+#include "../../profiling/memoryManager.hpp"
 #include "../../utilities/cudaUtilities.hpp"
 
 template <class T>
@@ -51,10 +52,14 @@ class Vector_d {
     this->_size = 0;
   }
 
-  inline void allocate(size_t size) {
+  inline void allocate(size_t size, bool managed = false) {
     assert(this->_data == nullptr);
     this->_size = size;
     checkCudaErrors(cudaMalloc(&this->_data, this->bytes()));
+
+    if (managed) {
+      registerManagedMemoryAddress(this->_data, this->bytes());
+    }
   }
 
   inline void allocate(size_t size, cudaStream_t stream) {

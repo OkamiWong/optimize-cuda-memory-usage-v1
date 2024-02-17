@@ -253,68 +253,68 @@ void cuda_init(int rank) {
 }
 
 void AllocateNodalPersistent(Domain* domain, size_t domNodes) {
-  domain->x.allocate(domNodes); /* coordinates */
-  domain->y.allocate(domNodes);
-  domain->z.allocate(domNodes);
+  domain->x.allocate(domNodes, true); /* coordinates */
+  domain->y.allocate(domNodes, true);
+  domain->z.allocate(domNodes, true);
 
-  domain->xd.allocate(domNodes); /* velocities */
-  domain->yd.allocate(domNodes);
-  domain->zd.allocate(domNodes);
+  domain->xd.allocate(domNodes, true); /* velocities */
+  domain->yd.allocate(domNodes, true);
+  domain->zd.allocate(domNodes, true);
 
-  domain->xdd.allocate(domNodes); /* accelerations */
-  domain->ydd.allocate(domNodes);
-  domain->zdd.allocate(domNodes);
+  domain->xdd.allocate(domNodes, true); /* accelerations */
+  domain->ydd.allocate(domNodes, true);
+  domain->zdd.allocate(domNodes, true);
 
-  domain->fx.allocate(domNodes); /* forces */
-  domain->fy.allocate(domNodes);
-  domain->fz.allocate(domNodes);
+  domain->fx.allocate(domNodes, true); /* forces */
+  domain->fy.allocate(domNodes, true);
+  domain->fz.allocate(domNodes, true);
 
-  domain->nodalMass.allocate(domNodes); /* mass */
+  domain->nodalMass.allocate(domNodes, true); /* mass */
 }
 
 void AllocateElemPersistent(Domain* domain, size_t domElems, size_t padded_domElems) {
-  domain->matElemlist.allocate(domElems);         /* material indexset */
-  domain->nodelist.allocate(8 * padded_domElems); /* elemToNode connectivity */
+  domain->matElemlist.allocate(domElems, true);         /* material indexset */
+  domain->nodelist.allocate(8 * padded_domElems, true); /* elemToNode connectivity */
 
-  domain->lxim.allocate(domElems); /* elem connectivity through face */
-  domain->lxip.allocate(domElems);
-  domain->letam.allocate(domElems);
-  domain->letap.allocate(domElems);
-  domain->lzetam.allocate(domElems);
-  domain->lzetap.allocate(domElems);
+  domain->lxim.allocate(domElems, true); /* elem connectivity through face */
+  domain->lxip.allocate(domElems, true);
+  domain->letam.allocate(domElems, true);
+  domain->letap.allocate(domElems, true);
+  domain->lzetam.allocate(domElems, true);
+  domain->lzetap.allocate(domElems, true);
 
-  domain->elemBC.allocate(domElems); /* elem face symm/free-surf flag */
+  domain->elemBC.allocate(domElems, true); /* elem face symm/free-surf flag */
 
-  domain->e.allocate(domElems); /* energy */
-  domain->p.allocate(domElems); /* pressure */
+  domain->e.allocate(domElems, true); /* energy */
+  domain->p.allocate(domElems, true); /* pressure */
 
-  domain->q.allocate(domElems);  /* q */
-  domain->ql.allocate(domElems); /* linear term for q */
-  domain->qq.allocate(domElems); /* quadratic term for q */
+  domain->q.allocate(domElems, true);  /* q */
+  domain->ql.allocate(domElems, true); /* linear term for q */
+  domain->qq.allocate(domElems, true); /* quadratic term for q */
 
-  domain->v.allocate(domElems); /* relative volume */
+  domain->v.allocate(domElems, true); /* relative volume */
 
-  domain->volo.allocate(domElems); /* reference volume */
-  domain->delv.allocate(domElems); /* m_vnew - m_v */
-  domain->vdov.allocate(domElems); /* volume derivative over volume */
+  domain->volo.allocate(domElems, true); /* reference volume */
+  domain->delv.allocate(domElems, true); /* m_vnew - m_v */
+  domain->vdov.allocate(domElems, true); /* volume derivative over volume */
 
-  domain->arealg.allocate(domElems); /* elem characteristic length */
+  domain->arealg.allocate(domElems, true); /* elem characteristic length */
 
-  domain->ss.allocate(domElems); /* "sound speed" */
+  domain->ss.allocate(domElems, true); /* "sound speed" */
 
-  domain->elemMass.allocate(domElems); /* mass */
+  domain->elemMass.allocate(domElems, true); /* mass */
 }
 
 void AllocateSymmX(Domain* domain, size_t size) {
-  domain->symmX.allocate(size);
+  domain->symmX.allocate(size, true);
 }
 
 void AllocateSymmY(Domain* domain, size_t size) {
-  domain->symmY.allocate(size);
+  domain->symmY.allocate(size, true);
 }
 
 void AllocateSymmZ(Domain* domain, size_t size) {
-  domain->symmZ.allocate(size);
+  domain->symmZ.allocate(size, true);
 }
 
 void InitializeFields(Domain* domain) {
@@ -699,9 +699,9 @@ Domain* NewDomain(Domain* oldDomain, Int_t numRanks, Index_t colLoc, Index_t row
   }
 
   if (shouldAllocate) {
-    domain->nodeElemStart.allocate(nodeElemStart_h.size());
-    domain->nodeElemCount.allocate(nodeElemCount_h.size());
-    domain->nodeElemCornerList.allocate(nodeElemCornerList_h.size());
+    domain->nodeElemStart.allocate(nodeElemStart_h.size(), true);
+    domain->nodeElemCount.allocate(nodeElemCount_h.size(), true);
+    domain->nodeElemCornerList.allocate(nodeElemCornerList_h.size(), true);
   }
 
   domain->nodeElemStart = nodeElemStart_h;
@@ -812,11 +812,11 @@ Domain* NewDomain(Domain* oldDomain, Int_t numRanks, Index_t colLoc, Index_t row
   domain->cost = cost;
 
   if (shouldAllocate) {
-    domain->regNumList.allocate(domain->numElem);   // material indexset
-    domain->regElemlist.allocate(domain->numElem);  // material indexset
-    domain->regCSR.allocate(nr);
-    domain->regReps.allocate(nr);
-    domain->regSorted.allocate(nr);
+    domain->regNumList.allocate(domain->numElem, true);   // material indexset
+    domain->regElemlist.allocate(domain->numElem, true);  // material indexset
+    domain->regCSR.allocate(nr, true);
+    domain->regReps.allocate(nr, true);
+    domain->regSorted.allocate(nr, true);
   }
 
   // Setup region index sets. For now, these are constant sized
