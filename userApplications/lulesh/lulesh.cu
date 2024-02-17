@@ -3053,7 +3053,7 @@ void VerifyAndWriteFinalOutput(Real_t elapsed_time, Domain& locDom, Int_t its, I
   printf("Grind time (us/z/c)  = %10.8g (per dom)  (%10.8g overall)\n", grindTime1, grindTime2);
   printf("FOM                  = %10.8g (z/s)\n\n", 1000.0 / grindTime2);  // zones per second
 
-  bool write_solution_flag = true;
+  bool write_solution_flag = false;
   if (write_solution_flag) {
     write_solution(&locDom);
   }
