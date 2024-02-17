@@ -52,13 +52,19 @@ class Vector_d {
     this->_size = 0;
   }
 
-  inline void allocate(size_t size, bool managed = false) {
+  inline void allocate(size_t size, bool managed = false, bool input = false, bool output = false) {
     assert(this->_data == nullptr);
     this->_size = size;
     checkCudaErrors(cudaMalloc(&this->_data, this->bytes()));
 
     if (managed) {
       registerManagedMemoryAddress(this->_data, this->bytes());
+      if (input) {
+        registerApplicationInput(this->_data);
+      }
+      if (output) {
+        registerApplicationOutput(this->_data);
+      }
     }
   }
 
