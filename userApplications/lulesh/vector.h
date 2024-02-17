@@ -3,6 +3,7 @@
 #include <thrust/host_vector.h>
 
 #include <cassert>
+#include <vector>
 
 #include "../../profiling/memoryManager.hpp"
 #include "../../utilities/cudaUtilities.hpp"
@@ -43,12 +44,22 @@ class Vector_h : public thrust::host_vector<T> {
   inline size_t bytes() const { return this->size() * sizeof(T); }
 };
 
+class VolatileVector_d {
+ public:
+  inline virtual void tryUpdateAddress(const std::map<void*, void*>& addressUpdate) = 0;
+};
+
+struct VolatileVectorManager {
+  inline static std::vector<VolatileVector_d*> volatileDeviceVectors;
+};
+
 // device vector
 template <class T>
-class Vector_d {
+class Vector_d : VolatileVector_d {
  public:
   Vector_d() {
     this->_data = nullptr;
+    this->_originalData = nullptr;
     this->_size = 0;
   }
 
@@ -58,6 +69,7 @@ class Vector_d {
     checkCudaErrors(cudaMalloc(&this->_data, this->bytes()));
 
     if (managed) {
+      VolatileVectorManager::volatileDeviceVectors.push_back(this);
       registerManagedMemoryAddress(this->_data, this->bytes());
       if (input) {
         registerApplicationInput(this->_data);
@@ -88,6 +100,16 @@ class Vector_d {
     this->_size = 0;
   }
 
+  inline void tryUpdateAddress(const std::map<void*, void*>& addressUpdate) {
+    if (this->_originalData == nullptr) {
+      this->_originalData = this->_data;
+    }
+
+    if (addressUpdate.count(this->_originalData) > 0) {
+      this->_data = static_cast<T*>(addressUpdate.at(this->_originalData));
+    }
+  }
+
   inline T* raw() {
     assert(this->_data != nullptr);
     return this->_data;
@@ -112,6 +134,6 @@ class Vector_d {
   }
 
  private:
-  T* _data;
+  T *_data, *_originalData;
   size_t _size;
 };

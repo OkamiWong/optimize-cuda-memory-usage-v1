@@ -28,6 +28,8 @@ class Domain {
 
   cudaStream_t mainStream;
 
+  bool annotate;
+
   /* Elem-centered */
 
   Vector_d<Index_t> matElemlist; /* material indexset */

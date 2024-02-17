@@ -285,18 +285,18 @@ void AllocateElemPersistent(Domain* domain, size_t domElems, size_t padded_domEl
 
   domain->elemBC.allocate(domElems, true, true, false); /* elem face symm/free-surf flag */
 
-  domain->e.allocate(domElems, true, true, true); /* energy */
+  domain->e.allocate(domElems, true, true, true);  /* energy */
   domain->p.allocate(domElems, true, true, false); /* pressure */
 
-  domain->q.allocate(domElems, true, true, false);  /* q */
-  domain->ql.allocate(domElems, true); /* linear term for q */
-  domain->qq.allocate(domElems, true); /* quadratic term for q */
+  domain->q.allocate(domElems, true, true, false); /* q */
+  domain->ql.allocate(domElems, true);             /* linear term for q */
+  domain->qq.allocate(domElems, true);             /* quadratic term for q */
 
   domain->v.allocate(domElems, true, true, false); /* relative volume */
 
   domain->volo.allocate(domElems, true, true, false); /* reference volume */
-  domain->delv.allocate(domElems, true); /* m_vnew - m_v */
-  domain->vdov.allocate(domElems, true); /* volume derivative over volume */
+  domain->delv.allocate(domElems, true);              /* m_vnew - m_v */
+  domain->vdov.allocate(domElems, true);              /* volume derivative over volume */
 
   domain->arealg.allocate(domElems, true); /* elem characteristic length */
 
@@ -1661,23 +1661,40 @@ __global__ void ApplyAccelerationBoundaryConditionsForNodes_kernel(
   }
 }
 
-static inline void ApplyAccelerationBoundaryConditionsForNodes(Domain* domain) {
+static inline void ApplyAccelerationBoundaryConditionsForNodesInXAxis(Domain* domain) {
   Index_t dimBlock = 128;
-
-  // Task 2
   Index_t dimGrid = PAD_DIV(domain->numSymmX, dimBlock);
-  if (domain->numSymmX > 0)
-    ApplyAccelerationBoundaryConditionsForNodes_kernel<<<dimGrid, dimBlock, 0, domain->mainStream>>>(domain->numSymmX, domain->xdd.raw(), domain->symmX.raw());
+  if (domain->numSymmX > 0) {
+    ApplyAccelerationBoundaryConditionsForNodes_kernel<<<dimGrid, dimBlock, 0, domain->mainStream>>>(
+      domain->numSymmX,
+      domain->xdd.raw(),
+      domain->symmX.raw()
+    );
+  }
+}
 
-  dimGrid = PAD_DIV(domain->numSymmY, dimBlock);
-  // Task 3
-  if (domain->numSymmY > 0)
-    ApplyAccelerationBoundaryConditionsForNodes_kernel<<<dimGrid, dimBlock, 0, domain->mainStream>>>(domain->numSymmY, domain->ydd.raw(), domain->symmY.raw());
+static inline void ApplyAccelerationBoundaryConditionsForNodesInYAxis(Domain* domain) {
+  Index_t dimBlock = 128;
+  Index_t dimGrid = PAD_DIV(domain->numSymmY, dimBlock);
+  if (domain->numSymmY > 0) {
+    ApplyAccelerationBoundaryConditionsForNodes_kernel<<<dimGrid, dimBlock, 0, domain->mainStream>>>(
+      domain->numSymmY,
+      domain->ydd.raw(),
+      domain->symmY.raw()
+    );
+  }
+}
 
-  // Task 4
-  dimGrid = PAD_DIV(domain->numSymmZ, dimBlock);
-  if (domain->numSymmZ > 0)
-    ApplyAccelerationBoundaryConditionsForNodes_kernel<<<dimGrid, dimBlock, 0, domain->mainStream>>>(domain->numSymmZ, domain->zdd.raw(), domain->symmZ.raw());
+static inline void ApplyAccelerationBoundaryConditionsForNodesInZAxis(Domain* domain) {
+  Index_t dimBlock = 128;
+  Index_t dimGrid = PAD_DIV(domain->numSymmZ, dimBlock);
+  if (domain->numSymmZ > 0) {
+    ApplyAccelerationBoundaryConditionsForNodes_kernel<<<dimGrid, dimBlock, 0, domain->mainStream>>>(
+      domain->numSymmZ,
+      domain->zdd.raw(),
+      domain->symmZ.raw()
+    );
+  }
 }
 
 __global__ void CalcPositionAndVelocityForNodes_kernel(int numNode, const Real_t* deltatime, const Real_t u_cut, Real_t* __restrict__ x, Real_t* __restrict__ y, Real_t* __restrict__ z, Real_t* __restrict__ xd, Real_t* __restrict__ yd, Real_t* __restrict__ zd, const Real_t* __restrict__ xdd, const Real_t* __restrict__ ydd, const Real_t* __restrict__ zdd) {
@@ -1712,20 +1729,6 @@ static inline void CalcPositionAndVelocityForNodes(const Real_t u_cut, Domain* d
 
   // cudaDeviceSynchronize();
   // cudaCheckError();
-}
-
-static inline void LagrangeNodal(Domain* domain) {
-  // Task 0
-  CalcVolumeForceForElems(domain->hgcoef, domain);
-
-  // Task 1
-  CalcAccelerationForNodes(domain);
-
-  // Task 2 ~ 4
-  ApplyAccelerationBoundaryConditionsForNodes(domain);
-
-  // Task 5
-  CalcPositionAndVelocityForNodes(domain->u_cut, domain);
 }
 
 __device__ static inline Real_t AreaFace(const Real_t x0, const Real_t x1, const Real_t x2, const Real_t x3, const Real_t y0, const Real_t y1, const Real_t y2, const Real_t y3, const Real_t z0, const Real_t z1, const Real_t z2, const Real_t z3) {
@@ -2903,30 +2906,56 @@ static inline void CalcTimeConstraintsForElems(Domain* domain) {
   dev_mindthydro.free(domain->mainStream);
 }
 
-static inline void LagrangeLeapFrog(Domain* domain) {
-  // Task 0 ~ 5
-  // Calculate nodal forces, accelerations, velocities, positions, with
-  // applied boundary conditions and slide surface considerations
-  LagrangeNodal(domain);
+constexpr int NUM_TASKS = 8;
 
-  // Task 6
-  // Calculate element quantities (i.e. velocity gradient & q), and update
-  // material states
-  LagrangeElements(domain);
+void executeRandomTask(Domain* domain, bool annotate, int taskId, const std::map<void*, void*>& addressUpdate, cudaStream_t stream) {
+  for (auto v : VolatileVectorManager::volatileDeviceVectors) {
+    v->tryUpdateAddress(addressUpdate);
+  }
 
-  // Task 7
-  CalcTimeConstraintsForElems(domain);
+  domain->mainStream = stream;
+  domain->annotate = annotate;
+
+  if (taskId == 0) {
+    // LagrangeLeapFrog / LagrangeNodal / CalcVolumeForceForElems
+    CalcVolumeForceForElems(domain->hgcoef, domain);
+  } else if (taskId == 1) {
+    // LagrangeLeapFrog / LagrangeNodal / CalcAccelerationForNodes
+    CalcAccelerationForNodes(domain);
+  } else if (taskId == 2) {
+    // LagrangeLeapFrog / LagrangeNodal / ApplyAccelerationBoundaryConditionsForNodes
+    ApplyAccelerationBoundaryConditionsForNodesInXAxis(domain);
+  } else if (taskId == 3) {
+    // LagrangeLeapFrog / LagrangeNodal / ApplyAccelerationBoundaryConditionsForNodes
+    ApplyAccelerationBoundaryConditionsForNodesInYAxis(domain);
+  } else if (taskId == 4) {
+    // LagrangeLeapFrog / LagrangeNodal / ApplyAccelerationBoundaryConditionsForNodes
+    ApplyAccelerationBoundaryConditionsForNodesInZAxis(domain);
+  } else if (taskId == 5) {
+    // LagrangeLeapFrog / LagrangeNodal / CalcPositionAndVelocityForNodes
+    CalcPositionAndVelocityForNodes(domain->u_cut, domain);
+  } else if (taskId == 6) {
+    // LagrangeLeapFrog / LagrangeElements
+    LagrangeElements(domain);
+  } else if (taskId == 7) {
+    // LagrangeLeapFrog / CalcTimeConstraintsForElems
+    CalcTimeConstraintsForElems(domain);
+  } else {
+    fprintf(stderr, "Invalid taskId (%d)\n", taskId);
+    exit(1);
+  }
 }
 
 cudaGraph_t recordCudaGraph(Domain* domain) {
   cudaStream_t s;
   checkCudaErrors(cudaStreamCreate(&s));
 
-  domain->mainStream = s;
-
   checkCudaErrors(cudaStreamBeginCapture(s, cudaStreamCaptureModeGlobal));
 
-  LagrangeLeapFrog(domain);
+  std::map<void*, void*> addressUpdate;
+  for (int i = 0; i < NUM_TASKS; i++) {
+    executeRandomTask(domain, true, i, addressUpdate, s);
+  }
 
   cudaGraph_t g;
   checkCudaErrors(cudaStreamEndCapture(s, &g));
