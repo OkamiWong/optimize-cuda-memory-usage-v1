@@ -46,7 +46,9 @@ class Vector_h : public thrust::host_vector<T> {
 
 class VolatileVector_d {
  public:
-  inline virtual void tryUpdateAddress(const std::map<void*, void*>& addressUpdate) = 0;
+  inline virtual void tryUpdateAddress(const std::map<void*, void*>& addressUpdate) {
+    assert(false);
+  };
 };
 
 struct VolatileVectorManager {
