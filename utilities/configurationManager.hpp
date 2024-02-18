@@ -26,6 +26,9 @@ struct Configuration {
   int tiledCholeskyN = 256;
   int tiledCholeskyT = 4;
 
+  // LULESH
+  int luleshS = 45;
+
   NLOHMANN_DEFINE_TYPE_INTRUSIVE(
     Configuration,
     optimize,
@@ -37,7 +40,8 @@ struct Configuration {
     useNvlink,
     measurePeakMemoryUsage,
     tiledCholeskyN,
-    tiledCholeskyT
+    tiledCholeskyT,
+    luleshS
   );
 };
 

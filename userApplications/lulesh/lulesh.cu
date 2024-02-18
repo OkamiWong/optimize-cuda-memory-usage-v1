@@ -80,6 +80,7 @@ Additional BSD Notice
 #include <vector>
 
 #include "../../profiling/annotation.hpp"
+#include "../../utilities/configurationManager.hpp"
 #include "../../utilities/cudaUtilities.hpp"
 #include "lulesh.h"
 #include "sm_utils.inl"
@@ -3026,14 +3027,6 @@ cudaGraph_t recordCudaGraph(Domain* domain) {
   return g;
 }
 
-void printUsage(char* argv[]) {
-  printf("Usage: \n");
-  printf("Structured grid:    %s -s numEdgeElems \n", argv[0]);
-  printf("\nExamples:\n");
-  printf("%s -s 45\n", argv[0]);
-  printf("%s -u sedov15oct.lmesh\n", argv[0]);
-}
-
 void write_solution(Domain* locDom) {
   Vector_h<Real_t> x_h(locDom->x.size());
   Vector_h<Real_t> y_h(locDom->y.size());
@@ -3174,26 +3167,8 @@ int main(int argc, char* argv[]) {
   exit(-1);
 #endif
 
-  if (argc < 3) {
-    printUsage(argv);
-    exit(LFileError);
-  }
-
-  if (strcmp(argv[1], "-u") != 0 && strcmp(argv[1], "-s") != 0) {
-    printUsage(argv);
-    exit(LFileError);
-  }
-
-  int num_iters = -1;
-  if (argc == 5) {
-    num_iters = atoi(argv[4]);
-  }
-
-  bool structured = (strcmp(argv[1], "-s") == 0);
-  if (!structured) {
-    printf("Unstructured meshes feature is not supported.\n");
-    exit(-1);
-  }
+  ConfigurationManager::exportDefaultConfiguration();
+  ConfigurationManager::initialize(argc, argv);
 
   Int_t numRanks;
   Int_t myRank;
@@ -3204,7 +3179,7 @@ int main(int argc, char* argv[]) {
   cuda_init(myRank);
 
   /* assume cube subdomain geometry for now */
-  Index_t nx = atoi(argv[2]);
+  Index_t nx = ConfigurationManager::getConfig().luleshS;
 
   Domain* locDom;
 
@@ -3262,7 +3237,6 @@ int main(int argc, char* argv[]) {
       printf("cycle = %d, time = %e, dt=%e\n", its + 1, double(locDom->time_h), double(locDom->deltatime_h));
 #endif
     its++;
-    if (its == num_iters) break;
   }
 
   // make sure GPU finished its work
