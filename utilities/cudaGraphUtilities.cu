@@ -43,6 +43,22 @@ cudaGraphNode_t getRootNode(cudaGraph_t graph) {
   return rootNodes[0];
 }
 
+std::vector<cudaGraphNode_t> getNodesWithZeroOutDegree(cudaGraph_t graph) {
+  std::vector<cudaGraphNode_t> nodesWithZeroOutDegree;
+
+  std::vector<cudaGraphNode_t> nodes;
+  std::map<cudaGraphNode_t, std::vector<cudaGraphNode_t>> edges;
+  extractGraphNodesAndEdges(graph, nodes, edges);
+
+  for (auto u : nodes) {
+    if (edges[u].size() == 0) {
+      nodesWithZeroOutDegree.push_back(u);
+    }
+  }
+
+  return nodesWithZeroOutDegree;
+}
+
 void getKernelNodeParams(cudaGraphNode_t kernelNode, CUDA_KERNEL_NODE_PARAMS &nodeParams) {
   cudaGraphNodeType nodeType;
   checkCudaErrors(cudaGraphNodeGetType(kernelNode, &nodeType));

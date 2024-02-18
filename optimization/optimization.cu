@@ -24,3 +24,22 @@ void executeOptimizedGraph(
     managedDeviceArrayToHostArrayMap
   );
 }
+
+void executeOptimizedGraphRepeatedly(
+  OptimizationOutput &optimizedGraph,
+  ExecuteRandomTask executeRandomTask,
+  ShouldContinue shouldContinue,
+  int &numIterations,
+  float &runningTime,
+  std::map<void *, void *> &managedDeviceArrayToHostArrayMap
+) {
+  LOG_TRACE();
+  Executor::getInstance()->executeOptimizedGraphRepeatedly(
+    optimizedGraph,
+    executeRandomTask,
+    shouldContinue,
+    numIterations,
+    runningTime,
+    managedDeviceArrayToHostArrayMap
+  );
+}

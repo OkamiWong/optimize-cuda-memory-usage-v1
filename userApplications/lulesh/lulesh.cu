@@ -63,6 +63,7 @@ Additional BSD Notice
 */
 
 #include <cuda.h>
+#include <fmt/core.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -1710,7 +1711,7 @@ __global__ void CalcPositionAndVelocityForNodes_kernel(int numNode, const Real_t
 static inline void CalcPositionAndVelocityForNodes(const Real_t u_cut, Domain* domain) {
   if (domain->annotate) {
     annotateNextKernel(
-      0,
+      5,
       {domain->x.raw(), domain->y.raw(), domain->z.raw(), domain->xd.raw(), domain->yd.raw(), domain->zd.raw(), domain->xdd.raw(), domain->ydd.raw(), domain->zdd.raw()},
       {domain->x.raw(), domain->y.raw(), domain->z.raw(), domain->xd.raw(), domain->yd.raw(), domain->zd.raw()},
       domain->mainStream
@@ -3191,6 +3192,44 @@ int main(int argc, char* argv[]) {
 
   if (ConfigurationManager::getConfig().optimize) {
     auto optimizedGraph = profileAndOptimize(graph);
+
+    // Initialize data again
+    NewDomain(locDom, numRanks, col, row, plane, nx, side, nr, balance, cost);
+
+    float runningTime;
+    std::map<void*, void*> managedDeviceArrayToHostArrayMap;
+
+    executeOptimizedGraphRepeatedly(
+      optimizedGraph,
+      [&](int taskId, std::map<void*, void*> addressUpdate, cudaStream_t stream) {
+        executeRandomTask(locDom, false, taskId, addressUpdate, stream);
+      },
+      [&]() {
+        bool shouldContinue = locDom->time_h < locDom->stoptime;
+        TimeIncrement(locDom);
+        return shouldContinue;
+      },
+      its,
+      runningTime,
+      managedDeviceArrayToHostArrayMap
+    );
+
+    std::map<void*, void*> managedDeviceArrayToNewDeviceArrayMap;
+    for (const auto& [oldDevicePtr, newHostPtr] : managedDeviceArrayToHostArrayMap) {
+      void* newDevicePtr;
+      size_t size = MemoryManager::managedMemoryAddressToSizeMap[oldDevicePtr];
+      checkCudaErrors(cudaMalloc(&newDevicePtr, size));
+      checkCudaErrors(cudaMemcpy(newDevicePtr, newHostPtr, size, cudaMemcpyDefault));
+      managedDeviceArrayToNewDeviceArrayMap[oldDevicePtr] = newDevicePtr;
+    }
+    for (auto v : VolatileVectorManager::volatileDeviceVectors) {
+      v->tryUpdateAddress(managedDeviceArrayToNewDeviceArrayMap);
+    }
+
+    checkCudaErrors(cudaDeviceSynchronize());
+
+    VerifyAndWriteFinalOutput(runningTime, *locDom, its, nx, numRanks);
+
     return 0;
   }
 
