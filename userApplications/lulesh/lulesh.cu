@@ -79,9 +79,11 @@ Additional BSD Notice
 #include <sstream>
 #include <vector>
 
+#include "../../optimization/optimization.hpp"
 #include "../../profiling/annotation.hpp"
 #include "../../utilities/configurationManager.hpp"
 #include "../../utilities/cudaUtilities.hpp"
+#include "../../utilities/logger.hpp"
 #include "lulesh.h"
 #include "sm_utils.inl"
 #include "util.h"
@@ -3206,6 +3208,14 @@ int main(int argc, char* argv[]) {
   }
 
   cudaGraph_t graph = recordCudaGraph(locDom);
+
+  LOG_TRACE_WITH_INFO("Printing original graph to graph.dot");
+  checkCudaErrors(cudaGraphDebugDotPrint(graph, "./graph.dot", 0));
+
+  if (ConfigurationManager::getConfig().optimize) {
+    auto optimizedGraph = profileAndOptimize(graph);
+    return 0;
+  }
 
   cudaGraphExec_t graphExec;
   checkCudaErrors(cudaGraphInstantiate(&graphExec, graph, nullptr, nullptr, 0));
