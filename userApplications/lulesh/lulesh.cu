@@ -87,6 +87,10 @@ Additional BSD Notice
 #include "sm_utils.inl"
 #include "util.h"
 
+#ifndef DOUBLE_PRECISION
+  #error Only double precision is supported.
+#endif
+
 /****************************************************/
 /* Allow flexibility for arithmetic representations */
 /****************************************************/
@@ -3141,11 +3145,6 @@ void VerifyAndWriteFinalOutput(Real_t elapsed_time, Domain& locDom, Int_t its, I
 }
 
 int main(int argc, char* argv[]) {
-#ifndef DOUBLE_PRECISION
-  printf("Single precision is not supported.\n");
-  exit(-1);
-#endif
-
   ConfigurationManager::exportDefaultConfiguration();
   ConfigurationManager::initialize(argc, argv);
 
