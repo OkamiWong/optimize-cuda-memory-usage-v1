@@ -63,14 +63,12 @@ Additional BSD Notice
 */
 
 #include <cuda.h>
-#include <cuda_profiler_api.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
 #include <thrust/device_ptr.h>
 #include <thrust/fill.h>
-#include <unistd.h>
 
 #include <iomanip>
 #include <iostream>
@@ -82,6 +80,7 @@ Additional BSD Notice
 #include "../../optimization/optimization.hpp"
 #include "../../profiling/annotation.hpp"
 #include "../../utilities/configurationManager.hpp"
+#include "../../utilities/constants.hpp"
 #include "../../utilities/cudaUtilities.hpp"
 #include "../../utilities/logger.hpp"
 #include "lulesh.h"
@@ -217,41 +216,19 @@ __host__ __device__ static __forceinline__
   return CalcElemVolume(x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7], z[0], z[1], z[2], z[3], z[4], z[5], z[6], z[7]);
 }
 
-void cuda_init(int rank) {
-  Int_t deviceCount, dev;
-  cudaDeviceProp cuda_deviceProp;
-
-  cudaSafeCall(cudaGetDeviceCount(&deviceCount));
-  if (deviceCount == 0) {
-    fprintf(stderr, "cuda_init(): no devices supporting CUDA.\n");
-    exit(1);
-  }
-
-  dev = rank % deviceCount;
-
-  if ((dev < 0) || (dev > deviceCount - 1)) {
-    fprintf(stderr, "cuda_init(): requested device (%d) out of range [%d,%d]\n", dev, 0, deviceCount - 1);
-    exit(1);
-  }
-
-  cudaSafeCall(cudaSetDevice(dev));
+void checkCudaDevice() {
+  const auto dev = Constants::DEVICE_ID;
 
   struct cudaDeviceProp props;
   cudaGetDeviceProperties(&props, dev);
 
-  char hostname[256];
-  gethostname(hostname, sizeof(hostname));
-
-  printf("Host %s using GPU %i: %s\n", hostname, dev, props.name);
-
-  cudaSafeCall(cudaGetDeviceProperties(&cuda_deviceProp, dev));
-  if (cuda_deviceProp.major < 3) {
-    fprintf(stderr, "cuda_init(): This implementation of Lulesh requires device SM 3.0+.\n", dev);
+  if (props.major < 3) {
+    fprintf(stderr, "This implementation of Lulesh requires device SM 3.0+.\n", dev);
     exit(1);
   }
 
 #if CUDART_VERSION < 5000
-  fprintf(stderr, "cuda_init(): This implementation of Lulesh uses texture objects, which is requires Cuda 5.0+.\n");
+  fprintf(stderr, "This implementation of Lulesh uses texture objects, which is requires Cuda 5.0+.\n");
   exit(1);
 #endif
 }
@@ -3172,13 +3149,14 @@ int main(int argc, char* argv[]) {
   ConfigurationManager::exportDefaultConfiguration();
   ConfigurationManager::initialize(argc, argv);
 
+  initializeCudaDevice();
+  checkCudaDevice();
+
   Int_t numRanks;
   Int_t myRank;
 
   numRanks = 1;
   myRank = 0;
-
-  cuda_init(myRank);
 
   /* assume cube subdomain geometry for now */
   Index_t nx = ConfigurationManager::getConfig().luleshS;
@@ -3223,8 +3201,6 @@ int main(int argc, char* argv[]) {
   cudaStream_t stream;
   checkCudaErrors(cudaStreamCreate(&stream));
 
-  cudaProfilerStart();
-
   timeval start;
   gettimeofday(&start, NULL);
 
@@ -3260,8 +3236,6 @@ int main(int argc, char* argv[]) {
 
   double elapsed_timeG;
   elapsed_timeG = elapsed_time;
-
-  cudaProfilerStop();
 
   if (myRank == 0)
     VerifyAndWriteFinalOutput(elapsed_timeG, *locDom, its, nx, numRanks);
