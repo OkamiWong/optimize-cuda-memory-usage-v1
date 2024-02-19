@@ -24,7 +24,7 @@ struct IntegerProgrammingSolver {
   // States of the solver
   SecondStepSolver::Input input;
 
-  double originalPeakMemoryUsage;  // In MB
+  double originalPeakMemoryUsage, lowestPeakMemoryUsagePossible;  // In MiB
   float originalTotalRunningTime;
   double originalPeakMemoryUsageToTotalRunningTimeRatio;
   int numberOfTaskGroups, numberOfArrays, numberOfVertices;
@@ -74,6 +74,7 @@ struct IntegerProgrammingSolver {
 
     originalTotalRunningTime = input.originalTotalRunningTime;
 
+    lowestPeakMemoryUsagePossible = 0;
     std::set<int> allDependencies, currentDependencies;
     for (int i = 0; i < numberOfTaskGroups; i++) {
       currentDependencies.clear();
@@ -91,8 +92,14 @@ struct IntegerProgrammingSolver {
         allDependencies.end(),
         std::inserter(allDependencies, allDependencies.begin())
       );
+      lowestPeakMemoryUsagePossible = std::max(
+        1.0 / 1024.0 / 1024.0 * std::accumulate(currentDependencies.begin(), currentDependencies.end(), static_cast<size_t>(0), [&](size_t a, int b) {
+          return a + input.arraySizes[b];
+        }),
+        lowestPeakMemoryUsagePossible
+      );
     }
-    originalPeakMemoryUsage = 1e-6 * std::accumulate(allDependencies.begin(), allDependencies.end(), static_cast<size_t>(0), [&](size_t a, int b) {
+    originalPeakMemoryUsage = 1.0 / 1024.0 / 1024.0 * std::accumulate(allDependencies.begin(), allDependencies.end(), static_cast<size_t>(0), [&](size_t a, int b) {
                                 return a + input.arraySizes[b];
                               });
 
@@ -419,13 +426,13 @@ struct IntegerProgrammingSolver {
   }
 
   void definePeakMemoryUsage() {
-    // Represent the peak memory usage in MByte
+    // Represent the peak memory usage in MiB
     peakMemoryUsage = solver->MakeNumVar(0, infinity, "");
     for (int i = 0; i < numberOfTaskGroups; i++) {
       auto constraint = solver->MakeRowConstraint(0, infinity);
       constraint->SetCoefficient(peakMemoryUsage, 1);
       for (int j = 0; j < numberOfArrays; j++) {
-        constraint->SetCoefficient(x[i][j], -static_cast<double>(this->input.arraySizes[j]) * 1e-6);
+        constraint->SetCoefficient(x[i][j], -static_cast<double>(this->input.arraySizes[j]) / 1024.0 / 1024.0);
       }
     }
   }
@@ -455,13 +462,14 @@ struct IntegerProgrammingSolver {
 
     auto fp = fopen("secondStepSolver.out", "w");
 
-    fmt::print(fp, "resultStatus = {}\n", resultStatus == MPSolver::OPTIMAL ? "OPTIMAL" : "FEASIBLE");
+    fmt::print(fp, "Result status: {}\n", resultStatus == MPSolver::OPTIMAL ? "OPTIMAL" : "FEASIBLE");
 
     auto optimizedPeakMemoryUsage = peakMemoryUsage->solution_value();
     auto totalRunningTime = z[getTaskGroupVertexIndex(numberOfTaskGroups - 1)]->solution_value();
 
-    fmt::print(fp, "Original peak memory usage (MByte): {:.6f}\n", originalPeakMemoryUsage);
-    fmt::print(fp, "Optimal peak memory usage (MByte): {:.6f}\n", optimizedPeakMemoryUsage);
+    fmt::print(fp, "Original peak memory usage (MiB): {:.6f}\n", originalPeakMemoryUsage);
+    fmt::print(fp, "Lowest peak memory usage possible (MiB): {:.6f}\n", lowestPeakMemoryUsagePossible);
+    fmt::print(fp, "Optimal peak memory usage (MiB): {:.6f}\n", optimizedPeakMemoryUsage);
     fmt::print(fp, "Optimal peak memory usage  / Original peak memory usage: {:.6f}%\n", optimizedPeakMemoryUsage / originalPeakMemoryUsage * 100.0);
 
     fmt::print(fp, "Original total running time (s): {:.6f}\n", originalTotalRunningTime);
