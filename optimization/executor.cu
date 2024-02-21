@@ -248,6 +248,9 @@ void Executor::executeOptimizedGraph(
   cudaGraphExec_t graphExec;
   checkCudaErrors(cudaGraphInstantiate(&graphExec, graph, nullptr, nullptr, 0));
 
+  checkCudaErrors(cudaGraphUpload(graphExec, stream));
+  checkCudaErrors(cudaStreamSynchronize(stream));
+
   if (ConfigurationManager::getConfig().measurePeakMemoryUsage) {
     peakMemoryUsageProfiler.start();
   }
@@ -475,6 +478,9 @@ void Executor::executeOptimizedGraphRepeatedly(
   CudaEventClock cudaEventClock;
   cudaGraphExec_t graphExec;
   checkCudaErrors(cudaGraphInstantiate(&graphExec, graph, nullptr, nullptr, 0));
+
+  checkCudaErrors(cudaGraphUpload(graphExec, stream));
+  checkCudaErrors(cudaStreamSynchronize(stream));
 
   if (ConfigurationManager::getConfig().measurePeakMemoryUsage) {
     peakMemoryUsageProfiler.start();
