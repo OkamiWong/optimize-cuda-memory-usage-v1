@@ -1,7 +1,6 @@
 add_library(strategyUtilities SHARED strategyUtilities.cu)
 target_link_libraries(
   strategyUtilities
-  logger
   fmt::fmt
 )
 
@@ -11,13 +10,11 @@ target_link_libraries(
   strategyUtilities
   firstStepSolver
   secondStepSolver
-  logger
 )
 
 add_library(firstStepSolver SHARED firstStepSolver.cpp)
 target_link_libraries(
   firstStepSolver
-  logger
   fmt::fmt
 )
 
@@ -25,7 +22,6 @@ add_library(secondStepSolver SHARED secondStepSolver.cpp)
 target_link_libraries(
   secondStepSolver
   utilities
-  logger
   fmt::fmt
   ortools::ortools
 )

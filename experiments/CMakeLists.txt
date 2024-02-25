@@ -17,5 +17,4 @@ target_link_libraries(
   optimizedStream
   utilities
   cudaUtilities
-  logger
 )

@@ -6,7 +6,6 @@ target_link_libraries(
   annotation
   optimization
   peakMemoryUsageProfiler
-  logger
   CUDA::cublas
   CUDA::cusolver
   CUDA::curand

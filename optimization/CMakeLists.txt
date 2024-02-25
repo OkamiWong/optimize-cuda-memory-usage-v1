@@ -13,7 +13,6 @@ target_link_libraries(
   cudaGraphUtilities
   cudaGraphExecutionTimelineProfiler
   peakMemoryUsageProfiler
-  logger
   -lcuda
 )
 

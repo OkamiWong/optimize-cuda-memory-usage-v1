@@ -6,6 +6,5 @@ target_link_libraries(
   annotation
   optimization
   peakMemoryUsageProfiler
-  logger
   fmt::fmt
 )
