@@ -6,6 +6,7 @@
 #include <set>
 #include <vector>
 
+#include "../utilities/configurationManager.hpp"
 #include "../utilities/types.hpp"
 
 struct MemoryManager {
@@ -17,6 +18,10 @@ struct MemoryManager {
 
 template <typename T>
 void registerManagedMemoryAddress(T *devPtr, size_t size) {
+  if (size < ConfigurationManager::getConfig().minManagedArraySize) {
+    return;
+  }
+
   auto ptr = static_cast<void *>(devPtr);
   if (MemoryManager::managedMemoryAddressToIndexMap.count(ptr) == 0) {
     MemoryManager::managedMemoryAddresses.push_back(ptr);

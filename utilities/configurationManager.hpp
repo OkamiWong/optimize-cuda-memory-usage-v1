@@ -18,6 +18,7 @@ struct Configuration {
   bool mergeConcurrentCudaGraphNodes = true;
   double prefetchingBandwidthInGB = 281.0;
   double acceptableRunningTimeFactor = 10.0;
+  int minManagedArraySize = 0;
 
   // Execution
   bool useNvlink = false;
@@ -38,6 +39,7 @@ struct Configuration {
     mergeConcurrentCudaGraphNodes,
     prefetchingBandwidthInGB,
     acceptableRunningTimeFactor,
+    minManagedArraySize,
     useNvlink,
     measurePeakMemoryUsage,
     tiledCholeskyN,

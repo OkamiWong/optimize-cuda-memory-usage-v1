@@ -1,7 +1,6 @@
 #pragma once
 
-#include <initializer_list>
-#include <iterator>
+#include <vector>
 
 #include "../utilities/types.hpp"
 
@@ -20,7 +19,7 @@ __global__ void dummyKernelForAnnotation(TaskAnnotation taskAnnotation);
 
 __host__ void annotateNextKernel(
   TaskId taskId,
-  std::initializer_list<void *> inputs,
-  std::initializer_list<void *> outputs,
+  std::vector<void *> inputs,
+  std::vector<void *> outputs,
   cudaStream_t stream
 );
