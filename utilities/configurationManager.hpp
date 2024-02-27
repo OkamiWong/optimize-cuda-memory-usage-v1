@@ -30,6 +30,8 @@ struct Configuration {
 
   // LULESH
   int luleshS = 45;
+  bool luleshConstrainIterationCount = false;
+  int luleshTargetIterationCount = 3000;
 
   NLOHMANN_DEFINE_TYPE_INTRUSIVE(
     Configuration,
@@ -44,7 +46,9 @@ struct Configuration {
     measurePeakMemoryUsage,
     tiledCholeskyN,
     tiledCholeskyT,
-    luleshS
+    luleshS,
+    luleshConstrainIterationCount,
+    luleshTargetIterationCount
   );
 };
 

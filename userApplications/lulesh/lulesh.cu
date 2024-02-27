@@ -3246,7 +3246,12 @@ int main(int argc, char* argv[]) {
         executeRandomTask(locDom, false, taskId, addressUpdate, stream);
       },
       [&]() {
-        bool shouldContinue = *locDom->time_h < locDom->stoptime;
+        bool shouldContinue;
+        if (ConfigurationManager::getConfig().luleshConstrainIterationCount) {
+          shouldContinue = *locDom->cycle_h < ConfigurationManager::getConfig().luleshTargetIterationCount;
+        } else {
+          shouldContinue = *locDom->time_h < locDom->stoptime;
+        }
         return shouldContinue;
       },
       its,
@@ -3282,7 +3287,17 @@ int main(int argc, char* argv[]) {
   timeval start;
   gettimeofday(&start, NULL);
 
-  while (*locDom->time_h < locDom->stoptime) {
+  while (true) {
+    if (ConfigurationManager::getConfig().luleshConstrainIterationCount) {
+      if (*locDom->cycle_h >= ConfigurationManager::getConfig().luleshTargetIterationCount) {
+        break;
+      }
+    } else {
+      if (*locDom->time_h >= locDom->stoptime) {
+        break;
+      }
+    }
+
     checkCudaErrors(cudaGraphLaunch(graphExec, stream));
 
     checkCudaErrors(cudaStreamSynchronize(stream));
