@@ -1611,14 +1611,14 @@ static inline void CalcVolumeForceForElems(const Real_t hgcoef, Domain* domain) 
   return;
 }
 
-static inline void checkErrors(Domain* domain, int its, int myRank) {
+static inline void checkErrors(Domain* domain, int myRank) {
   if (*(domain->bad_vol_h) != -1) {
-    printf("Rank %i: Volume Error in cell %d at iteration %d\n", myRank, *(domain->bad_vol_h), its);
+    printf("Rank %i: Volume Error in cell %d at iteration %d\n", myRank, *(domain->bad_vol_h), *(domain->cycle_h));
     exit(VolumeError);
   }
 
   if (*(domain->bad_q_h) != -1) {
-    printf("Rank %i: Q Error in cell %d at iteration %d\n", myRank, *(domain->bad_q_h), its);
+    printf("Rank %i: Q Error in cell %d at iteration %d\n", myRank, *(domain->bad_q_h), *(domain->cycle_h));
     exit(QStopError);
   }
 }
@@ -3041,8 +3041,11 @@ cudaGraph_t recordCudaGraph(Domain* domain) {
   checkCudaErrors(cudaStreamBeginCapture(s, cudaStreamCaptureModeGlobal));
 
   std::map<void*, void*> addressUpdate;
-  for (int i = 0; i < NUM_TASKS; i++) {
-    executeRandomTask(domain, true, i, addressUpdate, s);
+
+  for (int i = 0; i < ConfigurationManager::getConfig().luleshIterationBatchSize; i++) {
+    for (int j = 0; j < NUM_TASKS; j++) {
+      executeRandomTask(domain, true, j, addressUpdate, s);
+    }
   }
 
   cudaGraph_t g;
@@ -3120,13 +3123,15 @@ void InitMeshDecomp(Int_t numRanks, Int_t myRank, Int_t* col, Int_t* row, Int_t*
   return;
 }
 
-void VerifyAndWriteFinalOutput(Real_t elapsed_time, Domain& locDom, Int_t its, Int_t nx, Int_t numRanks) {
+void VerifyAndWriteFinalOutput(Real_t elapsed_time, Domain& locDom, Int_t nx, Int_t numRanks) {
   size_t free_mem, total_mem, used_mem;
   cudaMemGetInfo(&free_mem, &total_mem);
   used_mem = total_mem - free_mem;
 #if LULESH_SHOW_PROGRESS == 0
   printf("   Used Memory         =  %8.4f Mb\n", used_mem / (1024. * 1024.));
 #endif
+
+  Int_t its = *locDom.cycle_h;
 
   // GrindTime1 only takes a single domain into account, and is thus a good way to measure
   // processor speed indepdendent of MPI parallelism.
@@ -3273,7 +3278,7 @@ int main(int argc, char* argv[]) {
 
     checkCudaErrors(cudaDeviceSynchronize());
 
-    VerifyAndWriteFinalOutput(runningTime, *locDom, its, nx, numRanks);
+    VerifyAndWriteFinalOutput(runningTime, *locDom, nx, numRanks);
 
     return 0;
   }
@@ -3304,7 +3309,7 @@ int main(int argc, char* argv[]) {
 
     // LagrangeLeapFrog(locDom);
 
-    checkErrors(locDom, its, myRank);
+    checkErrors(locDom, myRank);
 
 #if LULESH_SHOW_PROGRESS
     if (myRank == 0)
@@ -3326,7 +3331,7 @@ int main(int argc, char* argv[]) {
   elapsed_timeG = elapsed_time;
 
   if (myRank == 0)
-    VerifyAndWriteFinalOutput(elapsed_timeG, *locDom, its, nx, numRanks);
+    VerifyAndWriteFinalOutput(elapsed_timeG, *locDom, nx, numRanks);
 
   checkCudaErrors(cudaGraphExecDestroy(graphExec));
   checkCudaErrors(cudaGraphDestroy(graph));

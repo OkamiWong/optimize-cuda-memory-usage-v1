@@ -32,6 +32,7 @@ struct Configuration {
   int luleshS = 45;
   bool luleshConstrainIterationCount = false;
   int luleshTargetIterationCount = 3000;
+  int luleshIterationBatchSize = 1;
 
   NLOHMANN_DEFINE_TYPE_INTRUSIVE(
     Configuration,
@@ -48,7 +49,8 @@ struct Configuration {
     tiledCholeskyT,
     luleshS,
     luleshConstrainIterationCount,
-    luleshTargetIterationCount
+    luleshTargetIterationCount,
+    luleshIterationBatchSize
   );
 };
 
