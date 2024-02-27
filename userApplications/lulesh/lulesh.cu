@@ -715,13 +715,18 @@ Domain* NewDomain(Domain* oldDomain, Int_t numRanks, Index_t colLoc, Index_t row
   *(domain->dtcourant_h) = 1e20;
 
   /* initialize material parameters */
-  domain->time_h = Real_t(0.);
+  if (shouldAllocate) {
+    cudaMallocHost(&domain->time_h, sizeof(Real_t), 0);
+    cudaMallocHost(&domain->cycle_h, sizeof(Index_t), 0);
+  }
+
   domain->dtfixed = Real_t(-1.0e-6);
   domain->deltatimemultlb = Real_t(1.1);
   domain->deltatimemultub = Real_t(1.2);
   domain->stoptime = Real_t(1.0e-2);
   domain->dtmax = Real_t(1.0e-2);
-  domain->cycle = 0;
+  *domain->time_h = Real_t(0.);
+  *domain->cycle_h = 0;
 
   domain->e_cut = Real_t(1.0e-7);
   domain->p_cut = Real_t(1.0e-7);
@@ -976,52 +981,68 @@ void Domain::CreateRegionIndexSets(Int_t nr, Int_t b) {
 
 }  // end of create function
 
-static inline void TimeIncrement(Domain* domain) {
-  Real_t targetdt = domain->stoptime - domain->time_h;
+__global__ void IncreaseTime_kernel(
+  Real_t dtfixed,
+  Real_t deltatimemultlb,
+  Real_t deltatimemultub,
+  Real_t stoptime,
+  Real_t dtmax,
+  Real_t* dthydro,
+  Real_t* dtcourant,
+  Real_t* deltatime,
+  Real_t* time,
+  Int_t* cycle
+) {
+  int tid = blockDim.x * blockIdx.x + threadIdx.x;
+  if (tid != 0) {
+    return;
+  }
 
-  if ((domain->dtfixed <= Real_t(0.0)) && (domain->cycle != Int_t(0))) {
+  Real_t targetdt = stoptime - *time;
+
+  if ((dtfixed <= Real_t(0.0)) && (*cycle != Int_t(0))) {
     Real_t ratio;
 
     /* This will require a reduction in parallel */
     Real_t gnewdt = Real_t(1.0e+20);
     Real_t newdt;
-    if (*(domain->dtcourant_h) < gnewdt) {
-      gnewdt = *(domain->dtcourant_h) / Real_t(2.0);
+    if (*dtcourant < gnewdt) {
+      gnewdt = *dtcourant / Real_t(2.0);
     }
-    if (*(domain->dthydro_h) < gnewdt) {
-      gnewdt = *(domain->dthydro_h) * Real_t(2.0) / Real_t(3.0);
+    if (*dthydro < gnewdt) {
+      gnewdt = *dthydro * Real_t(2.0) / Real_t(3.0);
     }
 
     newdt = gnewdt;
 
-    Real_t olddt = *domain->deltatime_h;
+    Real_t olddt = *deltatime;
     ratio = newdt / olddt;
     if (ratio >= Real_t(1.0)) {
-      if (ratio < domain->deltatimemultlb) {
+      if (ratio < deltatimemultlb) {
         newdt = olddt;
-      } else if (ratio > domain->deltatimemultub) {
-        newdt = olddt * domain->deltatimemultub;
+      } else if (ratio > deltatimemultub) {
+        newdt = olddt * deltatimemultub;
       }
     }
 
-    if (newdt > domain->dtmax) {
-      newdt = domain->dtmax;
+    if (newdt > dtmax) {
+      newdt = dtmax;
     }
-    *domain->deltatime_h = newdt;
+    *deltatime = newdt;
   }
 
   /* TRY TO PREVENT VERY SMALL SCALING ON THE NEXT CYCLE */
-  if ((targetdt > *domain->deltatime_h) && (targetdt < (Real_t(4.0) * (*domain->deltatime_h) / Real_t(3.0)))) {
-    targetdt = Real_t(2.0) * (*domain->deltatime_h) / Real_t(3.0);
+  if ((targetdt > *deltatime) && (targetdt < (Real_t(4.0) * (*deltatime) / Real_t(3.0)))) {
+    targetdt = Real_t(2.0) * (*deltatime) / Real_t(3.0);
   }
 
-  if (targetdt < *domain->deltatime_h) {
-    *domain->deltatime_h = targetdt;
+  if (targetdt < *deltatime) {
+    *deltatime = targetdt;
   }
 
-  domain->time_h += *domain->deltatime_h;
+  *time += *deltatime;
 
-  ++domain->cycle;
+  (*cycle)++;
 }
 
 __device__ static __forceinline__ void CalcElemShapeFunctionDerivatives(const Real_t* const x, const Real_t* const y, const Real_t* const z, Real_t b[][8], Real_t* const volume) {
@@ -1526,6 +1547,22 @@ static inline void CalcVolumeForceForElems(const Real_t hgcoef, Domain* domain) 
     );
   }
 
+  // Call IncreaseTime_kernel to increase time concurrently
+  cudaEvent_t timeIncrementStartEvent, timeIncrementEndEvent;
+  checkCudaErrors(cudaEventCreate(&timeIncrementStartEvent));
+  checkCudaErrors(cudaEventCreate(&timeIncrementEndEvent));
+  cudaStream_t timeIncrementStream;
+  checkCudaErrors(cudaStreamCreate(&timeIncrementStream));
+
+  checkCudaErrors(cudaEventRecord(timeIncrementStartEvent, domain->mainStream));
+  checkCudaErrors(cudaStreamWaitEvent(timeIncrementStream, timeIncrementStartEvent));
+  IncreaseTime_kernel<<<1, 1, 0, timeIncrementStream>>>(
+    domain->dtfixed, domain->deltatimemultlb, domain->deltatimemultub,
+    domain->stoptime, domain->dtmax, domain->dthydro_h, domain->dtcourant_h,
+    domain->deltatime_h, domain->time_h, domain->cycle_h
+  );
+  checkCudaErrors(cudaEventRecord(timeIncrementEndEvent, timeIncrementStream));
+
   Index_t numElem = domain->numElem;
   Index_t padded_numElem = domain->padded_numElem;
 
@@ -1560,12 +1597,16 @@ static inline void CalcVolumeForceForElems(const Real_t hgcoef, Domain* domain) 
     domain->fx.raw(), domain->fy.raw(), domain->fz.raw(),
     num_threads
   );
-  //    cudaDeviceSynchronize();
-  //    cudaCheckError();
 
   fx_elem.free(domain->mainStream);
   fy_elem.free(domain->mainStream);
   fz_elem.free(domain->mainStream);
+
+  checkCudaErrors(cudaStreamWaitEvent(domain->mainStream, timeIncrementEndEvent));
+
+  checkCudaErrors(cudaEventDestroy(timeIncrementStartEvent));
+  checkCudaErrors(cudaEventDestroy(timeIncrementEndEvent));
+  checkCudaErrors(cudaStreamDestroy(timeIncrementStream));
 
   return;
 }
@@ -3205,8 +3246,7 @@ int main(int argc, char* argv[]) {
         executeRandomTask(locDom, false, taskId, addressUpdate, stream);
       },
       [&]() {
-        bool shouldContinue = locDom->time_h < locDom->stoptime;
-        TimeIncrement(locDom);
+        bool shouldContinue = *locDom->time_h < locDom->stoptime;
         return shouldContinue;
       },
       its,
@@ -3242,13 +3282,8 @@ int main(int argc, char* argv[]) {
   timeval start;
   gettimeofday(&start, NULL);
 
-  while (locDom->time_h < locDom->stoptime) {
-    // this has been moved after computation of volume forces to hide launch latencies
-    // TimeIncrement(locDom) ;
-
+  while (*locDom->time_h < locDom->stoptime) {
     checkCudaErrors(cudaGraphLaunch(graphExec, stream));
-
-    TimeIncrement(locDom);
 
     checkCudaErrors(cudaStreamSynchronize(stream));
 

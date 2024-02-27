@@ -96,7 +96,7 @@ class Domain {
   Vector_d<Real_t> fy;
   Vector_d<Real_t> fz;
 
-  Vector_d<Real_t> nodalMass;   /* mass */
+  Vector_d<Real_t> nodalMass; /* mass */
 
   /* Boundary nodesets */
 
@@ -115,14 +115,14 @@ class Domain {
   Real_t deltatimemultub;
   Real_t stoptime; /* end time for simulation */
   Real_t dtmax;    /* maximum allowable time increment */
-  Int_t cycle;     /* iteration count for simulation */
+  Int_t* cycle_h;     /* iteration count for simulation */
 
   Real_t* dthydro_h;   /* hydro time constraint */
   Real_t* dtcourant_h; /* courant time constraint */
   Index_t* bad_q_h;    /* flag to indicate Q error */
   Index_t* bad_vol_h;  /* flag to indicate volume error */
 
-  Real_t time_h;      /* current time */
+  Real_t* time_h;      /* current time */
   Real_t* deltatime_h; /* variable time increment */
 
   Real_t u_cut;  /* velocity tolerance */
