@@ -139,7 +139,9 @@ struct IntegerProgrammingSolver {
   }
 
   void initialize() {
-    solver = std::unique_ptr<MPSolver>(MPSolver::CreateSolver("SCIP"));
+    solver = std::unique_ptr<MPSolver>(MPSolver::CreateSolver(
+      ConfigurationManager::getConfig().solver
+    ));
 
     if (!solver) {
       fmt::print("Solver not available\n");
@@ -596,13 +598,13 @@ struct IntegerProgrammingSolver {
     );
     objective->SetMinimization();
 
-    solver->set_time_limit(1000 * 60 * 10);
+    solver->set_time_limit(1000 * 60 * 30);
 
     MPSolverParameters solverParam;
-    solverParam.SetIntegerParam(
-      MPSolverParameters::IntegerParam::LP_ALGORITHM,
-      MPSolverParameters::LpAlgorithmValues::PRIMAL
-    );
+    // solverParam.SetIntegerParam(
+    //   MPSolverParameters::IntegerParam::LP_ALGORITHM,
+    //   MPSolverParameters::LpAlgorithmValues::PRIMAL
+    // );
 
     SystemWallClock clock;
 

@@ -19,6 +19,7 @@ struct Configuration {
   double prefetchingBandwidthInGB = 281.0;
   double acceptableRunningTimeFactor = 10.0;
   int minManagedArraySize = 0;
+  std::string solver = "SCIP";
 
   // Execution
   bool useNvlink = false;
@@ -43,6 +44,7 @@ struct Configuration {
     prefetchingBandwidthInGB,
     acceptableRunningTimeFactor,
     minManagedArraySize,
+    solver,
     useNvlink,
     measurePeakMemoryUsage,
     tiledCholeskyN,
