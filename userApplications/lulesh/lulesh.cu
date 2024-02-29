@@ -3214,13 +3214,10 @@ int main(int argc, char* argv[]) {
   Int_t col, row, plane, side;
   InitMeshDecomp(numRanks, myRank, &col, &row, &plane, &side);
 
-  // TODO: change default nr to 11
   Int_t nr = 11;
   Int_t balance = 1;
   Int_t cost = 1;
 
-  // TODO: modify this constructor to account for new fields
-  // TODO: setup communication buffers
   locDom = NewDomain(nullptr, numRanks, col, row, plane, nx, side, nr, balance, cost);
 
   cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);

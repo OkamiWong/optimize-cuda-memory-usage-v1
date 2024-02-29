@@ -106,36 +106,40 @@ struct IntegerProgrammingSolver {
     originalPeakMemoryUsageToTotalRunningTimeRatio = static_cast<double>(originalPeakMemoryUsage) / static_cast<double>(originalTotalRunningTime);
 
     shouldAllocate.clear();
-    std::vector<int> arrayFirstWritingKernel(numberOfArrays, std::numeric_limits<int>::max());
-
-    for (auto arr : input.applicationInputArrays) {
-      arrayFirstWritingKernel[arr] = -1;
-    }
-
-    for (int i = 0; i < numberOfTaskGroups; i++) {
-      for (auto arr : input.taskGroupOutputArrays[i]) {
-        if (i < arrayFirstWritingKernel[arr]) {
-          arrayFirstWritingKernel[arr] = i;
-          shouldAllocate[std::make_pair(i, arr)] = true;
-        }
-      }
-    }
-
     shouldDeallocate.clear();
-    std::vector<int> arrayLastReadingKernel(numberOfArrays, -1);
 
-    for (auto arr : input.applicationOutputArrays) {
-      arrayLastReadingKernel[arr] = numberOfTaskGroups;
-    }
+    // TODO: Uncomment the section below to consider allocation and deallocation
+    // in the optimization stage after they are supported in the execution stage.
 
-    for (int i = numberOfTaskGroups - 1; i >= 0; i--) {
-      for (auto arr : input.taskGroupInputArrays[i]) {
-        if (i > arrayLastReadingKernel[arr]) {
-          arrayLastReadingKernel[arr] = i;
-          shouldDeallocate[std::make_pair(i, arr)] = true;
-        }
-      }
-    }
+    // std::vector<int> arrayFirstWritingKernel(numberOfArrays, std::numeric_limits<int>::max());
+
+    // for (auto arr : input.applicationInputArrays) {
+    //   arrayFirstWritingKernel[arr] = -1;
+    // }
+
+    // for (int i = 0; i < numberOfTaskGroups; i++) {
+    //   for (auto arr : input.taskGroupOutputArrays[i]) {
+    //     if (i < arrayFirstWritingKernel[arr]) {
+    //       arrayFirstWritingKernel[arr] = i;
+    //       shouldAllocate[std::make_pair(i, arr)] = true;
+    //     }
+    //   }
+    // }
+
+    // std::vector<int> arrayLastReadingKernel(numberOfArrays, -1);
+
+    // for (auto arr : input.applicationOutputArrays) {
+    //   arrayLastReadingKernel[arr] = numberOfTaskGroups;
+    // }
+
+    // for (int i = numberOfTaskGroups - 1; i >= 0; i--) {
+    //   for (auto arr : input.taskGroupInputArrays[i]) {
+    //     if (i > arrayLastReadingKernel[arr]) {
+    //       arrayLastReadingKernel[arr] = i;
+    //       shouldDeallocate[std::make_pair(i, arr)] = true;
+    //     }
+    //   }
+    // }
   }
 
   void initialize() {
@@ -527,6 +531,15 @@ struct IntegerProgrammingSolver {
             fmt::print(fp, "o_{{{}, {}, {}}} = {}; w = {}; z = {}\n", i, j, k, true, w[getOffloadVertexIndex(i, j)]->solution_value(), z[getOffloadVertexIndex(i, j)]->solution_value());
           }
         }
+      }
+    }
+
+    fmt::print(fp, "\n");
+
+    for (int j = 0; j < numberOfArrays; j++) {
+      const int i = numberOfTaskGroups - 1;
+      if (y[i][j]->solution_value() > 0) {
+        fmt::print(fp, "y_{{{}, {}}} = {}\n", i, j, y[i][j]->solution_value());
       }
     }
 
