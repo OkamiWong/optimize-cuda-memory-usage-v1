@@ -8,6 +8,7 @@
 #include "../utilities/constants.hpp"
 #include "../utilities/cudaGraphUtilities.hpp"
 #include "../utilities/cudaUtilities.hpp"
+#include "../utilities/utilities.hpp"
 #include "../utilities/logger.hpp"
 #include "executor.hpp"
 
@@ -360,6 +361,9 @@ void Executor::executeOptimizedGraphRepeatedly(
   checkCudaErrors(cudaSetDevice(Constants::DEVICE_ID));
   checkCudaErrors(cudaDeviceSynchronize());
 
+  SystemWallClock clock;
+  clock.start();
+
   LOG_TRACE_WITH_INFO("Record nodes to a new CUDA Graph");
 
   std::map<void *, void *> addressUpdate;
@@ -469,6 +473,9 @@ void Executor::executeOptimizedGraphRepeatedly(
     newLeafNodes = optimizedCudaGraphCreator->endCaptureOperation();
   }
   checkCudaErrors(cudaDeviceSynchronize());
+
+  clock.end();
+  LOG_TRACE_WITH_INFO("Time taken for recording graph: %.6f", clock.getTimeInSeconds());
 
   LOG_TRACE_WITH_INFO("Printing the new CUDA Graph to newGraph.dot");
   checkCudaErrors(cudaGraphDebugDotPrint(graph, "newGraph.dot", 0));
