@@ -17,14 +17,18 @@ class SecondStepSolver {
 
     float prefetchingBandwidth, offloadingBandwidth;
 
+    bool optimizeForRepetitiveExecution;
+
     float originalTotalRunningTime;
   };
 
   struct Output {
     // (Task Group Index, Array Index)
+    // Prefetch at the start of a task group
     typedef std::tuple<TaskGroupId, ArrayId> Prefetch;
 
     // (Starting Task Group Index, Array Index, Ending Task Group Index)
+    // Offload at the end of a task group
     typedef std::tuple<TaskGroupId, ArrayId, TaskGroupId> Offload;
 
     bool optimal;

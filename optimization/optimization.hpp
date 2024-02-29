@@ -3,7 +3,10 @@
 #include "executor.hpp"
 #include "optimizationOutput.hpp"
 
-OptimizationOutput profileAndOptimize(cudaGraph_t originalGraph);
+OptimizationOutput profileAndOptimize(
+  cudaGraph_t originalGraph,
+  bool optimizeForRepetitiveExecution = false
+);
 
 /// @brief
 /// @param optimizedGraph

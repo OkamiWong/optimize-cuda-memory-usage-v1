@@ -187,7 +187,8 @@ OptimizationInput constructOptimizationInput(
   std::map<cudaGraphNode_t, std::vector<cudaGraphNode_t>> &edges,
   CudaGraphExecutionTimeline &timeline,
   DisjointSet<cudaGraphNode_t> &disjointSet,
-  std::map<cudaGraphNode_t, cudaGraphNode_t> &nodeToAnnotationMap
+  std::map<cudaGraphNode_t, cudaGraphNode_t> &nodeToAnnotationMap,
+  bool optimizeForRepetitiveExecution
 ) {
   LOG_TRACE();
 
@@ -293,6 +294,20 @@ OptimizationInput constructOptimizationInput(
 
   optimizationInput.originalTotalRunningTime = static_cast<float>(globalMaxEnd - globalMinStart) * 1e-9f;
 
+  // Add dummy task group if optimize for repetitive execution
+  optimizationInput.optimizeForRepetitiveExecution = optimizeForRepetitiveExecution;
+  if (optimizeForRepetitiveExecution) {
+    optimizationInput.nodes.emplace_back();
+    auto &dummyTaskGroup = *optimizationInput.nodes.rbegin();
+    auto dummyTaskGroupId = optimizationInput.nodes.size() - 1;
+    dummyTaskGroup.runningTime = 0;
+    for (auto &[taskGroupId, destinations] : optimizationInput.edges) {
+      if (destinations.size() == 0) {
+        destinations.push_back(dummyTaskGroupId);
+      }
+    }
+  }
+
   return optimizationInput;
 }
 
@@ -305,7 +320,7 @@ Optimizer *Optimizer::getInstance() {
   return instance;
 }
 
-OptimizationOutput Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
+OptimizationOutput Optimizer::profileAndOptimize(cudaGraph_t originalGraph, bool optimizeForRepetitiveExecution) {
   registerDummyKernelFuncHandle(originalGraph);
 
   auto timeline = getCudaGraphExecutionTimeline(originalGraph);
@@ -325,7 +340,7 @@ OptimizationOutput Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
 
   mergeNodesWithSameAnnotation(nodes, nodeToAnnotationMap, disjointSet);
 
-  auto optimizationInput = constructOptimizationInput(originalGraph, nodes, edges, timeline, disjointSet, nodeToAnnotationMap);
+  auto optimizationInput = constructOptimizationInput(originalGraph, nodes, edges, timeline, disjointSet, nodeToAnnotationMap, optimizeForRepetitiveExecution);
 
   auto optimizedGraph = this->optimize<TwoStepOptimizationStrategy>(optimizationInput);
 

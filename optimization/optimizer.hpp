@@ -13,7 +13,7 @@ class Optimizer {
   void operator=(const Optimizer &) = delete;
 
   // Warning: the graph is executed once during profiling.
-  OptimizationOutput profileAndOptimize(cudaGraph_t originalGraph);
+  OptimizationOutput profileAndOptimize(cudaGraph_t originalGraph, bool optimizeForRepetitiveExecution);
 
  protected:
   Optimizer() = default;

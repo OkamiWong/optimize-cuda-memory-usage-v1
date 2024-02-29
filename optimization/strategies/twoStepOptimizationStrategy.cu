@@ -111,6 +111,8 @@ SecondStepSolver::Input convertToSecondStepInput(OptimizationInput &optimization
     secondStepInput.applicationOutputArrays.insert(MemoryManager::managedMemoryAddressToIndexMap[ptr]);
   }
 
+  secondStepInput.optimizeForRepetitiveExecution = optimizationInput.optimizeForRepetitiveExecution;
+
   return secondStepInput;
 }
 
@@ -139,14 +141,14 @@ float calculateLongestPath(OptimizationOutput &optimizedGraph, std::map<int, flo
     for (auto v : optimizedGraph.edges[u]) {
       dis[v] = std::max(dis[v], dis[u] + nodeWeight[v]);
       inDegree[v]--;
-      if(inDegree[v] == 0){
+      if (inDegree[v] == 0) {
         q.push(v);
       }
     }
   }
 
   float longestPathLength = 0;
-  for(auto u : optimizedGraph.nodes){
+  for (auto u : optimizedGraph.nodes) {
     longestPathLength = std::max(longestPathLength, dis[u]);
   }
   return longestPathLength;
@@ -215,13 +217,17 @@ OptimizationOutput convertToOptimizationOutput(
 
     optimizedGraph.addEdge(taskGroupStartNodes[i], taskGroupBodyNodes[i]);
 
-    for (auto u : taskGroup.nodes) {
-      if (!taskHasIncomingEdgeMap[u]) {
-        optimizedGraph.addEdge(taskGroupBodyNodes[i], taskIdToOutputNodeIdMap[u]);
-      }
+    if (taskGroup.nodes.size() == 0) {
+      optimizedGraph.addEdge(taskGroupBodyNodes[i], taskGroupEndNodes[i]);
+    } else {
+      for (auto u : taskGroup.nodes) {
+        if (!taskHasIncomingEdgeMap[u]) {
+          optimizedGraph.addEdge(taskGroupBodyNodes[i], taskIdToOutputNodeIdMap[u]);
+        }
 
-      if (taskGroup.edges[u].size() == 0) {
-        optimizedGraph.addEdge(taskIdToOutputNodeIdMap[u], taskGroupEndNodes[i]);
+        if (taskGroup.edges[u].size() == 0) {
+          optimizedGraph.addEdge(taskIdToOutputNodeIdMap[u], taskGroupEndNodes[i]);
+        }
       }
     }
   }
@@ -231,18 +237,30 @@ OptimizationOutput convertToOptimizationOutput(
     void *arrayAddress = MemoryManager::managedMemoryAddresses[arrayIndex];
     size_t arraySize = MemoryManager::managedMemoryAddressToSizeMap[arrayAddress];
 
-    int endingNodeIndex = startingNodeIndex;
-    while (endingNodeIndex < firstStepOutput.taskGroupExecutionOrder.size()) {
-      auto &taskGroup = optimizationInput.nodes[firstStepOutput.taskGroupExecutionOrder[endingNodeIndex]];
-      if (taskGroup.dataDependency.inputs.count(arrayAddress) > 0 || taskGroup.dataDependency.outputs.count(arrayAddress) > 0) {
-        break;
+    int endingNodeIndex;
+    if (
+      optimizationInput.optimizeForRepetitiveExecution
+      && startingNodeIndex == firstStepOutput.taskGroupExecutionOrder.size() - 1
+    ) {
+      // For repetitive execution, there might be prefetch in the end
+      // to prefetch data for the next round of execution.
+      // For such prefetch, there is no task depending on the data in this round.
+      endingNodeIndex = startingNodeIndex;
+    } else {
+      // Look for the closest node that depends on the prefetch
+      endingNodeIndex = startingNodeIndex;
+      while (endingNodeIndex < firstStepOutput.taskGroupExecutionOrder.size()) {
+        auto &taskGroup = optimizationInput.nodes[firstStepOutput.taskGroupExecutionOrder[endingNodeIndex]];
+        if (taskGroup.dataDependency.inputs.count(arrayAddress) > 0 || taskGroup.dataDependency.outputs.count(arrayAddress) > 0) {
+          break;
+        }
+        endingNodeIndex++;
       }
-      endingNodeIndex++;
-    }
 
-    // Ignore unnecessary prefetch, which has no dependent kernels after it.
-    if (endingNodeIndex == firstStepOutput.taskGroupExecutionOrder.size()) {
-      continue;
+      // Ignore unnecessary prefetch, which has no dependent kernels after it.
+      if (endingNodeIndex == firstStepOutput.taskGroupExecutionOrder.size()) {
+        continue;
+      }
     }
 
     auto dataMovementNode = optimizedGraph.addDataMovementNode(

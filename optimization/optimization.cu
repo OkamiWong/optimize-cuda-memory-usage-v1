@@ -5,9 +5,12 @@
 #include "optimization.hpp"
 #include "optimizer.hpp"
 
-OptimizationOutput profileAndOptimize(cudaGraph_t originalGraph) {
+OptimizationOutput profileAndOptimize(
+  cudaGraph_t originalGraph,
+  bool optimizeForRepetitiveExecution
+) {
   LOG_TRACE();
-  return Optimizer::getInstance()->profileAndOptimize(originalGraph);
+  return Optimizer::getInstance()->profileAndOptimize(originalGraph, optimizeForRepetitiveExecution);
 }
 
 void executeOptimizedGraph(

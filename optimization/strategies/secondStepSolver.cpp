@@ -155,10 +155,6 @@ struct IntegerProgrammingSolver {
     initiallyAllocatedOnDevice.clear();
     for (int i = 0; i < numberOfArrays; i++) {
       initiallyAllocatedOnDevice.push_back(solver->MakeBoolVar(fmt::format("I_{{{}}}", i)));
-      initiallyAllocatedOnDevice[i]->SetUB(0);
-    }
-    for (auto arr : input.applicationInputArrays) {
-      initiallyAllocatedOnDevice[arr]->SetUB(1);
     }
 
     // Add decision variables for prefetching
@@ -427,6 +423,14 @@ struct IntegerProgrammingSolver {
     }
   }
 
+  void addRepetitiveExecutionConstraints() {
+    for (int i = 0; i < numberOfArrays; i++) {
+      auto constraint = solver->MakeRowConstraint(0, 0);
+      constraint->SetCoefficient(initiallyAllocatedOnDevice[i], 1);
+      constraint->SetCoefficient(y[numberOfTaskGroups - 1][i], -1);
+    }
+  }
+
   void definePeakMemoryUsage() {
     // Represent the peak memory usage in MiB
     peakMemoryUsage = solver->MakeNumVar(0, infinity, "");
@@ -564,7 +568,7 @@ struct IntegerProgrammingSolver {
     fclose(fp);
   }
 
-  SecondStepSolver::Output solve(SecondStepSolver::Input &&input, bool verbose = false) {
+  SecondStepSolver::Output solve(SecondStepSolver::Input &&input) {
     this->input = std::move(input);
 
     initialize();
@@ -584,6 +588,10 @@ struct IntegerProgrammingSolver {
     addLongestPathConstraints();
 
     addKernelDataDependencyConstraints();
+
+    if (this->input.optimizeForRepetitiveExecution) {
+      addRepetitiveExecutionConstraints();
+    }
 
     definePeakMemoryUsage();
 

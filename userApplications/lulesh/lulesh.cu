@@ -3238,7 +3238,7 @@ int main(int argc, char* argv[]) {
   checkCudaErrors(cudaGraphDebugDotPrint(graph, "./graph.dot", 0));
 
   if (ConfigurationManager::getConfig().optimize) {
-    auto optimizedGraph = profileAndOptimize(graph);
+    auto optimizedGraph = profileAndOptimize(graph, true);
 
     // Initialize data again
     NewDomain(locDom, numRanks, col, row, plane, nx, side, nr, balance, cost);
