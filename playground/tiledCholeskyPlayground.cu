@@ -1,4 +1,5 @@
 #include <cublas_v2.h>
+#include <cuda_profiler_api.h>
 #include <cuda_runtime.h>
 #include <cuda_runtime_api.h>
 #include <cusolverDn.h>
@@ -22,7 +23,7 @@
 #include "../utilities/cudaUtilities.hpp"
 #include "../utilities/utilities.hpp"
 
-constexpr size_t N = 1024 * 40;
+constexpr size_t N = 1024 * 20;
 constexpr size_t B = N / 4;
 
 constexpr size_t T = N / B;
@@ -490,6 +491,8 @@ void tiledCholesky(bool verify) {
   cudaGraphExec_t graphExec;
   checkCudaErrors(cudaGraphInstantiate(&graphExec, graph, nullptr, nullptr, 0));
 
+  checkCudaErrors(cudaProfilerStart());
+
   CudaEventClock cudaEventClock;
 
   clock.logWithCurrentTime("Launch graph");
@@ -500,6 +503,8 @@ void tiledCholesky(bool verify) {
 
   checkCudaErrors(cudaDeviceSynchronize());
   clock.logWithCurrentTime("Synchronization done");
+
+  checkCudaErrors(cudaProfilerStop());
 
   if (verify) {
     clock.logWithCurrentTime("Start to verify");
