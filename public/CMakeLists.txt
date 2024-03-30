@@ -1,7 +1,7 @@
-add_library(memopt STATIC memopt.cu)
+add_library(memopt INTERFACE)
 target_link_libraries(
   memopt
-  STATIC
+  INTERFACE
   utilities
   cudaUtilities
   annotation

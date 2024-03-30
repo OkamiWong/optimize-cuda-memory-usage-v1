@@ -9,7 +9,3 @@
 #include "../utilities/cudaUtilities.hpp"
 #include "../utilities/logger.hpp"
 #include "../utilities/utilities.hpp"
-
-namespace memopt {
-void helloWorld();
-}  // namespace memopt
