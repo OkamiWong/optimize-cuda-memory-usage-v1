@@ -1,6 +1,6 @@
 #include <cstdio>
 
-#include "../utilities/cudaUtilities.hpp"
+#include "memopt.hpp"
 
 using namespace memopt;
 

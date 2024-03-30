@@ -19,9 +19,7 @@
 #include <tuple>
 #include <vector>
 
-#include "../include/argh.h"
-#include "../utilities/cudaUtilities.hpp"
-#include "../utilities/utilities.hpp"
+#include "memopt.hpp"
 
 using namespace memopt;
 

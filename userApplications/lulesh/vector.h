@@ -5,8 +5,7 @@
 #include <cassert>
 #include <vector>
 
-#include "../../profiling/memoryManager.hpp"
-#include "../../utilities/cudaUtilities.hpp"
+#include "memopt.hpp"
 
 template <class T>
 class Vector_h;

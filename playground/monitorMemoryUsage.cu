@@ -5,7 +5,7 @@
 #include <iostream>
 #include <thread>
 
-#include "../utilities/cudaUtilities.hpp"
+#include "memopt.hpp"
 
 using namespace memopt;
 
@@ -30,7 +30,7 @@ struct PeakMemoryUsageProfiler {
   void start() {
     stopFlag = false;
     peakMemoryUsagePromise = std::promise<size_t>();
-    monitorThread = std::thread(&PeakMemoryUsageProfiler::periodicallyCheckMemoryUsage, this);
+    monitorThread = std::thread(&::PeakMemoryUsageProfiler::periodicallyCheckMemoryUsage, this);
   }
 
   size_t end() {
@@ -112,7 +112,7 @@ void testPeakMemoryUsageProfiler() {
 
   fmt::print("Start testPeakMemoryUsageProfiler\n");
   printMemInfo();
-  PeakMemoryUsageProfiler profiler;
+  ::PeakMemoryUsageProfiler profiler;
   profiler.start();
 
   fmt::print("Press enter to continue\n");

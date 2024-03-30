@@ -1,8 +1,7 @@
 add_executable(bandwidthTest bandwidthTest.cu)
 target_link_libraries(
   bandwidthTest
-  utilities
-  cudaUtilities
+  memopt
 )
 
 add_executable(splitDataMovement splitDataMovement.cu)

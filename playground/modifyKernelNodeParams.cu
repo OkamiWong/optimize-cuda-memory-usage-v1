@@ -2,8 +2,7 @@
 
 #include <cstdio>
 
-#include "../utilities/cudaGraphUtilities.hpp"
-#include "../utilities/cudaUtilities.hpp"
+#include "memopt.hpp"
 
 using namespace memopt;
 

@@ -9,9 +9,7 @@
 
 #include "../include/argh.h"
 #include "../include/csv.hpp"
-#include "../utilities/cudaUtilities.hpp"
-#include "../utilities/logger.hpp"
-#include "../utilities/utilities.hpp"
+#include "memopt.hpp"
 
 using namespace memopt;
 

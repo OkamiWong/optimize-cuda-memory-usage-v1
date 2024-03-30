@@ -78,13 +78,8 @@ Additional BSD Notice
 #include <sstream>
 #include <vector>
 
-#include "../../optimization/optimization.hpp"
-#include "../../profiling/annotation.hpp"
-#include "../../utilities/configurationManager.hpp"
-#include "../../utilities/constants.hpp"
-#include "../../utilities/cudaUtilities.hpp"
-#include "../../utilities/logger.hpp"
 #include "lulesh.h"
+#include "memopt.hpp"
 #include "sm_utils.inl"
 #include "util.h"
 
