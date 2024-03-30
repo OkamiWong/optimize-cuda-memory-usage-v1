@@ -8,3 +8,8 @@ target_link_libraries(
   optimization
   peakMemoryUsageProfiler
 )
+target_include_directories(
+  memopt
+  INTERFACE
+  ${CMAKE_CURRENT_SOURCE_DIR}
+)
