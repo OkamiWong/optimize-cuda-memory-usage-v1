@@ -1,11 +1,15 @@
 # Build
 .PHONY: config-debug
 config-debug:
-	cmake -S . -B ./build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_TOOLCHAIN_FILE=/home/twang/sources/resources/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_PREFIX_PATH=/home/twang/misc/ortools
+	cmake -S . -B ./build -DCMAKE_BUILD_TYPE=Debug \
+	-DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake \
+	-DCMAKE_PREFIX_PATH=${ORTOOLS_ROOT}
 
 .PHONY: config-release
 config-release:
-	cmake -S . -B ./build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=/home/twang/sources/resources/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_PREFIX_PATH=/home/twang/misc/ortools
+	cmake -S . -B ./build -DCMAKE_BUILD_TYPE=Release \
+	-DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake \
+	-DCMAKE_PREFIX_PATH=${ORTOOLS_ROOT}
 
 .PHONY: config
 config: config-release
