@@ -12,6 +12,10 @@ config: config-release
 
 .PHONY: build
 build:
+	cmake --build ./build -j
+
+.PHONY: build-sequential
+build-sequential:
 	cmake --build ./build
 
 .PHONY: build-verbose
