@@ -8,13 +8,11 @@ target_link_libraries(
 add_executable(splitDataMovement splitDataMovement.cu)
 target_link_libraries(
   splitDataMovement
-  utilities
-  cudaUtilities
+  memopt
 )
 
 add_executable(optimizedStream optimizedStream.cu)
 target_link_libraries(
   optimizedStream
-  utilities
-  cudaUtilities
+  memopt
 )

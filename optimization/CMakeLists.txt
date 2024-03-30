@@ -1,12 +1,13 @@
 add_library(
   optimization
-  SHARED
+  STATIC
   optimization.cu
   optimizer.cu
   executor.cu
 )
 target_link_libraries(
   optimization
+  PRIVATE
   strategies
   annotation
   cudaUtilities

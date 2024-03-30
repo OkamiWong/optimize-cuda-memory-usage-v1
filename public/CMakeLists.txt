@@ -4,6 +4,7 @@ target_link_libraries(
   INTERFACE
   utilities
   cudaUtilities
+  cudaGraphUtilities
   annotation
   optimization
   peakMemoryUsageProfiler

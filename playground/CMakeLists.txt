@@ -1,13 +1,13 @@
 add_executable(helloWorld helloWorld.cu)
 
 add_executable(captureGraph captureGraph.cu)
-target_link_libraries(captureGraph cudaUtilities)
+target_link_libraries(captureGraph memopt)
 
 add_executable(modifyKernelNodeParams modifyKernelNodeParams.cu)
-target_link_libraries(modifyKernelNodeParams cudaUtilities cudaGraphUtilities -lcuda)
+target_link_libraries(modifyKernelNodeParams memopt -lcuda)
 
 add_executable(monitorMemoryUsage monitorMemoryUsage.cu)
-target_link_libraries(monitorMemoryUsage cudaUtilities fmt::fmt)
+target_link_libraries(monitorMemoryUsage memopt fmt::fmt)
 
 add_executable(assertion assertion.cu)
 
@@ -20,9 +20,7 @@ target_link_libraries(orToolsRoutingPlayground ortools::ortools fmt::fmt)
 add_executable(tiledCholeskyPlayground tiledCholeskyPlayground.cu)
 target_link_libraries(
   tiledCholeskyPlayground
-  utilities
-  cudaUtilities
-  annotation
+  memopt
   CUDA::cublas
   CUDA::cusolver
   fmt::fmt

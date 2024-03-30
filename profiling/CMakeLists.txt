@@ -1,7 +1,7 @@
-add_library(annotation SHARED annotation.cu)
+add_library(annotation STATIC annotation.cu)
 
-add_library(cudaGraphExecutionTimelineProfiler SHARED cudaGraphExecutionTimelineProfiler.cu)
-target_link_libraries(cudaGraphExecutionTimelineProfiler cudaUtilities -lcupti)
+add_library(cudaGraphExecutionTimelineProfiler STATIC cudaGraphExecutionTimelineProfiler.cu)
+target_link_libraries(cudaGraphExecutionTimelineProfiler PRIVATE cudaUtilities -lcupti)
 
-add_library(peakMemoryUsageProfiler SHARED peakMemoryUsageProfiler.cu)
-target_link_libraries(peakMemoryUsageProfiler cudaUtilities)
+add_library(peakMemoryUsageProfiler STATIC peakMemoryUsageProfiler.cu)
+target_link_libraries(peakMemoryUsageProfiler PRIVATE cudaUtilities)

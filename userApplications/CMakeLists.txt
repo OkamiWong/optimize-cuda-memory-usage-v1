@@ -1,11 +1,7 @@
 add_executable(tiledCholesky tiledCholesky.cu)
 target_link_libraries(
   tiledCholesky
-  utilities
-  cudaUtilities
-  annotation
-  optimization
-  peakMemoryUsageProfiler
+  memopt
   CUDA::cublas
   CUDA::cusolver
   CUDA::curand
