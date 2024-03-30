@@ -6,6 +6,8 @@
 
 #include "../utilities/types.hpp"
 
+namespace memopt {
+
 struct OptimizationOutput {
   enum class NodeType {
     empty,
@@ -69,3 +71,5 @@ struct OptimizationOutput {
     this->edges[from].push_back(to);
   }
 };
+
+}  // namespace memopt

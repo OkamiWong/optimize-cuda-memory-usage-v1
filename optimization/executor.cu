@@ -12,6 +12,8 @@
 #include "../utilities/logger.hpp"
 #include "executor.hpp"
 
+namespace memopt {
+
 class OptimizedCudaGraphCreator {
  public:
   OptimizedCudaGraphCreator(cudaStream_t stream, cudaGraph_t graph) : stream(stream), graph(graph) {}
@@ -523,3 +525,5 @@ void Executor::executeOptimizedGraphRepeatedly(
 
   runningTime = cudaEventClock.getTimeInSeconds();
 }
+
+}  // namespace memopt

@@ -14,6 +14,8 @@
 #include "strategies.hpp"
 #include "strategyUtilities.hpp"
 
+namespace memopt {
+
 FirstStepSolver::Input convertToFirstStepInput(OptimizationInput &optimizationInput) {
   const auto numTaskGroups = optimizationInput.nodes.size();
 
@@ -296,3 +298,5 @@ OptimizationOutput TwoStepOptimizationStrategy::run(OptimizationInput &input) {
 
   return output;
 }
+
+}  // namespace memopt

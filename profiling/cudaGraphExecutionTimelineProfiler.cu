@@ -6,6 +6,8 @@
 #include "../utilities/cuptiUtilities.hpp"
 #include "cudaGraphExecutionTimelineProfiler.hpp"
 
+namespace memopt {
+
 CudaGraphExecutionTimelineProfiler *CudaGraphExecutionTimelineProfiler::instance = nullptr;
 
 CudaGraphExecutionTimelineProfiler *CudaGraphExecutionTimelineProfiler::getInstance() {
@@ -160,3 +162,5 @@ CudaGraphExecutionTimeline CudaGraphExecutionTimelineProfiler::getTimeline() {
 
   return timeline;
 }
+
+}  // namespace memopt

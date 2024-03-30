@@ -4,6 +4,8 @@
 #include "../utilities/cudaUtilities.hpp"
 #include "peakMemoryUsageProfiler.hpp"
 
+namespace memopt {
+
 void PeakMemoryUsageProfiler::periodicallyCheckMemoryUsage() {
   checkCudaErrors(cudaSetDevice(Constants::DEVICE_ID));
 
@@ -30,3 +32,5 @@ size_t PeakMemoryUsageProfiler::end() {
   this->monitorThread.join();
   return this->peakMemoryUsagePromise.get_future().get();
 }
+
+}  // namespace memopt

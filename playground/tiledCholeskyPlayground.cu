@@ -23,6 +23,8 @@
 #include "../utilities/cudaUtilities.hpp"
 #include "../utilities/utilities.hpp"
 
+using namespace memopt;
+
 constexpr size_t N = 1024 * 20;
 constexpr size_t B = N / 4;
 

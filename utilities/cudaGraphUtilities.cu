@@ -8,6 +8,8 @@
 #include "cudaGraphUtilities.hpp"
 #include "cudaUtilities.hpp"
 
+namespace memopt {
+
 void extractGraphNodesAndEdges(
   cudaGraph_t graph,
   std::vector<cudaGraphNode_t> &nodes,
@@ -68,3 +70,5 @@ void getKernelNodeParams(cudaGraphNode_t kernelNode, CUDA_KERNEL_NODE_PARAMS &no
   // https://forums.developer.nvidia.com/t/cuda-runtime-api-error-for-cuda-graph-and-opencv/215408/13
   checkCudaErrors(cuGraphKernelNodeGetParams(kernelNode, &nodeParams));
 }
+
+}  // namespace memopt

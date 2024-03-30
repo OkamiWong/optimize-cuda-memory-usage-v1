@@ -3,6 +3,8 @@
 #include <chrono>
 #include <random>
 
+namespace memopt {
+
 void SystemWallClock::start() {
   this->startTimePoint = std::chrono::system_clock::now();
 }
@@ -32,3 +34,5 @@ int generateRandomInteger(int min, int max) {
   static std::uniform_int_distribution distrib(min, max);
   return distrib(gen);
 }
+
+}  // namespace memopt

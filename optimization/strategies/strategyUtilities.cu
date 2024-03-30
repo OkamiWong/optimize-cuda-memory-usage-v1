@@ -6,6 +6,8 @@
 #include "../../utilities/logger.hpp"
 #include "strategyUtilities.hpp"
 
+namespace memopt {
+
 inline std::string getTaskGroupName(TaskGroupId index) {
   return fmt::format("task_group_{}", index);
 }
@@ -88,3 +90,5 @@ void printOptimizationOutput(OptimizationOutput &output) {
 
   fclose(fp);
 }
+
+}  // namespace memopt

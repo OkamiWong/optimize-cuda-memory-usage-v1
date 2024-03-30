@@ -13,6 +13,8 @@
 #include "../utilities/logger.hpp"
 #include "../utilities/utilities.hpp"
 
+using namespace memopt;
+
 constexpr int NVLINK_DEVICE_ID_A = 1;
 constexpr int NVLINK_DEVICE_ID_B = 2;
 

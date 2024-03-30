@@ -2,6 +2,8 @@
 
 #include "../utilities/cudaUtilities.hpp"
 
+using namespace memopt;
+
 struct KernelParam {
   int a[1];
 };

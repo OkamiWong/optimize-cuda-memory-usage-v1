@@ -5,6 +5,8 @@
 #include "optimization.hpp"
 #include "optimizer.hpp"
 
+namespace memopt {
+
 OptimizationOutput profileAndOptimize(cudaGraph_t originalGraph) {
   LOG_TRACE();
   return Optimizer::getInstance()->profileAndOptimize(originalGraph);
@@ -43,3 +45,5 @@ void executeOptimizedGraphRepeatedly(
     managedDeviceArrayToHostArrayMap
   );
 }
+
+}  // namespace memopt

@@ -4,6 +4,8 @@
 #include "strategies.hpp"
 #include "strategyUtilities.hpp"
 
+namespace memopt {
+
 OptimizationOutput NoOptimizationStrategy::run(OptimizationInput &input) {
   LOG_TRACE();
 
@@ -63,3 +65,5 @@ OptimizationOutput NoOptimizationStrategy::run(OptimizationInput &input) {
 
   return output;
 }
+
+}  // namespace memopt

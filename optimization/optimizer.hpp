@@ -6,6 +6,8 @@
 #include "optimizationInput.hpp"
 #include "optimizationOutput.hpp"
 
+namespace memopt {
+
 class Optimizer {
  public:
   static Optimizer *getInstance();
@@ -26,3 +28,5 @@ class Optimizer {
     return strategyInstance.run(optimizationInput);
   }
 };
+
+}  // namespace memopt

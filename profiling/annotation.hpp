@@ -4,6 +4,8 @@
 
 #include "../utilities/types.hpp"
 
+namespace memopt {
+
 struct TaskAnnotation {
   // Before CUDA 12.1, the size of the parameters passed to a kernel is
   // limited to 4096 bytes. CUDA 12.1 increases this limit to 32764 bytes.
@@ -23,3 +25,5 @@ __host__ void annotateNextKernel(
   std::vector<void *> outputs,
   cudaStream_t stream
 );
+
+}  // namespace memopt

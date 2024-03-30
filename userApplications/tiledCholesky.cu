@@ -28,6 +28,8 @@
 #include "../utilities/logger.hpp"
 #include "../utilities/utilities.hpp"
 
+using namespace memopt;
+
 size_t N;
 size_t B;
 size_t T;

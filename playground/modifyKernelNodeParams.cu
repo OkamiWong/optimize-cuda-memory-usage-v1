@@ -5,6 +5,8 @@
 #include "../utilities/cudaGraphUtilities.hpp"
 #include "../utilities/cudaUtilities.hpp"
 
+using namespace memopt;
+
 struct Param {
   int8_t a; 
   int64_t c;

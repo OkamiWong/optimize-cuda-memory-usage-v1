@@ -3,6 +3,8 @@
 #include "executor.hpp"
 #include "optimizationOutput.hpp"
 
+namespace memopt {
+
 OptimizationOutput profileAndOptimize(cudaGraph_t originalGraph);
 
 /// @brief
@@ -37,3 +39,5 @@ void executeOptimizedGraphRepeatedly(
   float &runningTime,
   std::map<void *, void *> &managedDeviceArrayToHostArrayMap
 );
+
+}  // namespace memopt

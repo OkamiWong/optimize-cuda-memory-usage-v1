@@ -12,6 +12,8 @@
 #include "../utilities/cudaUtilities.hpp"
 #include "../utilities/utilities.hpp"
 
+using namespace memopt;
+
 constexpr int REPETITION = 100;
 constexpr int PCIE_DEVICE_ID = 0;
 constexpr int NVLINK_DEVICE_ID_A = 1;

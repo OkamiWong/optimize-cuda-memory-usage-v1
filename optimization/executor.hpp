@@ -5,6 +5,8 @@
 
 #include "optimizationOutput.hpp"
 
+namespace memopt {
+
 typedef std::function<void(int, std::map<void *, void *>, cudaStream_t)> ExecuteRandomTask;
 
 typedef std::function<bool()> ShouldContinue;
@@ -35,3 +37,5 @@ class Executor {
   Executor() = default;
   static Executor *instance;
 };
+
+}  // namespace memopt

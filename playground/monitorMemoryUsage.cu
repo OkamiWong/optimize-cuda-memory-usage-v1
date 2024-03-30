@@ -7,6 +7,8 @@
 
 #include "../utilities/cudaUtilities.hpp"
 
+using namespace memopt;
+
 struct PeakMemoryUsageProfiler {
   std::thread monitorThread;
   std::atomic<bool> stopFlag;

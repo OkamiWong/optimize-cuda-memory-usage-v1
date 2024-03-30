@@ -2,6 +2,8 @@
 
 #include "cudaUtilities.hpp"
 
+namespace memopt {
+
 __global__ void warmUp() {
   unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
   float ia, ib;
@@ -81,3 +83,5 @@ float CudaEventClock::getTimeInSeconds() {
   checkCudaErrors(cudaEventElapsedTime(&time, this->startEvent, this->endEvent));
   return time * 1e-3f;
 }
+
+}  // namespace memopt

@@ -5,6 +5,8 @@
 #include <sstream>
 #include <string>
 
+namespace memopt {
+
 class SystemWallClock {
  public:
   void start();
@@ -26,3 +28,5 @@ std::string toStringWithPrecision(const T a_value, const int n = 6) {
 }
 
 int generateRandomInteger(int min, int max);
+
+}  // namespace memopt

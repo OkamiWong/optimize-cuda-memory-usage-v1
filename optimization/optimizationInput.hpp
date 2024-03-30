@@ -6,6 +6,8 @@
 
 #include "../utilities/types.hpp"
 
+namespace memopt {
+
 struct OptimizationInput {
   struct TaskGroup {
     struct DataDependency {
@@ -23,3 +25,5 @@ struct OptimizationInput {
 
   float originalTotalRunningTime;
 };
+
+}  // namespace memopt

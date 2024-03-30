@@ -88,6 +88,8 @@ Additional BSD Notice
 #include "sm_utils.inl"
 #include "util.h"
 
+using namespace memopt;
+
 #ifndef DOUBLE_PRECISION
   #error Only double precision is supported.
 #endif

@@ -16,6 +16,8 @@
 #include "optimizer.hpp"
 #include "strategies/strategies.hpp"
 
+namespace memopt {
+
 static CUfunction dummyKernelFuncHandle;
 
 void registerDummyKernelFuncHandle(cudaGraph_t graph) {
@@ -336,3 +338,5 @@ OptimizationOutput Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
     exit(-1);
   }
 }
+
+}  // namespace memopt

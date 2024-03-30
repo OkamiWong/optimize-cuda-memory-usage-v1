@@ -5,6 +5,8 @@
 #include <map>
 #include <vector>
 
+namespace memopt {
+
 void extractGraphNodesAndEdges(
   cudaGraph_t graph,
   std::vector<cudaGraphNode_t> &nodes,
@@ -16,3 +18,5 @@ cudaGraphNode_t getRootNode(cudaGraph_t graph);
 std::vector<cudaGraphNode_t> getNodesWithZeroOutDegree(cudaGraph_t graph);
 
 void getKernelNodeParams(cudaGraphNode_t kernelNode, CUDA_KERNEL_NODE_PARAMS &nodeParams);
+
+}  // namespace memopt

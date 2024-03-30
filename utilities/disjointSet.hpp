@@ -3,6 +3,8 @@
 #include <map>
 #include <utility>
 
+namespace memopt {
+
 template <typename KeyType>
 class DisjointSet {
  public:
@@ -45,3 +47,5 @@ class DisjointSet {
   std::map<KeyType, KeyType> parent;
   std::map<KeyType, size_t> size;
 };
+
+}  // namespace memopt

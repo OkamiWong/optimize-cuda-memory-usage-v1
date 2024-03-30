@@ -4,6 +4,8 @@
 
 #include "../../utilities/types.hpp"
 
+namespace memopt {
+
 class FirstStepSolver {
  public:
   struct Input {
@@ -30,3 +32,5 @@ class FirstStepSolver {
   void dfs(size_t currentTotalOverlap);
   void printSolution();
 };
+
+}  // namespace memopt

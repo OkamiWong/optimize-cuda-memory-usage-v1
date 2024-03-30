@@ -9,6 +9,8 @@
 #include "../utilities/configurationManager.hpp"
 #include "../utilities/types.hpp"
 
+namespace memopt {
+
 struct MemoryManager {
   inline static std::vector<void *> managedMemoryAddresses;
   inline static std::map<void *, ArrayId> managedMemoryAddressToIndexMap;
@@ -66,3 +68,5 @@ inline void updateManagedMemoryAddress(const std::map<void *, void *> oldAddress
     }
   }
 }
+
+}  // namespace memopt

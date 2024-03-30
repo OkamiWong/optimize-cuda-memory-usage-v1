@@ -15,6 +15,8 @@
 
 using namespace operations_research;
 
+namespace memopt {
+
 // Need separate the or_tools reference with cu files,
 // because nvcc cannot compile or_tools
 struct IntegerProgrammingSolver {
@@ -663,3 +665,5 @@ SecondStepSolver::Output SecondStepSolver::solve(SecondStepSolver::Input &&input
   IntegerProgrammingSolver solver;
   return solver.solve(std::move(input));
 }
+
+}  // namespace memopt

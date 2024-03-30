@@ -5,6 +5,8 @@
 
 #include "constants.hpp"
 
+namespace memopt {
+
 template <typename T>
 void __check(T result, char const *const func, const char *const file, int const line) {
   if (result) {
@@ -34,3 +36,5 @@ class CudaEventClock {
  private:
   cudaEvent_t startEvent, endEvent;
 };
+
+}  // namespace memopt

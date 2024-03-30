@@ -8,6 +8,8 @@
 #include "../include/argh.h"
 #include "../include/json.hpp"
 
+namespace memopt {
+
 struct Configuration {
   // Generic
   bool optimize = false;
@@ -108,3 +110,5 @@ class ConfigurationManager {
     f << s << std::endl;
   }
 };
+
+};  // namespace memopt

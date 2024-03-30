@@ -4,6 +4,8 @@
 
 #include <cstdio>
 
+namespace memopt {
+
 constexpr size_t BUF_SIZE = 8 * 1024;
 constexpr size_t ALIGN_SIZE = 8;
 
@@ -20,3 +22,5 @@ constexpr size_t ALIGN_SIZE = 8;
       exit(-1);                                                                                                \
     }                                                                                                          \
   } while (0)
+
+}  // namespace memopt

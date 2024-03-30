@@ -23,7 +23,7 @@ class Vector_h : public thrust::host_vector<T> {
   inline Vector_h(int N) : thrust::host_vector<T>(N) {}
 
   inline Vector_h<T>& operator=(const Vector_d<T>& a) {
-    checkCudaErrors(cudaMemcpy(this->raw(), a.raw(), this->bytes(), cudaMemcpyDefault));
+    memopt::checkCudaErrors(cudaMemcpy(this->raw(), a.raw(), this->bytes(), cudaMemcpyDefault));
     return *this;
   }
 
@@ -68,16 +68,16 @@ class Vector_d : VolatileVector_d {
   inline void allocate(size_t size, bool managed = false, bool input = false, bool output = false) {
     assert(this->_data == nullptr);
     this->_size = size;
-    checkCudaErrors(cudaMalloc(&this->_data, this->bytes()));
+    memopt::checkCudaErrors(cudaMalloc(&this->_data, this->bytes()));
 
     if (managed) {
       VolatileVectorManager::volatileDeviceVectors.push_back(this);
-      registerManagedMemoryAddress(this->_data, this->bytes());
+      memopt::registerManagedMemoryAddress(this->_data, this->bytes());
       if (input) {
-        registerApplicationInput(this->_data);
+        memopt::registerApplicationInput(this->_data);
       }
       if (output) {
-        registerApplicationOutput(this->_data);
+        memopt::registerApplicationOutput(this->_data);
       }
     }
   }
@@ -85,19 +85,19 @@ class Vector_d : VolatileVector_d {
   inline void allocate(size_t size, cudaStream_t stream) {
     assert(this->_data == nullptr);
     this->_size = size;
-    checkCudaErrors(cudaMallocAsync(&this->_data, this->bytes(), stream));
+    memopt::checkCudaErrors(cudaMallocAsync(&this->_data, this->bytes(), stream));
   }
 
   inline void free() {
     assert(this->_data != nullptr);
-    checkCudaErrors(cudaFree(this->_data));
+    memopt::checkCudaErrors(cudaFree(this->_data));
     this->_data = nullptr;
     this->_size = 0;
   }
 
   inline void free(cudaStream_t stream) {
     assert(this->_data != nullptr);
-    checkCudaErrors(cudaFreeAsync(this->_data, stream));
+    memopt::checkCudaErrors(cudaFreeAsync(this->_data, stream));
     this->_data = nullptr;
     this->_size = 0;
   }
@@ -131,7 +131,7 @@ class Vector_d : VolatileVector_d {
   }
 
   inline Vector_d<T>& operator=(const Vector_h<T>& a) {
-    checkCudaErrors(cudaMemcpy(this->raw(), a.raw(), this->bytes(), cudaMemcpyDefault));
+    memopt::checkCudaErrors(cudaMemcpy(this->raw(), a.raw(), this->bytes(), cudaMemcpyDefault));
     return *this;
   }
 

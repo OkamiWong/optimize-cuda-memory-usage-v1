@@ -1,6 +1,8 @@
 #include <future>
 #include <thread>
 
+namespace memopt {
+
 class PeakMemoryUsageProfiler {
  public:
   void start();
@@ -13,3 +15,5 @@ class PeakMemoryUsageProfiler {
 
   void periodicallyCheckMemoryUsage();
 };
+
+}  // namespace memopt

@@ -5,6 +5,8 @@
 #include <map>
 #include <utility>
 
+namespace memopt {
+
 typedef std::pair<uint64_t, uint64_t> CudaGraphNodeLifetime;
 
 typedef std::map<cudaGraphNode_t, CudaGraphNodeLifetime> CudaGraphExecutionTimeline;
@@ -31,3 +33,5 @@ class CudaGraphExecutionTimelineProfiler {
   std::map<uint64_t, uint64_t> originalNodeIdToClonedNodeIdMap;
   CUpti_SubscriberHandle subscriberHandle;
 };
+
+}  // namespace memopt

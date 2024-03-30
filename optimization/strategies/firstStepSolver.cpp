@@ -4,6 +4,8 @@
 
 #include "../../utilities/logger.hpp"
 
+namespace memopt {
+
 FirstStepSolver::FirstStepSolver(FirstStepSolver::Input &&input) {
   this->input = std::move(input);
 }
@@ -74,3 +76,5 @@ void FirstStepSolver::printSolution() {
 
   fclose(fp);
 }
+
+}  // namespace memopt

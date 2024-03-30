@@ -5,6 +5,8 @@
 #include "annotation.hpp"
 #include "memoryManager.hpp"
 
+namespace memopt {
+
 __global__ void dummyKernelForAnnotation(TaskAnnotation taskAnnotation) {
   return;
 }
@@ -35,3 +37,5 @@ __host__ void annotateNextKernel(
 
   dummyKernelForAnnotation<<<1, 1, 0, stream>>>(taskAnnotation);
 }
+
+}  // namespace memopt

@@ -6,6 +6,8 @@
 
 #include "../../utilities/types.hpp"
 
+namespace memopt {
+
 class SecondStepSolver {
  public:
   struct Input {
@@ -35,3 +37,5 @@ class SecondStepSolver {
 
   Output solve(Input &&input);
 };
+
+}  // namespace memopt
