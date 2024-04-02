@@ -515,7 +515,7 @@ void tiledCholesky(bool optimize, bool verify) {
       {{k, k}}
     );
     nextTaskId = tiledCholeskyTaskManager->addTask(TiledCholeskyTaskManager::Task::OperationType::portf, {k, k});
-    annotateNextKernel(nextTaskId, {getMatrixBlock(k, k)}, {getMatrixBlock(k, k)}, s);
+    annotateNextTask(nextTaskId, {getMatrixBlock(k, k)}, {getMatrixBlock(k, k)}, s);
     checkCudaErrors(cusolverDnXpotrf(
       cusolverDnHandle,
       cusolverDnParams,
@@ -541,7 +541,7 @@ void tiledCholesky(bool optimize, bool verify) {
         {{k, k}, {i, k}}
       );
       nextTaskId = tiledCholeskyTaskManager->addTask(TiledCholeskyTaskManager::Task::OperationType::trsm, {i, k}, {k, k});
-      annotateNextKernel(nextTaskId, {getMatrixBlock(i, k), getMatrixBlock(k, k)}, {getMatrixBlock(i, k)}, s);
+      annotateNextTask(nextTaskId, {getMatrixBlock(i, k), getMatrixBlock(k, k)}, {getMatrixBlock(i, k)}, s);
       checkCudaErrors(cublasDtrsm(
         cublasHandle,
         CUBLAS_SIDE_RIGHT,
@@ -564,7 +564,7 @@ void tiledCholesky(bool optimize, bool verify) {
         {{i, i}, {i, k}}
       );
       nextTaskId = tiledCholeskyTaskManager->addTask(TiledCholeskyTaskManager::Task::OperationType::syrk, {i, i}, {i, k});
-      annotateNextKernel(nextTaskId, {getMatrixBlock(i, i), getMatrixBlock(i, k)}, {getMatrixBlock(i, i)}, s);
+      annotateNextTask(nextTaskId, {getMatrixBlock(i, i), getMatrixBlock(i, k)}, {getMatrixBlock(i, i)}, s);
       checkCudaErrors(cublasDsyrk(
         cublasHandle,
         CUBLAS_FILL_MODE_LOWER,
@@ -583,7 +583,7 @@ void tiledCholesky(bool optimize, bool verify) {
           {{j, i}, {j, k}, {i, k}}
         );
         nextTaskId = tiledCholeskyTaskManager->addTask(TiledCholeskyTaskManager::Task::OperationType::gemm, {j, i}, {j, k}, {i, k});
-        annotateNextKernel(nextTaskId, {getMatrixBlock(j, i), getMatrixBlock(j, k), getMatrixBlock(i, k)}, {getMatrixBlock(j, i)}, s);
+        annotateNextTask(nextTaskId, {getMatrixBlock(j, i), getMatrixBlock(j, k), getMatrixBlock(i, k)}, {getMatrixBlock(j, i)}, s);
         checkCudaErrors(cublasGemmEx(
           cublasHandle,
           CUBLAS_OP_N,

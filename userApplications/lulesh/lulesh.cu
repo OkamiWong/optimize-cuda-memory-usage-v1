@@ -1536,7 +1536,7 @@ __global__ __launch_bounds__(64, 4) void CalcVolumeForceForElems_kernel(
 
 static inline void CalcVolumeForceForElems(const Real_t hgcoef, Domain* domain) {
   if (domain->annotate) {
-    annotateNextKernel(
+    annotateNextTask(
       0,
       {domain->volo.raw(), domain->v.raw(), domain->p.raw(), domain->q.raw(), domain->nodelist.raw(), domain->ss.raw(), domain->elemMass.raw(), domain->x.raw(), domain->y.raw(), domain->z.raw(), domain->xd.raw(), domain->yd.raw(), domain->zd.raw(), domain->nodeElemCount.raw(), domain->nodeElemStart.raw(), domain->nodeElemCornerList.raw()},
       {domain->fx.raw(), domain->fy.raw(), domain->fz.raw()},
@@ -1632,7 +1632,7 @@ __global__ void CalcAccelerationForNodes_kernel(int numNode, Real_t* xdd, Real_t
 
 static inline void CalcAccelerationForNodes(Domain* domain) {
   if (domain->annotate) {
-    annotateNextKernel(
+    annotateNextTask(
       1,
       {domain->fx.raw(), domain->fy.raw(), domain->fz.raw(), domain->nodalMass.raw()},
       {domain->xdd.raw(), domain->ydd.raw(), domain->zdd.raw()},
@@ -1664,7 +1664,7 @@ static inline void ApplyAccelerationBoundaryConditionsForNodesInXAxis(Domain* do
   Index_t dimGrid = PAD_DIV(domain->numSymmX, dimBlock);
   if (domain->numSymmX > 0) {
     if (domain->annotate) {
-      annotateNextKernel(
+      annotateNextTask(
         2,
         {domain->symmX.raw()},
         {domain->xdd.raw()},
@@ -1685,7 +1685,7 @@ static inline void ApplyAccelerationBoundaryConditionsForNodesInYAxis(Domain* do
   Index_t dimGrid = PAD_DIV(domain->numSymmY, dimBlock);
   if (domain->numSymmY > 0) {
     if (domain->annotate) {
-      annotateNextKernel(
+      annotateNextTask(
         3,
         {domain->symmY.raw()},
         {domain->ydd.raw()},
@@ -1706,7 +1706,7 @@ static inline void ApplyAccelerationBoundaryConditionsForNodesInZAxis(Domain* do
   Index_t dimGrid = PAD_DIV(domain->numSymmZ, dimBlock);
   if (domain->numSymmZ > 0) {
     if (domain->annotate) {
-      annotateNextKernel(
+      annotateNextTask(
         4,
         {domain->symmZ.raw()},
         {domain->zdd.raw()},
@@ -1748,7 +1748,7 @@ __global__ void CalcPositionAndVelocityForNodes_kernel(int numNode, const Real_t
 
 static inline void CalcPositionAndVelocityForNodes(const Real_t u_cut, Domain* domain) {
   if (domain->annotate) {
-    annotateNextKernel(
+    annotateNextTask(
       5,
       {domain->x.raw(), domain->y.raw(), domain->z.raw(), domain->xd.raw(), domain->yd.raw(), domain->zd.raw(), domain->xdd.raw(), domain->ydd.raw(), domain->zdd.raw()},
       {domain->x.raw(), domain->y.raw(), domain->z.raw(), domain->xd.raw(), domain->yd.raw(), domain->zd.raw()},
@@ -2622,7 +2622,7 @@ static inline void ApplyMaterialPropertiesAndUpdateVolume(Domain* domain) {
 
 static inline void LagrangeElementsCalcKinematicsAndMonotonicQGradient(Domain* domain) {
   if (domain->annotate) {
-    annotateNextKernel(
+    annotateNextTask(
       6,
       {domain->nodelist.raw(), domain->volo.raw(), domain->v.raw(),
        domain->x.raw(), domain->y.raw(), domain->z.raw(),
@@ -2658,7 +2658,7 @@ static inline void LagrangeElementsCalcKinematicsAndMonotonicQGradient(Domain* d
 
 static inline void LagrangeElementsCalcMonotonicQRegionForElems(Domain* domain) {
   if (domain->annotate) {
-    annotateNextKernel(
+    annotateNextTask(
       7,
       {domain->regElemlist.raw(), domain->elemBC.raw(),
        domain->lxim.raw(), domain->lxip.raw(), domain->letam.raw(),
@@ -2682,7 +2682,7 @@ static inline void LagrangeElementsCalcMonotonicQRegionForElems(Domain* domain) 
 
 static inline void LagrangeElementApplyMaterialPropertiesAndUpdateVolume(Domain* domain) {
   if (domain->annotate) {
-    annotateNextKernel(
+    annotateNextTask(
       8,
       {domain->ql.raw(), domain->qq.raw(), domain->vnew.raw(), domain->v.raw(),
        domain->regElemlist.raw(), domain->e.raw(), domain->delv.raw(),
@@ -2953,7 +2953,7 @@ __global__ void CalcMinDtOneBlock(Real_t* dev_mindthydro, Real_t* dev_mindtcoura
 
 static inline void CalcTimeConstraintsForElems(Domain* domain) {
   if (domain->annotate) {
-    annotateNextKernel(
+    annotateNextTask(
       9,
       {domain->matElemlist.raw(), domain->ss.raw(), domain->vdov.raw(), domain->arealg.raw()},
       {},

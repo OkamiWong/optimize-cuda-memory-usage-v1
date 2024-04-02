@@ -19,7 +19,7 @@ struct TaskAnnotation {
 
 __global__ void dummyKernelForAnnotation(TaskAnnotation taskAnnotation);
 
-__host__ void annotateNextKernel(
+__host__ void annotateNextTask(
   TaskId taskId,
   std::vector<void *> inputs,
   std::vector<void *> outputs,
