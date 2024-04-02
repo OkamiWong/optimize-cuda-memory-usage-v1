@@ -6,6 +6,10 @@
 
 namespace memopt {
 
+PeakMemoryUsageProfiler::PeakMemoryUsageProfiler(int sampleIntervalMilliseconds)
+: sampleIntervalMilliseconds(sampleIntervalMilliseconds)
+{}
+
 void PeakMemoryUsageProfiler::periodicallyCheckMemoryUsage() {
   checkCudaErrors(cudaSetDevice(Constants::DEVICE_ID));
 
@@ -15,7 +19,7 @@ void PeakMemoryUsageProfiler::periodicallyCheckMemoryUsage() {
   while (!this->stopFlag) {
     checkCudaErrors(cudaMemGetInfo(&free, &total));
     peakMemoryUsage = std::max(peakMemoryUsage, total - free);
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    std::this_thread::sleep_for(std::chrono::milliseconds(this->sampleIntervalMilliseconds));
   }
 
   this->peakMemoryUsagePromise.set_value(peakMemoryUsage);
