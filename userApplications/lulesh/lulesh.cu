@@ -78,6 +78,7 @@ Additional BSD Notice
 #include <sstream>
 #include <vector>
 
+#include "../../include/argh.h"
 #include "lulesh.h"
 #include "memopt.hpp"
 #include "sm_utils.inl"
@@ -3190,8 +3191,12 @@ void VerifyAndWriteFinalOutput(Real_t elapsed_time, Domain& locDom, Int_t nx, In
 }
 
 int main(int argc, char* argv[]) {
+  auto cmdl = argh::parser(argc, argv);
+  std::string configFilePath;
+  cmdl("configFile", "config.json") >> configFilePath;
+
   ConfigurationManager::exportDefaultConfiguration();
-  ConfigurationManager::initialize(argc, argv);
+  ConfigurationManager::loadConfiguration(configFilePath);
 
   initializeCudaDevice();
   checkCudaDevice();

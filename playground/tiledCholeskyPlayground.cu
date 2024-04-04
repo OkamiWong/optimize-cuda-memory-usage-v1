@@ -19,6 +19,7 @@
 #include <tuple>
 #include <vector>
 
+#include "../include/argh.h"
 #include "memopt.hpp"
 
 using namespace memopt;

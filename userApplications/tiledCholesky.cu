@@ -18,6 +18,7 @@
 #include <tuple>
 #include <vector>
 
+#include "../include/argh.h"
 #include "memopt.hpp"
 
 using namespace memopt;
@@ -699,9 +700,12 @@ void tiledCholesky(bool optimize, bool verify) {
 }
 
 int main(int argc, char **argv) {
-  ConfigurationManager::exportDefaultConfiguration();
+  auto cmdl = argh::parser(argc, argv);
+  std::string configFilePath;
+  cmdl("configFile", "config.json") >> configFilePath;
 
-  ConfigurationManager::initialize(argc, argv);
+  ConfigurationManager::exportDefaultConfiguration();
+  ConfigurationManager::loadConfiguration(configFilePath);
 
   N = ConfigurationManager::getConfig().tiledCholeskyN;
   T = ConfigurationManager::getConfig().tiledCholeskyT;

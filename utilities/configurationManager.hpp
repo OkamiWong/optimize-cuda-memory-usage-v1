@@ -5,7 +5,6 @@
 #include <iostream>
 #include <string>
 
-#include "../include/argh.h"
 #include "../include/json.hpp"
 
 namespace memopt {
@@ -88,13 +87,6 @@ class ConfigurationManager {
 
       exit(-1);
     }
-  }
-
-  static void initialize(int argc, char** argv) {
-    auto cmdl = argh::parser(argc, argv);
-    std::string configFilePath;
-    cmdl("configFile", "config.json") >> configFilePath;
-    loadConfiguration(configFilePath);
   }
 
  private:
