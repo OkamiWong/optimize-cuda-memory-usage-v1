@@ -23,5 +23,6 @@ target_link_libraries(
   memopt
   CUDA::cublas
   CUDA::cusolver
+  CUDA::curand
   fmt::fmt
 )

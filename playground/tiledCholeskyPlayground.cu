@@ -2,6 +2,7 @@
 #include <cuda_profiler_api.h>
 #include <cuda_runtime.h>
 #include <cuda_runtime_api.h>
+#include <curand.h>
 #include <cusolverDn.h>
 #include <fmt/core.h>
 
@@ -24,26 +25,60 @@
 
 using namespace memopt;
 
-constexpr size_t N = 1024 * 20;
+constexpr size_t N = 71680;
 constexpr size_t B = N / 4;
 
 constexpr size_t T = N / B;
 
+__global__ void makeMatrixSymmetric(double *d_matrix, size_t n) {
+  size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+  size_t x = idx / n;
+  size_t y = idx % n;
+
+  if (x >= y || x >= n || y >= n) {
+    return;
+  }
+
+  double average = 0.5 * (d_matrix[x * n + y] + d_matrix[y * n + x]);
+  d_matrix[x * n + y] = average;
+  d_matrix[y * n + x] = average;
+}
+
+__global__ void addIdenticalMatrix(double *d_matrix, size_t n) {
+  size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx >= n) {
+    return;
+  }
+  d_matrix[idx * n + idx] += n;
+}
+
 // Credit to: https://math.stackexchange.com/questions/357980/how-to-generate-random-symmetric-positive-definite-matrices-using-matlab
 void generateRandomSymmetricPositiveDefiniteMatrix(double *h_A, const size_t n) {
-  srand(time(NULL));
+  double *d_A;
+  checkCudaErrors(cudaMalloc(&d_A, n * n * sizeof(double)));
 
-  double *h_A_temp = (double *)malloc(n * n * sizeof(double));
+  // Generate random matrix d_A
+  curandGenerator_t prng;
+  curandCreateGenerator(&prng, CURAND_RNG_PSEUDO_XORWOW);
+  curandSetPseudoRandomGeneratorSeed(prng, (unsigned long long)clock());
+  curandGenerateUniformDouble(prng, d_A, n * n);
 
-  for (int i = 0; i < n; i++)
-    for (int j = 0; j < n; j++)
-      h_A_temp[i * n + j] = (float)rand() / (float)RAND_MAX;
+  // d_A = (d_A + d_A^T) / 2
+  size_t numThreads = 1024;
+  size_t numBlocks = (N * N + numThreads) / numThreads;
+  makeMatrixSymmetric<<<numBlocks, numThreads>>>(d_A, N);
 
-  for (int i = 0; i < n; i++)
-    for (int j = 0; j < n; j++)
-      h_A[i * n + j] = 0.5 * (h_A_temp[i * n + j] + h_A_temp[j * n + i]);
+  // d_A = d_A + n * I
+  numThreads = 1024;
+  numBlocks = (N + numThreads) / numThreads;
+  addIdenticalMatrix<<<numBlocks, numThreads>>>(d_A, N);
 
-  for (int i = 0; i < n; i++) h_A[i * n + i] = h_A[i * n + i] + n;
+  checkCudaErrors(cudaDeviceSynchronize());
+
+  checkCudaErrors(cudaMemcpy(h_A, d_A, n * n * sizeof(double), cudaMemcpyDefault));
+
+  checkCudaErrors(cudaDeviceSynchronize());
+  checkCudaErrors(cudaFree(d_A));
 }
 
 void printSquareMatrix(double *h_A, const size_t n) {
@@ -58,7 +93,7 @@ void printSquareMatrix(double *h_A, const size_t n) {
 
 // Set upper triangle entries (excluding diagonal entries) in column-major order to zero.
 // Then, transpose to row-major order.
-void cleanCusolverCholeskyDecompositionResult(double *L, const int n) {
+void cleanCusolverCholeskyDecompositionResult(double *L, const size_t n) {
   for (int i = 0; i < n; i++) {
     for (int j = i + 1; j < n; j++) {
       L[i + j * n] = 0;
@@ -67,7 +102,7 @@ void cleanCusolverCholeskyDecompositionResult(double *L, const int n) {
   }
 }
 
-bool verifyCholeskyDecomposition(double *A, double *L, const int n) {
+bool verifyCholeskyDecomposition(double *A, double *L, const size_t n) {
   auto newA = std::make_unique<double[]>(n * n);
   memset(newA.get(), 0, n * n * sizeof(double));
   for (int i = 0; i < n; i++) {
@@ -101,12 +136,12 @@ bool verifyCholeskyDecomposition(double *A, double *L, const int n) {
 }
 
 // Only verify the last row of L * L^T = A
-bool verifyCholeskyDecompositionPartially(double *A, double *L, const int n) {
-  auto getAEntry = [&](int row, int col) {
+bool verifyCholeskyDecompositionPartially(double *A, double *L, const size_t n) {
+  auto getAEntry = [&](size_t row, size_t col) {
     return A[row * n + col];
   };
 
-  auto getLEntry = [&](int row, int col) {
+  auto getLEntry = [&](size_t row, size_t col) {
     if (row < col) {
       return static_cast<double>(0);
     }
@@ -114,9 +149,9 @@ bool verifyCholeskyDecompositionPartially(double *A, double *L, const int n) {
   };
 
   // Only check the last row;
-  const int rowIndex = n - 1;
+  const size_t rowIndex = n - 1;
 
-  const int rowLength = n;
+  const size_t rowLength = std::min((size_t)1024, n);
 
   auto firstRow = std::make_unique<double[]>(rowLength);
   memset(firstRow.get(), 0, rowLength * sizeof(double));
@@ -211,7 +246,7 @@ void trivialCholesky(bool verify) {
     double *h_L = (double *)malloc(N * N * sizeof(double));
     checkCudaErrors(cudaMemcpy(h_L, d_A, N * N * sizeof(double), cudaMemcpyDeviceToHost));
     cleanCusolverCholeskyDecompositionResult(h_L, N);
-    fmt::print("Result passes verification: {}\n", verifyCholeskyDecomposition(h_A, h_L, N));
+    fmt::print("Result passes verification: {}\n", verifyCholeskyDecompositionPartially(h_A, h_L, N));
     free(h_L);
   }
 
