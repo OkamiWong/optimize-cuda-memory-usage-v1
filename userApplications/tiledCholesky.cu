@@ -375,12 +375,12 @@ void initializeHostData(double *h_originalMatrix) {
 __global__ void storeMatrixIntoTiles(double *d_originalMatrix, double **d_tilePointers, size_t N, size_t B, size_t T) {
   size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
 
+  if (idx >= N * N) return;
+
   size_t i = (idx % N) / B;
   size_t k = (idx % N) % B;
   size_t j = (idx / N) / B;
   size_t l = (idx / N) % B;
-
-  if (i >= T || j >= T || k >= B || l >= B) return;
 
   d_tilePointers[i + j * T][k + l * B] = d_originalMatrix[(i * B + k) + (j * B * N + l * N)];
 }
