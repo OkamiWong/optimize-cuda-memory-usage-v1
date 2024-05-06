@@ -62,12 +62,12 @@ void generateRandomSymmetricPositiveDefiniteMatrix(double *h_A, const size_t n) 
 
   // d_A = (d_A + d_A^T) / 2
   size_t numThreads = 1024;
-  size_t numBlocks = (N * N + numThreads) / numThreads;
+  size_t numBlocks = (N * N + numThreads - 1) / numThreads;
   makeMatrixSymmetric<<<numBlocks, numThreads>>>(d_A, N);
 
   // d_A = d_A + n * I
   numThreads = 1024;
-  numBlocks = (N + numThreads) / numThreads;
+  numBlocks = (N + numThreads - 1) / numThreads;
   addIdenticalMatrix<<<numBlocks, numThreads>>>(d_A, N);
 
   checkCudaErrors(cudaDeviceSynchronize());
@@ -108,7 +108,7 @@ bool verifyCholeskyDecompositionPartially(double *A, std::vector<double *> &d_ti
   // Only check the last row;
   const size_t rowIndex = n - 1;
 
-  const size_t rowLength = n;
+  const size_t rowLength = min((size_t)1024, n);
 
   auto firstRow = std::make_unique<double[]>(rowLength);
   memset(firstRow.get(), 0, rowLength * sizeof(double));
@@ -372,13 +372,13 @@ void initializeHostData(double *h_originalMatrix) {
   generateRandomSymmetricPositiveDefiniteMatrix(h_originalMatrix, N);
 }
 
-__global__ void storeMatrixIntoTiles(double *d_originalMatrix, double **d_tilePointers, int N, int B, int T) {
+__global__ void storeMatrixIntoTiles(double *d_originalMatrix, double **d_tilePointers, size_t N, size_t B, size_t T) {
   size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
 
   size_t i = (idx % N) / B;
-  size_t k = (idx % N) - (i * B);
+  size_t k = (idx % N) % B;
   size_t j = (idx / N) / B;
-  size_t l = (idx / N) - (j * B);
+  size_t l = (idx / N) % B;
 
   if (i >= T || j >= T || k >= B || l >= B) return;
 
@@ -395,7 +395,7 @@ void initializeDeviceData(double *h_originalMatrix, std::vector<double *> &d_til
   checkCudaErrors(cudaMemcpy(d_tilePointers, d_tiles.data(), T * T * sizeof(double *), cudaMemcpyDefault));
 
   const size_t NUM_THREADS = 1024;
-  const size_t NUM_BLOCKS = (N * N + NUM_THREADS) / NUM_THREADS;
+  const size_t NUM_BLOCKS = (N * N + NUM_THREADS - 1) / NUM_THREADS;
   storeMatrixIntoTiles<<<NUM_BLOCKS, NUM_THREADS>>>(
     d_originalMatrix,
     d_tilePointers,
@@ -685,6 +685,8 @@ void tiledCholesky(bool optimize, bool verify) {
   clock.logWithCurrentTime("Synchronization done");
 
   if (verify) {
+    fmt::print("d_info: {}\n", *d_info);
+
     clock.logWithCurrentTime("Start verification");
     fmt::print("Result passes verification: {}\n", verifyCholeskyDecompositionPartially(h_originalMatrix.get(), d_tiles, N, B));
     clock.logWithCurrentTime("Verification done");
