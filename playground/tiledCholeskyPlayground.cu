@@ -265,7 +265,7 @@ typedef std::pair<int, int> MatrixTile;
 class TiledCholeskyGraphCreator {
  public:
   TiledCholeskyGraphCreator(cudaStream_t stream, cudaGraph_t graph) : stream(stream), graph(graph) {
-    this->lastModifiedTile = std::make_pair(-1, -1);
+    this->lastModifiedTile = {-1, -1};
   }
   void beginCaptureOperation(MatrixTile tileToWrite, std::initializer_list<MatrixTile> tilesToRead) {
     auto tiles = std::vector<MatrixTile>(tilesToRead);
@@ -282,7 +282,7 @@ class TiledCholeskyGraphCreator {
     assert(this->lastModifiedTile.first != -1 && this->lastModifiedTile.second != -1);
     checkCudaErrors(cudaStreamEndCapture(this->stream, &this->graph));
     this->tileLastModifiedByMap[this->lastModifiedTile] = this->getTailOfLastCapturedNodeChain();
-    this->lastModifiedTile = std::make_pair(-1, -1);
+    this->lastModifiedTile = {-1, -1};
   };
 
  private:
@@ -436,8 +436,8 @@ void tiledCholesky(bool verify) {
     // A[k][k] = POTRF(A[k][k])
     // L[k][k] = POTRF(A[k][k])
     tiledCholeskyGraphCreator->beginCaptureOperation(
-      std::make_pair(k, k),
-      {std::make_pair(k, k)}
+      {k, k},
+      {{k, k}}
     );
     checkCudaErrors(cusolverDnXpotrf(
       cusolverDnHandle,
@@ -460,8 +460,8 @@ void tiledCholesky(bool verify) {
       // A[i][k] = TRSM(A[k][k], A[i][k])
       // L[i][k] * L[k][k]^T = A[i][k]
       tiledCholeskyGraphCreator->beginCaptureOperation(
-        std::make_pair(i, k),
-        {std::make_pair(k, k), std::make_pair(i, k)}
+        {i, k},
+        {{k, k}, {i, k}}
       );
       checkCudaErrors(cublasDtrsm(
         cublasHandle,
@@ -481,8 +481,8 @@ void tiledCholesky(bool verify) {
       // A[i][i] = SYRK(A[i][k], A[i][i])
       // A[i][i] = A[i][i] - L[i][k] * L[i][k]^T
       tiledCholeskyGraphCreator->beginCaptureOperation(
-        std::make_pair(i, i),
-        {std::make_pair(i, i), std::make_pair(i, k)}
+        {i, i},
+        {{i, i}, {i, k}}
       );
       checkCudaErrors(cublasDsyrk(
         cublasHandle,
@@ -498,8 +498,8 @@ void tiledCholesky(bool verify) {
         // A[j][i] = GEMM(A[j][k], A[i][k])
         // A[j][i] = A[j][i] - L[j][k] * L[i][k]^T
         tiledCholeskyGraphCreator->beginCaptureOperation(
-          std::make_pair(j, i),
-          {std::make_pair(j, i), std::make_pair(j, k), std::make_pair(i, k)}
+          {j, i},
+          {{j, i}, {j, k}, {i, k}}
         );
         checkCudaErrors(cublasGemmEx(
           cublasHandle,

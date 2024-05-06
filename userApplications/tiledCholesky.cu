@@ -133,7 +133,7 @@ typedef std::pair<int, int> MatrixTile;
 class TiledCholeskyGraphCreator {
  public:
   TiledCholeskyGraphCreator(cudaStream_t stream, cudaGraph_t graph) : stream(stream), graph(graph) {
-    this->lastModifiedTile = std::make_pair(-1, -1);
+    this->lastModifiedTile = {-1, -1};
   }
 
   void beginCaptureOperation(MatrixTile tileToWrite, std::initializer_list<MatrixTile> tilesToRead) {
@@ -151,7 +151,7 @@ class TiledCholeskyGraphCreator {
     assert(this->lastModifiedTile.first != -1 && this->lastModifiedTile.second != -1);
     checkCudaErrors(cudaStreamEndCapture(this->stream, &this->graph));
     this->tileLastModifiedByMap[this->lastModifiedTile] = this->getTailOfLastCapturedNodeChain();
-    this->lastModifiedTile = std::make_pair(-1, -1);
+    this->lastModifiedTile = {-1, -1};
   };
 
  private:
@@ -477,8 +477,8 @@ void tiledCholesky(bool optimize, bool verify) {
   ));
   void *h_workspace, *d_workspace;
   int *d_info;
-  checkCudaErrors(cudaMallocManaged(&h_workspace, workspaceInBytesOnHost));
-  checkCudaErrors(cudaMallocManaged(&d_workspace, workspaceInBytesOnDevice));
+  checkCudaErrors(cudaMallocHost(&h_workspace, workspaceInBytesOnHost));
+  checkCudaErrors(cudaMalloc(&d_workspace, workspaceInBytesOnDevice));
   checkCudaErrors(cudaMallocManaged(&d_info, sizeof(int)));
 
   cudaGraph_t graph;
@@ -694,7 +694,7 @@ void tiledCholesky(bool optimize, bool verify) {
 
   clock.logWithCurrentTime("All finished");
 
-  free(h_workspace);
+  checkCudaErrors(cudaFreeHost(h_workspace));
   checkCudaErrors(cudaFree(d_workspace));
   for (auto d_tile : d_tiles) {
     checkCudaErrors(cudaFree(d_tile));
