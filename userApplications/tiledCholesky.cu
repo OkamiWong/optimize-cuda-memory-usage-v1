@@ -372,39 +372,20 @@ void initializeHostData(double *h_originalMatrix) {
   generateRandomSymmetricPositiveDefiniteMatrix(h_originalMatrix, N);
 }
 
-__global__ void storeMatrixIntoTiles(double *d_originalMatrix, double **d_tilePointers, size_t N, size_t B, size_t T) {
-  size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-  if (idx >= N * N) return;
-
-  size_t i = (idx % N) / B;
-  size_t k = (idx % N) % B;
-  size_t j = (idx / N) / B;
-  size_t l = (idx / N) % B;
-
-  d_tilePointers[i + j * T][k + l * B] = d_originalMatrix[(i * B + k) + (j * B * N + l * N)];
-}
-
 void initializeDeviceData(double *h_originalMatrix, std::vector<double *> &d_tiles) {
-  double *d_originalMatrix;
-  checkCudaErrors(cudaMallocManaged(&d_originalMatrix, N * N * sizeof(double)));
-  checkCudaErrors(cudaMemcpy(d_originalMatrix, h_originalMatrix, N * N * sizeof(double), cudaMemcpyDefault));
-
-  double **d_tilePointers;
-  checkCudaErrors(cudaMalloc(&d_tilePointers, T * T * sizeof(double *)));
-  checkCudaErrors(cudaMemcpy(d_tilePointers, d_tiles.data(), T * T * sizeof(double *), cudaMemcpyDefault));
-
-  const size_t NUM_THREADS = 1024;
-  const size_t NUM_BLOCKS = (N * N + NUM_THREADS - 1) / NUM_THREADS;
-  storeMatrixIntoTiles<<<NUM_BLOCKS, NUM_THREADS>>>(
-    d_originalMatrix,
-    d_tilePointers,
-    N, B, T
-  );
-
+  for (int i = 0; i < T; i++) {
+    for (int j = 0; j < T; j++) {
+      for (int k = 0; k < B; k++) {
+        checkCudaErrors(cudaMemcpy(
+          d_tiles[i + j * T] + B * k,
+          h_originalMatrix + N * (j * B + k) + B * i,
+          B * sizeof(double),
+          cudaMemcpyDefault
+        ));
+      }
+    }
+  }
   checkCudaErrors(cudaDeviceSynchronize());
-  checkCudaErrors(cudaFree(d_originalMatrix));
-  checkCudaErrors(cudaFree(d_tilePointers));
 }
 
 void tiledCholesky(bool optimize, bool verify) {
@@ -685,8 +666,6 @@ void tiledCholesky(bool optimize, bool verify) {
   clock.logWithCurrentTime("Synchronization done");
 
   if (verify) {
-    fmt::print("d_info: {}\n", *d_info);
-
     clock.logWithCurrentTime("Start verification");
     fmt::print("Result passes verification: {}\n", verifyCholeskyDecompositionPartially(h_originalMatrix.get(), d_tiles, N, B));
     clock.logWithCurrentTime("Verification done");
