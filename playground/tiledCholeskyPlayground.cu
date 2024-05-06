@@ -26,9 +26,8 @@
 using namespace memopt;
 
 constexpr size_t N = 71680;
-constexpr size_t B = N / 4;
-
-constexpr size_t T = N / B;
+constexpr size_t T = 4;
+constexpr size_t B = N / T;
 
 __global__ void makeMatrixSymmetric(double *d_matrix, size_t n) {
   size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -65,12 +64,12 @@ void generateRandomSymmetricPositiveDefiniteMatrix(double *h_A, const size_t n) 
 
   // d_A = (d_A + d_A^T) / 2
   size_t numThreads = 1024;
-  size_t numBlocks = (N * N + numThreads) / numThreads;
+  size_t numBlocks = (N * N + numThreads - 1) / numThreads;
   makeMatrixSymmetric<<<numBlocks, numThreads>>>(d_A, N);
 
   // d_A = d_A + n * I
   numThreads = 1024;
-  numBlocks = (N + numThreads) / numThreads;
+  numBlocks = (N + numThreads - 1) / numThreads;
   addIdenticalMatrix<<<numBlocks, numThreads>>>(d_A, N);
 
   checkCudaErrors(cudaDeviceSynchronize());
