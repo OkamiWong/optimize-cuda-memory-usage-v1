@@ -20,7 +20,7 @@ FirstStepSolver::Output FirstStepSolver::solve() {
     }
   }
 
-  this->maxTotalOverlap = -1;
+  this->maxTotalOverlap = 0;
   this->currentTopologicalSort.clear();
 
   dfs(0);
@@ -32,7 +32,9 @@ FirstStepSolver::Output FirstStepSolver::solve() {
 
 void FirstStepSolver::dfs(size_t currentTotalOverlap) {
   if (this->currentTopologicalSort.size() == this->input.n) {
-    if (currentTotalOverlap > this->maxTotalOverlap) {
+    // Must accept solution update to handle the situation
+    // when the best total overlap is zero.
+    if (currentTotalOverlap >= this->maxTotalOverlap) {
       this->maxTotalOverlap = currentTotalOverlap;
       this->output.taskGroupExecutionOrder = this->currentTopologicalSort;
     }
