@@ -20,7 +20,7 @@ FirstStepSolver::Output FirstStepSolver::solve() {
     }
   }
 
-  this->maxTotalOverlap = 0;
+  this->maxTotalOverlap = -1;
   this->currentTopologicalSort.clear();
 
   dfs(0);
