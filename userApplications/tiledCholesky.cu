@@ -619,7 +619,7 @@ void tiledCholesky(bool optimize, bool verify) {
         if (ConfigurationManager::getConfig().useNvlink) {
           checkCudaErrors(cudaFree(newPtr));
         } else {
-          free(newPtr);
+          checkCudaErrors(cudaFreeHost(newPtr));
         }
         oldManagedDeviceArrayToNewManagedDeviceArrayMap[oldPtr] = d_tiles[j];
       }

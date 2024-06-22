@@ -134,7 +134,7 @@ void Executor::executeOptimizedGraph(
       checkCudaErrors(cudaSetDevice(storageDeviceId));
       checkCudaErrors(cudaMalloc(&newPtr, MemoryManager::managedMemoryAddressToSizeMap[ptr]));
     } else {
-      newPtr = malloc(MemoryManager::managedMemoryAddressToSizeMap[ptr]);
+      checkCudaErrors(cudaMallocHost(&newPtr, MemoryManager::managedMemoryAddressToSizeMap[ptr]));
     }
 
     managedDeviceArrayToHostArrayMap[ptr] = newPtr;
@@ -355,7 +355,7 @@ void Executor::executeOptimizedGraphRepeatedly(
       checkCudaErrors(cudaSetDevice(storageDeviceId));
       checkCudaErrors(cudaMalloc(&newPtr, MemoryManager::managedMemoryAddressToSizeMap[ptr]));
     } else {
-      newPtr = malloc(MemoryManager::managedMemoryAddressToSizeMap[ptr]);
+      checkCudaErrors(cudaMallocHost(&newPtr, MemoryManager::managedMemoryAddressToSizeMap[ptr]));
     }
 
     managedDeviceArrayToHostArrayMap[ptr] = newPtr;
