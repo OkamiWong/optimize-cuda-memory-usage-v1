@@ -6,7 +6,6 @@
 
 #include "../../profiling/memoryManager.hpp"
 #include "../../utilities/configurationManager.hpp"
-#include "../../utilities/constants.hpp"
 #include "../../utilities/logger.hpp"
 #include "../../utilities/types.hpp"
 #include "firstStepSolver.hpp"

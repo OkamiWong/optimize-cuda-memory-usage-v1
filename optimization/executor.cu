@@ -5,7 +5,6 @@
 #include "../profiling/memoryManager.hpp"
 #include "../profiling/peakMemoryUsageProfiler.hpp"
 #include "../utilities/configurationManager.hpp"
-#include "../utilities/constants.hpp"
 #include "../utilities/cudaGraphUtilities.hpp"
 #include "../utilities/cudaUtilities.hpp"
 #include "../utilities/utilities.hpp"
@@ -115,12 +114,16 @@ void Executor::executeOptimizedGraph(
     }
   }
 
-  int storageDeviceId = ConfigurationManager::getConfig().useNvlink ? Constants::STORAGE_DEVICE_ID : cudaCpuDeviceId;
-  cudaMemcpyKind prefetchMemcpyKind = ConfigurationManager::getConfig().useNvlink ? cudaMemcpyDeviceToDevice : cudaMemcpyHostToDevice;
-  cudaMemcpyKind offloadMemcpyKind = ConfigurationManager::getConfig().useNvlink ? cudaMemcpyDeviceToDevice : cudaMemcpyDeviceToHost;
+  int mainDeviceId = ConfigurationManager::getConfig().mainDeviceId;
+  int storageDeviceId = cudaCpuDeviceId;
+  cudaMemcpyKind prefetchMemcpyKind = cudaMemcpyHostToDevice;
+  cudaMemcpyKind offloadMemcpyKind = cudaMemcpyDeviceToHost;
 
   if (ConfigurationManager::getConfig().useNvlink) {
-    enablePeerAccessForNvlink(Constants::DEVICE_ID, Constants::STORAGE_DEVICE_ID);
+    storageDeviceId = ConfigurationManager::getConfig().storageDeviceId;
+    prefetchMemcpyKind = cudaMemcpyDeviceToDevice;
+    offloadMemcpyKind = cudaMemcpyDeviceToDevice;
+    enablePeerAccessForNvlink(ConfigurationManager::getConfig().mainDeviceId, ConfigurationManager::getConfig().storageDeviceId);
   }
 
   LOG_TRACE_WITH_INFO("Initialize managed data distribution");
@@ -128,7 +131,7 @@ void Executor::executeOptimizedGraph(
   for (auto ptr : MemoryManager::managedMemoryAddresses) {
     void *newPtr;
     if (ConfigurationManager::getConfig().useNvlink) {
-      checkCudaErrors(cudaSetDevice(Constants::STORAGE_DEVICE_ID));
+      checkCudaErrors(cudaSetDevice(storageDeviceId));
       checkCudaErrors(cudaMalloc(&newPtr, MemoryManager::managedMemoryAddressToSizeMap[ptr]));
     } else {
       newPtr = malloc(MemoryManager::managedMemoryAddressToSizeMap[ptr]);
@@ -143,7 +146,7 @@ void Executor::executeOptimizedGraph(
     ));
     checkCudaErrors(cudaFree(ptr));
   }
-  checkCudaErrors(cudaSetDevice(Constants::DEVICE_ID));
+  checkCudaErrors(cudaSetDevice(mainDeviceId));
   checkCudaErrors(cudaDeviceSynchronize());
 
   std::map<void *, void *> addressUpdate;
@@ -290,7 +293,7 @@ void Executor::executeOptimizedGraph(
   checkCudaErrors(cudaStreamDestroy(stream));
 
   if (ConfigurationManager::getConfig().useNvlink) {
-    disablePeerAccessForNvlink(Constants::DEVICE_ID, Constants::STORAGE_DEVICE_ID);
+    disablePeerAccessForNvlink(mainDeviceId, storageDeviceId);
   }
 
   runningTime = cudaEventClock.getTimeInSeconds();
@@ -332,12 +335,16 @@ void Executor::executeOptimizedGraphRepeatedly(
     }
   }
 
-  int storageDeviceId = ConfigurationManager::getConfig().useNvlink ? Constants::STORAGE_DEVICE_ID : cudaCpuDeviceId;
-  cudaMemcpyKind prefetchMemcpyKind = ConfigurationManager::getConfig().useNvlink ? cudaMemcpyDeviceToDevice : cudaMemcpyHostToDevice;
-  cudaMemcpyKind offloadMemcpyKind = ConfigurationManager::getConfig().useNvlink ? cudaMemcpyDeviceToDevice : cudaMemcpyDeviceToHost;
+  int mainDeviceId = ConfigurationManager::getConfig().mainDeviceId;
+  int storageDeviceId = cudaCpuDeviceId;
+  cudaMemcpyKind prefetchMemcpyKind = cudaMemcpyHostToDevice;
+  cudaMemcpyKind offloadMemcpyKind = cudaMemcpyDeviceToHost;
 
   if (ConfigurationManager::getConfig().useNvlink) {
-    enablePeerAccessForNvlink(Constants::DEVICE_ID, Constants::STORAGE_DEVICE_ID);
+    storageDeviceId = ConfigurationManager::getConfig().storageDeviceId;
+    prefetchMemcpyKind = cudaMemcpyDeviceToDevice;
+    offloadMemcpyKind = cudaMemcpyDeviceToDevice;
+    enablePeerAccessForNvlink(ConfigurationManager::getConfig().mainDeviceId, ConfigurationManager::getConfig().storageDeviceId);
   }
 
   LOG_TRACE_WITH_INFO("Initialize managed data distribution");
@@ -345,7 +352,7 @@ void Executor::executeOptimizedGraphRepeatedly(
   for (auto ptr : MemoryManager::managedMemoryAddresses) {
     void *newPtr;
     if (ConfigurationManager::getConfig().useNvlink) {
-      checkCudaErrors(cudaSetDevice(Constants::STORAGE_DEVICE_ID));
+      checkCudaErrors(cudaSetDevice(storageDeviceId));
       checkCudaErrors(cudaMalloc(&newPtr, MemoryManager::managedMemoryAddressToSizeMap[ptr]));
     } else {
       newPtr = malloc(MemoryManager::managedMemoryAddressToSizeMap[ptr]);
@@ -360,7 +367,7 @@ void Executor::executeOptimizedGraphRepeatedly(
     ));
     checkCudaErrors(cudaFree(ptr));
   }
-  checkCudaErrors(cudaSetDevice(Constants::DEVICE_ID));
+  checkCudaErrors(cudaSetDevice(mainDeviceId));
   checkCudaErrors(cudaDeviceSynchronize());
 
   SystemWallClock clock;
@@ -520,7 +527,7 @@ void Executor::executeOptimizedGraphRepeatedly(
   checkCudaErrors(cudaStreamDestroy(stream));
 
   if (ConfigurationManager::getConfig().useNvlink) {
-    disablePeerAccessForNvlink(Constants::DEVICE_ID, Constants::STORAGE_DEVICE_ID);
+    disablePeerAccessForNvlink(mainDeviceId, storageDeviceId);
   }
 
   runningTime = cudaEventClock.getTimeInSeconds();

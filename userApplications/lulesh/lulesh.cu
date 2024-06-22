@@ -220,7 +220,7 @@ __host__ __device__ static __forceinline__
 }
 
 void checkCudaDevice() {
-  const auto dev = Constants::DEVICE_ID;
+  const auto dev = ConfigurationManager::getConfig().mainDeviceId;
 
   struct cudaDeviceProp props;
   cudaGetDeviceProperties(&props, dev);

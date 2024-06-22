@@ -25,6 +25,8 @@ struct Configuration {
   // Execution
   bool useNvlink = false;
   bool measurePeakMemoryUsage = false;
+  int mainDeviceId = 1;
+  int storageDeviceId = 2;
 
   // Tiled Cholesky
   int tiledCholeskyN = 256;
@@ -48,6 +50,8 @@ struct Configuration {
     solver,
     useNvlink,
     measurePeakMemoryUsage,
+    mainDeviceId,
+    storageDeviceId,
     tiledCholeskyN,
     tiledCholeskyT,
     luleshS,

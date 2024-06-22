@@ -3,8 +3,6 @@
 #include <cstdio>
 #include <cstdlib>
 
-#include "constants.hpp"
-
 namespace memopt {
 
 template <typename T>

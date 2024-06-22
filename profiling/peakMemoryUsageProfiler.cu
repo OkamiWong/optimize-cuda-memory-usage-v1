@@ -1,17 +1,16 @@
 #include <chrono>
 
-#include "../utilities/constants.hpp"
+#include "../utilities/configurationManager.hpp"
 #include "../utilities/cudaUtilities.hpp"
 #include "peakMemoryUsageProfiler.hpp"
 
 namespace memopt {
 
 PeakMemoryUsageProfiler::PeakMemoryUsageProfiler(int sampleIntervalMilliseconds)
-: sampleIntervalMilliseconds(sampleIntervalMilliseconds)
-{}
+    : sampleIntervalMilliseconds(sampleIntervalMilliseconds) {}
 
 void PeakMemoryUsageProfiler::periodicallyCheckMemoryUsage() {
-  checkCudaErrors(cudaSetDevice(Constants::DEVICE_ID));
+  checkCudaErrors(cudaSetDevice(ConfigurationManager::getConfig().mainDeviceId));
 
   size_t peakMemoryUsage = 0;
 

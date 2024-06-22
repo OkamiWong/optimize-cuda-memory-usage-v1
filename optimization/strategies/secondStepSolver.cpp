@@ -9,7 +9,6 @@
 #include <numeric>
 
 #include "../../utilities/configurationManager.hpp"
-#include "../../utilities/constants.hpp"
 #include "../../utilities/logger.hpp"
 #include "../../utilities/utilities.hpp"
 

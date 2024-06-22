@@ -1,5 +1,6 @@
 #include <cassert>
 
+#include "configurationManager.hpp"
 #include "cudaUtilities.hpp"
 
 namespace memopt {
@@ -17,12 +18,14 @@ void warmUpCudaDevice() {
 }
 
 void initializeCudaDevice(bool displayDeviceInfo) {
-  checkCudaErrors(cudaSetDevice(Constants::DEVICE_ID));
+  const int mainDeviceId = ConfigurationManager::getConfig().mainDeviceId;
+
+  checkCudaErrors(cudaSetDevice(mainDeviceId));
 
   if (displayDeviceInfo) {
     cudaDeviceProp deviceProp;
-    checkCudaErrors(cudaGetDeviceProperties(&deviceProp, Constants::DEVICE_ID));
-    printf("GPU Device %d: %s\n", Constants::DEVICE_ID, deviceProp.name);
+    checkCudaErrors(cudaGetDeviceProperties(&deviceProp, mainDeviceId));
+    printf("GPU Device %d: %s\n", mainDeviceId, deviceProp.name);
     printf("Compute Capability: %d.%d\n\n", deviceProp.major, deviceProp.minor);
   }
 
