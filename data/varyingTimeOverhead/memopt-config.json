@@ -1,0 +1,33 @@
+{
+  "execution": {
+    "mainDeviceId": 1,
+    "measurePeakMemoryUsage": true,
+    "storageDeviceId": 2,
+    "useNvlink": true
+  },
+  "generic": {
+    "optimize": true,
+    "repeat": 1,
+    "verify": true
+  },
+  "lulesh": {
+    "constrainIterationCount": true,
+    "iterationBatchSize": 1,
+    "s": 360,
+    "targetIterationCount": 100
+  },
+  "optimization": {
+    "acceptableRunningTimeFactor": 10.0,
+    "mergeConcurrentCudaGraphNodes": false,
+    "minManagedArraySize": 2097152,
+    "prefetchingBandwidthInGB": 260.0,
+    "solver": "GUROBI_MIXED_INTEGER_PROGRAMMING",
+    "weightOfNumberOfMigrations": 1e-05,
+    "weightOfPeakMemoryUsage": 1.0,
+    "weightOfTotalRunningTime": 1e-04
+  },
+  "tiledCholesky": {
+    "n": 40960,
+    "t": 4
+  }
+}
