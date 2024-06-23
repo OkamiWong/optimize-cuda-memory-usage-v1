@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <exception>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -14,12 +15,14 @@ struct Configuration {
     bool optimize = false;
     bool verify = false;
     int repeat = 1;
+    bool useUM = false;
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(
       Generic,
       optimize,
       verify,
-      repeat
+      repeat,
+      useUM
     );
   } generic;
 
@@ -116,14 +119,32 @@ class ConfigurationManager {
     exportConfiguration(fileName, configuration);
   }
 
+  static void validateConfiguration() {
+    if (configuration.generic.optimize && configuration.generic.useUM){
+      throw std::invalid_argument("generic.optimize and generic.useUM cannot be true at the same time");
+    }
+  }
+
   static void loadConfiguration(std::string fileName = "config.json") {
     try {
       std::ifstream f(fileName);
       auto j = nlohmann::json::parse(f);
       configuration = j.get<Configuration>();
+
+      validateConfiguration();
+
       initialized = true;
+    } catch (const std::exception& e) {
+      std::cerr << "Failed to load configuration from " << fileName << std::endl;
+      std::cerr << "Exception: " << e.what() << std::endl;
+      std::cerr << "See defaultConfig.json for sample configuration" << std::endl;
+
+      exportDefaultConfiguration();
+
+      exit(-1);
     } catch (...) {
       std::cerr << "Failed to load configuration from " << fileName << std::endl;
+      std::cerr << "Exception: Unknown" << std::endl;
       std::cerr << "See defaultConfig.json for sample configuration" << std::endl;
 
       exportDefaultConfiguration();
