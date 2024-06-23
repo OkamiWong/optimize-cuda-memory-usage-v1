@@ -78,8 +78,8 @@ FirstStepSolver::Input convertToFirstStepInput(OptimizationInput &optimizationIn
 
 SecondStepSolver::Input convertToSecondStepInput(OptimizationInput &optimizationInput, FirstStepSolver::Output &firstStepOutput) {
   SecondStepSolver::Input secondStepInput;
-  secondStepInput.prefetchingBandwidth = ConfigurationManager::getConfig().prefetchingBandwidthInGB * 1e9;
-  secondStepInput.offloadingBandwidth = ConfigurationManager::getConfig().prefetchingBandwidthInGB * 1e9;
+  secondStepInput.prefetchingBandwidth = ConfigurationManager::getConfig().optimization.prefetchingBandwidthInGB * 1e9;
+  secondStepInput.offloadingBandwidth = ConfigurationManager::getConfig().optimization.prefetchingBandwidthInGB * 1e9;
   secondStepInput.originalTotalRunningTime = optimizationInput.originalTotalRunningTime;
 
   secondStepInput.taskGroupRunningTimes.resize(optimizationInput.nodes.size());
@@ -254,7 +254,7 @@ OptimizationOutput convertToOptimizationOutput(
     );
 
     nodeWeight[dataMovementNode] = static_cast<float>(MemoryManager::managedMemoryAddressToSizeMap[arrayAddress])
-                                   / (ConfigurationManager::getConfig().prefetchingBandwidthInGB * 1e9);
+                                   / (ConfigurationManager::getConfig().optimization.prefetchingBandwidthInGB * 1e9);
   }
 
   // Add offloadings
@@ -270,7 +270,7 @@ OptimizationOutput convertToOptimizationOutput(
     );
 
     nodeWeight[dataMovementNode] = static_cast<float>(MemoryManager::managedMemoryAddressToSizeMap[arrayAddress])
-                                   / (ConfigurationManager::getConfig().prefetchingBandwidthInGB * 1e9);
+                                   / (ConfigurationManager::getConfig().optimization.prefetchingBandwidthInGB * 1e9);
   }
 
   LOG_TRACE_WITH_INFO("Longest path in optimized graph (s): %.6f", calculateLongestPath(optimizedGraph, nodeWeight));

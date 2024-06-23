@@ -594,7 +594,7 @@ void tiledCholesky(bool optimize, bool verify) {
   if (optimize) {
     auto optimizedGraph = profileAndOptimize(graph);
 
-    for (int i = 0; i < ConfigurationManager::getConfig().repeat; i++) {
+    for (int i = 0; i < ConfigurationManager::getConfig().generic.repeat; i++) {
       initializeDeviceData(h_originalMatrix.get(), d_tiles);
 
       float runningTime;
@@ -616,7 +616,7 @@ void tiledCholesky(bool optimize, bool verify) {
         auto newPtr = managedDeviceArrayToHostArrayMap[oldPtr];
         checkCudaErrors(cudaMalloc(&d_tiles[j], B * B * sizeof(double)));
         checkCudaErrors(cudaMemcpy(d_tiles[j], newPtr, B * B * sizeof(double), cudaMemcpyDefault));
-        if (ConfigurationManager::getConfig().useNvlink) {
+        if (ConfigurationManager::getConfig().execution.useNvlink) {
           checkCudaErrors(cudaFree(newPtr));
         } else {
           checkCudaErrors(cudaFreeHost(newPtr));
@@ -638,10 +638,10 @@ void tiledCholesky(bool optimize, bool verify) {
 
     clock.logWithCurrentTime("Graph instantiated, start execution");
 
-    for (int i = 0; i < ConfigurationManager::getConfig().repeat; i++) {
+    for (int i = 0; i < ConfigurationManager::getConfig().generic.repeat; i++) {
       initializeDeviceData(h_originalMatrix.get(), d_tiles);
 
-      if (ConfigurationManager::getConfig().measurePeakMemoryUsage) {
+      if (ConfigurationManager::getConfig().execution.measurePeakMemoryUsage) {
         peakMemoryUsageProfiler.start();
       }
 
@@ -651,7 +651,7 @@ void tiledCholesky(bool optimize, bool verify) {
 
       checkCudaErrors(cudaDeviceSynchronize());
 
-      if (ConfigurationManager::getConfig().measurePeakMemoryUsage) {
+      if (ConfigurationManager::getConfig().execution.measurePeakMemoryUsage) {
         const auto peakMemoryUsage = peakMemoryUsageProfiler.end();
         fmt::print(
           "Peak memory usage (MiB): {:.2f}\n",
@@ -688,13 +688,13 @@ int main(int argc, char **argv) {
   ConfigurationManager::exportDefaultConfiguration();
   ConfigurationManager::loadConfiguration(configFilePath);
 
-  N = ConfigurationManager::getConfig().tiledCholeskyN;
-  T = ConfigurationManager::getConfig().tiledCholeskyT;
+  N = ConfigurationManager::getConfig().tiledCholesky.n;
+  T = ConfigurationManager::getConfig().tiledCholesky.t;
   B = N / T;
 
   tiledCholesky(
-    ConfigurationManager::getConfig().optimize,
-    ConfigurationManager::getConfig().verify
+    ConfigurationManager::getConfig().generic.optimize,
+    ConfigurationManager::getConfig().generic.verify
   );
 
   return 0;

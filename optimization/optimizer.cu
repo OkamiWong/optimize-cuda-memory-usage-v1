@@ -321,7 +321,7 @@ OptimizationOutput Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
 
   DisjointSet<cudaGraphNode_t> disjointSet;
 
-  if (ConfigurationManager::getConfig().mergeConcurrentCudaGraphNodes) {
+  if (ConfigurationManager::getConfig().optimization.mergeConcurrentCudaGraphNodes) {
     mergeConcurrentCudaGraphNodes(timeline, disjointSet, std::numeric_limits<int>::max());
   }
 

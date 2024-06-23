@@ -20,7 +20,7 @@ struct MemoryManager {
 
 template <typename T>
 void registerManagedMemoryAddress(T *devPtr, size_t size) {
-  if (size < ConfigurationManager::getConfig().minManagedArraySize) {
+  if (size < ConfigurationManager::getConfig().optimization.minManagedArraySize) {
     return;
   }
 

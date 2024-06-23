@@ -10,54 +10,87 @@
 namespace memopt {
 
 struct Configuration {
-  // Generic
-  bool optimize = false;
-  bool verify = false;
-  int repeat = 1;
+  struct Generic {
+    bool optimize = false;
+    bool verify = false;
+    int repeat = 1;
 
-  // Optimization
-  bool mergeConcurrentCudaGraphNodes = true;
-  double prefetchingBandwidthInGB = 281.0;
-  double acceptableRunningTimeFactor = 10.0;
-  int minManagedArraySize = 0;
-  std::string solver = "SCIP";
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(
+      Generic,
+      optimize,
+      verify,
+      repeat
+    );
+  } generic;
 
-  // Execution
-  bool useNvlink = false;
-  bool measurePeakMemoryUsage = false;
-  int mainDeviceId = 1;
-  int storageDeviceId = 2;
+  struct Optimization {
+    bool mergeConcurrentCudaGraphNodes = true;
+    double prefetchingBandwidthInGB = 281.0;
+    double acceptableRunningTimeFactor = 10.0;
+    int minManagedArraySize = 0;
+    std::string solver = "SCIP";
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(
+      Optimization,
+      mergeConcurrentCudaGraphNodes,
+      prefetchingBandwidthInGB,
+      acceptableRunningTimeFactor,
+      minManagedArraySize,
+      solver
+    );
+  } optimization;
+
+  struct Execution {
+    bool useNvlink = false;
+    bool measurePeakMemoryUsage = false;
+    int mainDeviceId = 1;
+    int storageDeviceId = 2;
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(
+      Execution,
+      useNvlink,
+      measurePeakMemoryUsage,
+      mainDeviceId,
+      storageDeviceId
+    );
+  } execution;
 
   // Tiled Cholesky
-  int tiledCholeskyN = 256;
-  int tiledCholeskyT = 4;
+  struct TiledCholesky {
+    int n = 256;
+    int t = 4;
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(
+      TiledCholesky,
+      n,
+      t
+    );
+  } tiledCholesky;
 
   // LULESH
-  int luleshS = 45;
-  bool luleshConstrainIterationCount = false;
-  int luleshTargetIterationCount = 3000;
-  int luleshIterationBatchSize = 1;
+
+  struct Lulesh {
+    int s = 45;
+    bool constrainIterationCount = false;
+    int targetIterationCount = 3000;
+    int iterationBatchSize = 1;
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(
+      Lulesh,
+      s,
+      constrainIterationCount,
+      targetIterationCount,
+      iterationBatchSize
+    );
+  } lulesh;
 
   NLOHMANN_DEFINE_TYPE_INTRUSIVE(
     Configuration,
-    optimize,
-    verify,
-    repeat,
-    mergeConcurrentCudaGraphNodes,
-    prefetchingBandwidthInGB,
-    acceptableRunningTimeFactor,
-    minManagedArraySize,
-    solver,
-    useNvlink,
-    measurePeakMemoryUsage,
-    mainDeviceId,
-    storageDeviceId,
-    tiledCholeskyN,
-    tiledCholeskyT,
-    luleshS,
-    luleshConstrainIterationCount,
-    luleshTargetIterationCount,
-    luleshIterationBatchSize
+    generic,
+    optimization,
+    execution,
+    tiledCholesky,
+    lulesh
   );
 };
 

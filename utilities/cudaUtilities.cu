@@ -18,7 +18,7 @@ void warmUpCudaDevice() {
 }
 
 void initializeCudaDevice(bool displayDeviceInfo) {
-  const int mainDeviceId = ConfigurationManager::getConfig().mainDeviceId;
+  const int mainDeviceId = ConfigurationManager::getConfig().execution.mainDeviceId;
 
   checkCudaErrors(cudaSetDevice(mainDeviceId));
 

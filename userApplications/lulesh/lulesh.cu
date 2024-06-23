@@ -220,7 +220,7 @@ __host__ __device__ static __forceinline__
 }
 
 void checkCudaDevice() {
-  const auto dev = ConfigurationManager::getConfig().mainDeviceId;
+  const auto dev = ConfigurationManager::getConfig().execution.mainDeviceId;
 
   struct cudaDeviceProp props;
   cudaGetDeviceProperties(&props, dev);
@@ -3040,7 +3040,7 @@ cudaGraph_t recordCudaGraph(Domain* domain) {
 
   std::map<void*, void*> addressUpdate;
 
-  for (int i = 0; i < ConfigurationManager::getConfig().luleshIterationBatchSize; i++) {
+  for (int i = 0; i < ConfigurationManager::getConfig().lulesh.iterationBatchSize; i++) {
     for (int j = 0; j < NUM_TASKS; j++) {
       executeRandomTask(domain, true, j, addressUpdate, s);
     }
@@ -3208,7 +3208,7 @@ int main(int argc, char* argv[]) {
   myRank = 0;
 
   /* assume cube subdomain geometry for now */
-  Index_t nx = ConfigurationManager::getConfig().luleshS;
+  Index_t nx = ConfigurationManager::getConfig().lulesh.s;
 
   Domain* locDom;
 
@@ -3239,7 +3239,7 @@ int main(int argc, char* argv[]) {
   LOG_TRACE_WITH_INFO("Printing original graph to graph.dot");
   checkCudaErrors(cudaGraphDebugDotPrint(graph, "./graph.dot", 0));
 
-  if (ConfigurationManager::getConfig().optimize) {
+  if (ConfigurationManager::getConfig().generic.optimize) {
     auto optimizedGraph = profileAndOptimize(graph);
 
     // Initialize data again
@@ -3255,8 +3255,8 @@ int main(int argc, char* argv[]) {
       },
       [&]() {
         bool shouldContinue;
-        if (ConfigurationManager::getConfig().luleshConstrainIterationCount) {
-          shouldContinue = *locDom->cycle_h < ConfigurationManager::getConfig().luleshTargetIterationCount;
+        if (ConfigurationManager::getConfig().lulesh.constrainIterationCount) {
+          shouldContinue = *locDom->cycle_h < ConfigurationManager::getConfig().lulesh.targetIterationCount;
         } else {
           shouldContinue = *locDom->time_h < locDom->stoptime;
         }
@@ -3296,8 +3296,8 @@ int main(int argc, char* argv[]) {
   gettimeofday(&start, NULL);
 
   while (true) {
-    if (ConfigurationManager::getConfig().luleshConstrainIterationCount) {
-      if (*locDom->cycle_h >= ConfigurationManager::getConfig().luleshTargetIterationCount) {
+    if (ConfigurationManager::getConfig().lulesh.constrainIterationCount) {
+      if (*locDom->cycle_h >= ConfigurationManager::getConfig().lulesh.targetIterationCount) {
         break;
       }
     } else {

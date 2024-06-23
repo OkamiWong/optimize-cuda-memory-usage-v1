@@ -114,23 +114,23 @@ void Executor::executeOptimizedGraph(
     }
   }
 
-  int mainDeviceId = ConfigurationManager::getConfig().mainDeviceId;
+  int mainDeviceId = ConfigurationManager::getConfig().execution.mainDeviceId;
   int storageDeviceId = cudaCpuDeviceId;
   cudaMemcpyKind prefetchMemcpyKind = cudaMemcpyHostToDevice;
   cudaMemcpyKind offloadMemcpyKind = cudaMemcpyDeviceToHost;
 
-  if (ConfigurationManager::getConfig().useNvlink) {
-    storageDeviceId = ConfigurationManager::getConfig().storageDeviceId;
+  if (ConfigurationManager::getConfig().execution.useNvlink) {
+    storageDeviceId = ConfigurationManager::getConfig().execution.storageDeviceId;
     prefetchMemcpyKind = cudaMemcpyDeviceToDevice;
     offloadMemcpyKind = cudaMemcpyDeviceToDevice;
-    enablePeerAccessForNvlink(ConfigurationManager::getConfig().mainDeviceId, ConfigurationManager::getConfig().storageDeviceId);
+    enablePeerAccessForNvlink(ConfigurationManager::getConfig().execution.mainDeviceId, ConfigurationManager::getConfig().execution.storageDeviceId);
   }
 
   LOG_TRACE_WITH_INFO("Initialize managed data distribution");
 
   for (auto ptr : MemoryManager::managedMemoryAddresses) {
     void *newPtr;
-    if (ConfigurationManager::getConfig().useNvlink) {
+    if (ConfigurationManager::getConfig().execution.useNvlink) {
       checkCudaErrors(cudaSetDevice(storageDeviceId));
       checkCudaErrors(cudaMalloc(&newPtr, MemoryManager::managedMemoryAddressToSizeMap[ptr]));
     } else {
@@ -257,7 +257,7 @@ void Executor::executeOptimizedGraph(
   checkCudaErrors(cudaGraphUpload(graphExec, stream));
   checkCudaErrors(cudaStreamSynchronize(stream));
 
-  if (ConfigurationManager::getConfig().measurePeakMemoryUsage) {
+  if (ConfigurationManager::getConfig().execution.measurePeakMemoryUsage) {
     peakMemoryUsageProfiler.start();
   }
 
@@ -266,7 +266,7 @@ void Executor::executeOptimizedGraph(
   cudaEventClock.end();
   checkCudaErrors(cudaDeviceSynchronize());
 
-  if (ConfigurationManager::getConfig().measurePeakMemoryUsage) {
+  if (ConfigurationManager::getConfig().execution.measurePeakMemoryUsage) {
     const auto peakMemoryUsage = peakMemoryUsageProfiler.end();
     LOG_TRACE_WITH_INFO(
       "Peak memory usage (MiB): %.2f",
@@ -292,7 +292,7 @@ void Executor::executeOptimizedGraph(
   checkCudaErrors(cudaGraphDestroy(graph));
   checkCudaErrors(cudaStreamDestroy(stream));
 
-  if (ConfigurationManager::getConfig().useNvlink) {
+  if (ConfigurationManager::getConfig().execution.useNvlink) {
     disablePeerAccessForNvlink(mainDeviceId, storageDeviceId);
   }
 
@@ -335,23 +335,23 @@ void Executor::executeOptimizedGraphRepeatedly(
     }
   }
 
-  int mainDeviceId = ConfigurationManager::getConfig().mainDeviceId;
+  int mainDeviceId = ConfigurationManager::getConfig().execution.mainDeviceId;
   int storageDeviceId = cudaCpuDeviceId;
   cudaMemcpyKind prefetchMemcpyKind = cudaMemcpyHostToDevice;
   cudaMemcpyKind offloadMemcpyKind = cudaMemcpyDeviceToHost;
 
-  if (ConfigurationManager::getConfig().useNvlink) {
-    storageDeviceId = ConfigurationManager::getConfig().storageDeviceId;
+  if (ConfigurationManager::getConfig().execution.useNvlink) {
+    storageDeviceId = ConfigurationManager::getConfig().execution.storageDeviceId;
     prefetchMemcpyKind = cudaMemcpyDeviceToDevice;
     offloadMemcpyKind = cudaMemcpyDeviceToDevice;
-    enablePeerAccessForNvlink(ConfigurationManager::getConfig().mainDeviceId, ConfigurationManager::getConfig().storageDeviceId);
+    enablePeerAccessForNvlink(ConfigurationManager::getConfig().execution.mainDeviceId, ConfigurationManager::getConfig().execution.storageDeviceId);
   }
 
   LOG_TRACE_WITH_INFO("Initialize managed data distribution");
 
   for (auto ptr : MemoryManager::managedMemoryAddresses) {
     void *newPtr;
-    if (ConfigurationManager::getConfig().useNvlink) {
+    if (ConfigurationManager::getConfig().execution.useNvlink) {
       checkCudaErrors(cudaSetDevice(storageDeviceId));
       checkCudaErrors(cudaMalloc(&newPtr, MemoryManager::managedMemoryAddressToSizeMap[ptr]));
     } else {
@@ -498,7 +498,7 @@ void Executor::executeOptimizedGraphRepeatedly(
   checkCudaErrors(cudaGraphUpload(graphExec, stream));
   checkCudaErrors(cudaStreamSynchronize(stream));
 
-  if (ConfigurationManager::getConfig().measurePeakMemoryUsage) {
+  if (ConfigurationManager::getConfig().execution.measurePeakMemoryUsage) {
     peakMemoryUsageProfiler.start();
   }
 
@@ -513,7 +513,7 @@ void Executor::executeOptimizedGraphRepeatedly(
   cudaEventClock.end();
   checkCudaErrors(cudaDeviceSynchronize());
 
-  if (ConfigurationManager::getConfig().measurePeakMemoryUsage) {
+  if (ConfigurationManager::getConfig().execution.measurePeakMemoryUsage) {
     const auto peakMemoryUsage = peakMemoryUsageProfiler.end();
     LOG_TRACE_WITH_INFO(
       "Peak memory usage (MiB): %.2f",
@@ -526,7 +526,7 @@ void Executor::executeOptimizedGraphRepeatedly(
   checkCudaErrors(cudaGraphDestroy(graph));
   checkCudaErrors(cudaStreamDestroy(stream));
 
-  if (ConfigurationManager::getConfig().useNvlink) {
+  if (ConfigurationManager::getConfig().execution.useNvlink) {
     disablePeerAccessForNvlink(mainDeviceId, storageDeviceId);
   }
 

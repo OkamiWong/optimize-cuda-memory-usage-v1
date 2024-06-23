@@ -145,7 +145,7 @@ struct IntegerProgrammingSolver {
 
   void initialize() {
     solver = std::unique_ptr<MPSolver>(MPSolver::CreateSolver(
-      ConfigurationManager::getConfig().solver
+      ConfigurationManager::getConfig().optimization.solver
     ));
 
     if (!solver) {
@@ -410,7 +410,7 @@ struct IntegerProgrammingSolver {
       }
     }
 
-    auto zLastKernelConstraint = solver->MakeRowConstraint(0, originalTotalRunningTime * ConfigurationManager::getConfig().acceptableRunningTimeFactor);
+    auto zLastKernelConstraint = solver->MakeRowConstraint(0, originalTotalRunningTime * ConfigurationManager::getConfig().optimization.acceptableRunningTimeFactor);
     zLastKernelConstraint->SetCoefficient(z[getTaskGroupVertexIndex(numberOfTaskGroups - 1)], 1);
   }
 

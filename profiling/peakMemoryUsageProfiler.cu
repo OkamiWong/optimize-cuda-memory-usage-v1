@@ -10,7 +10,7 @@ PeakMemoryUsageProfiler::PeakMemoryUsageProfiler(int sampleIntervalMilliseconds)
     : sampleIntervalMilliseconds(sampleIntervalMilliseconds) {}
 
 void PeakMemoryUsageProfiler::periodicallyCheckMemoryUsage() {
-  checkCudaErrors(cudaSetDevice(ConfigurationManager::getConfig().mainDeviceId));
+  checkCudaErrors(cudaSetDevice(ConfigurationManager::getConfig().execution.mainDeviceId));
 
   size_t peakMemoryUsage = 0;
 
