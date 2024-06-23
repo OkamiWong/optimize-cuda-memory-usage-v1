@@ -16,13 +16,15 @@ struct Configuration {
     bool verify = false;
     int repeat = 1;
     bool useUM = false;
+    int availableMemoryForUMInMiB = 40960;
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(
       Generic,
       optimize,
       verify,
       repeat,
-      useUM
+      useUM,
+      availableMemoryForUMInMiB
     );
   } generic;
 
