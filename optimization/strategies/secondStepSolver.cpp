@@ -19,9 +19,6 @@ namespace memopt {
 // Need separate the or_tools reference with cu files,
 // because nvcc cannot compile or_tools
 struct IntegerProgrammingSolver {
-  static constexpr double totalRunningTimeWeight = 0.0001;
-  static constexpr double totalNumberOfDataMovementWeight = 0.00001;
-
   // States of the solver
   SecondStepSolver::Input input;
 
@@ -595,11 +592,11 @@ struct IntegerProgrammingSolver {
     defineNumberOfDataMovements();
 
     auto objective = solver->MutableObjective();
-    objective->SetCoefficient(peakMemoryUsage, 1);
-    objective->SetCoefficient(numberOfDataMovements, totalNumberOfDataMovementWeight);
+    objective->SetCoefficient(peakMemoryUsage, ConfigurationManager::getConfig().optimization.weightOfPeakMemoryUsage);
+    objective->SetCoefficient(numberOfDataMovements, ConfigurationManager::getConfig().optimization.weightOfNumberOfMigrations);
     objective->SetCoefficient(
       z[getTaskGroupVertexIndex(numberOfTaskGroups - 1)],
-      originalPeakMemoryUsageToTotalRunningTimeRatio * totalRunningTimeWeight
+      originalPeakMemoryUsageToTotalRunningTimeRatio * ConfigurationManager::getConfig().optimization.weightOfTotalRunningTime
     );
     objective->SetMinimization();
 

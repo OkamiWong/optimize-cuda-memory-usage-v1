@@ -29,6 +29,9 @@ struct Configuration {
     double acceptableRunningTimeFactor = 10.0;
     int minManagedArraySize = 0;
     std::string solver = "SCIP";
+    double weightOfPeakMemoryUsage = 1.0;
+    double weightOfTotalRunningTime = 0.0001;
+    double weightOfNumberOfMigrations = 0.00001;
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(
       Optimization,
@@ -36,7 +39,10 @@ struct Configuration {
       prefetchingBandwidthInGB,
       acceptableRunningTimeFactor,
       minManagedArraySize,
-      solver
+      solver,
+      weightOfPeakMemoryUsage,
+      weightOfTotalRunningTime,
+      weightOfNumberOfMigrations
     );
   } optimization;
 
