@@ -6,8 +6,10 @@
     "useNvlink": true
   },
   "generic": {
+    "availableMemoryForUMInMiB": 41046,
     "optimize": true,
     "repeat": 1,
+    "useUM": false,
     "verify": true
   },
   "lulesh": {
