@@ -15,6 +15,18 @@ void __check(T result, char const *const func, const char *const file, int const
 
 #define checkCudaErrors(val) __check((val), #val, __FILE__, __LINE__)
 
+inline void *placeholder;
+
+inline void reduceAvailableMemoryForUM(size_t targetSize) {
+  size_t free, total;
+  checkCudaErrors(cudaMemGetInfo(&free, &total));
+  checkCudaErrors(cudaMalloc(&placeholder, total - targetSize));
+}
+
+inline void resetAvailableMemoryForUM() {
+  checkCudaErrors(cudaFree(placeholder));
+}
+
 void warmUpCudaDevice();
 
 void initializeCudaDevice(bool displayDeviceInfo = false);
