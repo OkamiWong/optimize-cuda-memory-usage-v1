@@ -18,6 +18,9 @@ namespace memopt {
 
 // Need separate the or_tools reference with cu files,
 // because nvcc cannot compile or_tools
+
+constexpr int LONGEST_DATA_MIGRATION_SPAN = 10;
+
 struct IntegerProgrammingSolver {
   // States of the solver
   SecondStepSolver::Input input;
@@ -163,6 +166,19 @@ struct IntegerProgrammingSolver {
       initiallyAllocatedOnDevice[arr]->SetUB(1);
     }
 
+    std::map<std::pair<int, int>, int> closestDependency;
+    for (int i = numberOfTaskGroups - 1; i >= 0; i--) {
+      for (int j = 0; j < numberOfArrays; j++) {
+        if (input.taskGroupInputArrays[i].count(j) != 0 || input.taskGroupOutputArrays[i].count(j) != 0) {
+          closestDependency[{i, j}] = i;
+        } else {
+          if (closestDependency.count({i + 1, j}) != 0) {
+            closestDependency[{i, j}] = closestDependency[{i + 1, j}];
+          }
+        }
+      }
+    }
+
     // Add decision variables for prefetching
     p.clear();
     for (int i = 0; i < numberOfTaskGroups; i++) {
@@ -171,6 +187,11 @@ struct IntegerProgrammingSolver {
         p[i].push_back(solver->MakeBoolVar(fmt::format("p_{{{}, {}}}", i, j)));
         if (shouldAllocate[std::make_pair(i, j)]) {
           p[i][j]->SetLB(1);
+        } else {
+          int closestDependantTaskGroup = closestDependency.count({i, j}) > 0 ? closestDependency[{i, j}] : 0x3f3f3f3f;
+          if (closestDependantTaskGroup - i >= LONGEST_DATA_MIGRATION_SPAN) {
+            p[i][j]->SetUB(0);
+          }
         }
       }
     }
@@ -199,6 +220,8 @@ struct IntegerProgrammingSolver {
             }
           } else {
             if (k <= i) {
+              o[i][j][k]->SetUB(0);
+            } else if (k - i >= LONGEST_DATA_MIGRATION_SPAN) {
               o[i][j][k]->SetUB(0);
             }
           }
