@@ -20,6 +20,8 @@ class SecondStepSolver {
     float prefetchingBandwidth, offloadingBandwidth;
 
     float originalTotalRunningTime;
+
+    bool forceAllArraysToResideOnHostInitiallyAndFinally;
   };
 
   struct Output {

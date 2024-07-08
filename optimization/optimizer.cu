@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <exception>
 #include <limits>
 #include <utility>
 
@@ -13,19 +14,42 @@
 #include "../utilities/cudaUtilities.hpp"
 #include "../utilities/disjointSet.hpp"
 #include "../utilities/logger.hpp"
+#include "../utilities/utilities.hpp"
 #include "optimizer.hpp"
 #include "strategies/strategies.hpp"
 
 namespace memopt {
 
-static CUfunction dummyKernelFuncHandle;
+static CUfunction dummyKernelForAnnotationHandle;
+static CUfunction dummyKernelForStageSeparatorHandle;
 
-void registerDummyKernelFuncHandle(cudaGraph_t graph) {
-  // The graph is assumed to have only one root
-  // and that root is supposed to be an annotation node
+cudaGraph_t dummyKernelForAnnotationGraph;
+cudaGraph_t dummyKernelForStageSeparatorGraph;
+
+void registerDummyKernelHandles() {
+  cudaStream_t s;
+  cudaStreamCreate(&s);
+
+  cudaStreamBeginCapture(s, cudaStreamCaptureModeGlobal);
+  TaskAnnotation a{};
+  dummyKernelForAnnotation<<<1, 1, 0, s>>>(a);
+  cudaStreamEndCapture(s, &(dummyKernelForAnnotationGraph));
   CUDA_KERNEL_NODE_PARAMS rootNodeParams;
-  getKernelNodeParams(getRootNode(graph), rootNodeParams);
-  dummyKernelFuncHandle = rootNodeParams.func;
+  getKernelNodeParams(getRootNode(dummyKernelForAnnotationGraph), rootNodeParams);
+  dummyKernelForAnnotationHandle = rootNodeParams.func;
+
+  cudaStreamBeginCapture(s, cudaStreamCaptureModeGlobal);
+  dummyKernelForStageSeparator<<<1, 1, 0, s>>>();
+  cudaStreamEndCapture(s, &(dummyKernelForStageSeparatorGraph));
+  getKernelNodeParams(getRootNode(dummyKernelForStageSeparatorGraph), rootNodeParams);
+  dummyKernelForStageSeparatorHandle = rootNodeParams.func;
+
+  checkCudaErrors(cudaStreamDestroy(s));
+}
+
+void cleanUpDummyKernelFuncHandleRegistrations() {
+  checkCudaErrors(cudaGraphDestroy(dummyKernelForAnnotationGraph));
+  checkCudaErrors(cudaGraphDestroy(dummyKernelForStageSeparatorGraph));
 }
 
 CudaGraphExecutionTimeline getCudaGraphExecutionTimeline(cudaGraph_t graph) {
@@ -84,7 +108,7 @@ void mergeConcurrentCudaGraphNodes(
   }
 }
 
-void dfs(
+void mapNodeToAnnotationDfs(
   cudaGraphNode_t currentNode,
   cudaGraphNode_t currentAnnotationNode,
   std::map<cudaGraphNode_t, std::vector<cudaGraphNode_t>> &edges,
@@ -98,19 +122,8 @@ void dfs(
 
   if (!currentAnnotationNode) {
     isAnnotationNode = true;
-  } else {
-    cudaGraphNodeType nodeType;
-    checkCudaErrors(cudaGraphNodeGetType(currentNode, &nodeType));
-    if (nodeType == cudaGraphNodeTypeKernel) {
-      // Why switch to driver API:
-      // https://forums.developer.nvidia.com/t/cuda-runtime-api-error-for-cuda-graph-and-opencv/215408/13
-      CUDA_KERNEL_NODE_PARAMS nodeParams;
-      checkCudaErrors(cuGraphKernelNodeGetParams(currentNode, &nodeParams));
-
-      if (nodeParams.func == dummyKernelFuncHandle) {
-        isAnnotationNode = true;
-      }
-    }
+  } else if (compareKernelNodeFunctionHandle(currentNode, dummyKernelForAnnotationHandle)) {
+    isAnnotationNode = true;
   }
 
   if (isAnnotationNode) {
@@ -120,7 +133,7 @@ void dfs(
   nodeToAnnotationMap[currentNode] = currentAnnotationNode;
 
   for (auto nextNode : edges[currentNode]) {
-    dfs(nextNode, currentAnnotationNode, edges, nodeToAnnotationMap);
+    mapNodeToAnnotationDfs(nextNode, currentAnnotationNode, edges, nodeToAnnotationMap);
   }
 }
 
@@ -132,7 +145,7 @@ void mapNodeToAnnotation(
   LOG_TRACE();
 
   auto rootNode = getRootNode(originalGraph);
-  dfs(rootNode, nullptr, edges, nodeToAnnotationMap);
+  mapNodeToAnnotationDfs(rootNode, nullptr, edges, nodeToAnnotationMap);
 }
 
 void mergeNodesWithSameAnnotation(
@@ -143,6 +156,41 @@ void mergeNodesWithSameAnnotation(
   for (auto u : nodes) {
     disjointSet.unionUnderlyingSets(u, nodeToAnnotationMap[u]);
   }
+}
+
+void mapNodeToStageDfs(
+  cudaGraphNode_t currentNode,
+  int currentStageIndex,
+  std::map<cudaGraphNode_t, std::vector<cudaGraphNode_t>> &edges,
+  std::map<cudaGraphNode_t, int> &nodeToStageIndexMap
+) {
+  if (nodeToStageIndexMap.find(currentNode) != nodeToStageIndexMap.end()) {
+    return;
+  }
+
+  bool isStageSeparatorNode = compareKernelNodeFunctionHandle(currentNode, dummyKernelForStageSeparatorHandle);
+
+  // The separator node belongs to the previous stage
+  nodeToStageIndexMap[currentNode] = currentStageIndex;
+
+  if (isStageSeparatorNode) {
+    currentStageIndex++;
+  }
+
+  for (auto nextNode : edges[currentNode]) {
+    mapNodeToStageDfs(nextNode, currentStageIndex, edges, nodeToStageIndexMap);
+  }
+}
+
+void mapNodeToStage(
+  cudaGraph_t originalGraph,
+  std::map<cudaGraphNode_t, std::vector<cudaGraphNode_t>> &edges,
+  std::map<cudaGraphNode_t, int> &nodeToStageIndexMap
+) {
+  LOG_TRACE();
+
+  auto rootNode = getRootNode(originalGraph);
+  mapNodeToStageDfs(rootNode, 0, edges, nodeToStageIndexMap);
 }
 
 OptimizationInput::TaskGroup::DataDependency convertTaskAnnotationToTaskGroupDataDependency(
@@ -165,7 +213,7 @@ OptimizationInput::TaskGroup::DataDependency convertTaskAnnotationToTaskGroupDat
 TaskId getTaskId(cudaGraphNode_t annotationNode) {
   CUDA_KERNEL_NODE_PARAMS nodeParams;
   getKernelNodeParams(annotationNode, nodeParams);
-  assert(nodeParams.func == dummyKernelFuncHandle);
+  assert(nodeParams.func == dummyKernelForAnnotationHandle);
 
   auto taskAnnotationPtr = reinterpret_cast<TaskAnnotation *>(nodeParams.kernelParams[0]);
   return taskAnnotationPtr->taskId;
@@ -174,7 +222,7 @@ TaskId getTaskId(cudaGraphNode_t annotationNode) {
 void mergeDataDependency(OptimizationInput::TaskGroup &taskGroup, cudaGraphNode_t annotationNode) {
   CUDA_KERNEL_NODE_PARAMS nodeParams;
   getKernelNodeParams(annotationNode, nodeParams);
-  assert(nodeParams.func == dummyKernelFuncHandle);
+  assert(nodeParams.func == dummyKernelForAnnotationHandle);
 
   auto taskAnnotationPtr = reinterpret_cast<TaskAnnotation *>(nodeParams.kernelParams[0]);
   auto taskDataDependency = convertTaskAnnotationToTaskGroupDataDependency(*taskAnnotationPtr);
@@ -295,7 +343,103 @@ OptimizationInput constructOptimizationInput(
 
   optimizationInput.originalTotalRunningTime = static_cast<float>(globalMaxEnd - globalMinStart) * 1e-9f;
 
+  optimizationInput.forceAllArraysToResideOnHostInitiallyAndFinally = false;
+
   return optimizationInput;
+}
+
+std::vector<OptimizationInput> constructOptimizationInputsForStages(
+  cudaGraph_t originalGraph,
+  std::vector<cudaGraphNode_t> &allNodes,
+  std::map<cudaGraphNode_t, std::vector<cudaGraphNode_t>> &allEdges,
+  CudaGraphExecutionTimeline &timeline,
+  DisjointSet<cudaGraphNode_t> &disjointSet,
+  std::map<cudaGraphNode_t, cudaGraphNode_t> &nodeToAnnotationMap,
+  std::map<cudaGraphNode_t, int> &nodeToStageIndexMap
+) {
+  std::vector<std::vector<cudaGraphNode_t>> nodesPerStage;
+  for (auto node : allNodes) {
+    int stageIndex = nodeToStageIndexMap[node];
+    while (nodesPerStage.size() <= stageIndex) nodesPerStage.push_back({});
+    nodesPerStage[stageIndex].push_back(node);
+  }
+
+  const int numberOfStages = nodesPerStage.size();
+
+  std::vector<std::map<cudaGraphNode_t, std::vector<cudaGraphNode_t>>> edgesPerStage(numberOfStages);
+  for (int i = 0; i < numberOfStages; i++) {
+    for (auto u : nodesPerStage[i]) {
+      for (auto v : allEdges[u]) {
+        if (nodeToStageIndexMap[v] == i) {
+          edgesPerStage[i][u].push_back(v);
+        }
+      }
+    }
+  }
+
+  std::vector<OptimizationInput> optimizationInputs;
+  for (int i = 0; i < numberOfStages; i++) {
+    optimizationInputs.push_back(
+      constructOptimizationInput(
+        originalGraph, nodesPerStage[i], edgesPerStage[i], timeline, disjointSet, nodeToAnnotationMap
+      )
+    );
+    optimizationInputs.rbegin()->forceAllArraysToResideOnHostInitiallyAndFinally = true;
+  }
+  return optimizationInputs;
+}
+
+OptimizationOutput mergeOptimizationOutputs(std::vector<OptimizationOutput> &optimizationOutputs) {
+  auto getRootNodeIndex = [](OptimizationOutput &output) {
+    std::map<int, bool> hasIncomingEdge;
+    for (auto u : output.nodes) {
+      for (auto v : output.edges[u]) {
+        hasIncomingEdge[v] = true;
+      }
+    }
+    for (auto u : output.nodes) {
+      if (!hasIncomingEdge[u]) return u;
+    }
+    throw std::runtime_error("Cannot find root node");
+  };
+
+  auto getLastNodeIndex = [](OptimizationOutput &output) {
+    auto u = output.nodes[0];
+    while (output.edges[u].size() != 0) u = output.edges[u][0];
+    return u;
+  };
+
+  OptimizationOutput mergedOptimizationOutput = optimizationOutputs[0];
+  int globalLastNodeIndex = getLastNodeIndex(mergedOptimizationOutput);
+  int globalNodeIndexOffset = mergedOptimizationOutput.nodes.size();
+  for (int i = 1; i < optimizationOutputs.size(); i++) {
+    auto &output = optimizationOutputs[i];
+    int rootNodeIndex = getRootNodeIndex(output);
+    int lastNodeIndex = getLastNodeIndex(output);
+    for (auto u : output.nodes) {
+      int newU = u + globalNodeIndexOffset;
+      mergedOptimizationOutput.nodes.push_back(newU);
+      for (auto v : output.edges[u]) {
+        mergedOptimizationOutput.edges[newU].push_back(v + globalNodeIndexOffset);
+      }
+
+      auto nodeType = output.nodeIdToNodeTypeMap[u];
+      mergedOptimizationOutput.nodeIdToNodeTypeMap[newU] = nodeType;
+      if (nodeType == OptimizationOutput::NodeType::task) {
+        mergedOptimizationOutput.nodeIdToTaskIdMap[newU] = output.nodeIdToTaskIdMap[u];
+      } else if (nodeType == OptimizationOutput::NodeType::dataMovement) {
+        mergedOptimizationOutput.nodeIdToDataMovementMap[newU] = output.nodeIdToDataMovementMap[u];
+      }
+    }
+
+    mergedOptimizationOutput.addEdge(globalLastNodeIndex, rootNodeIndex + globalNodeIndexOffset);
+    globalLastNodeIndex = lastNodeIndex + globalNodeIndexOffset;
+    globalNodeIndexOffset += output.nodes.size();
+  }
+
+  mergedOptimizationOutput.arraysInitiallyAllocatedOnDevice.clear();
+
+  return mergedOptimizationOutput;
 }
 
 Optimizer *Optimizer::instance = nullptr;
@@ -308,7 +452,8 @@ Optimizer *Optimizer::getInstance() {
 }
 
 OptimizationOutput Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
-  registerDummyKernelFuncHandle(originalGraph);
+  registerDummyKernelHandles();
+  ScopeGuard scopeGuard([]() -> void { cleanUpDummyKernelFuncHandleRegistrations(); });
 
   auto timeline = getCudaGraphExecutionTimeline(originalGraph);
 
@@ -327,15 +472,45 @@ OptimizationOutput Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
 
   mergeNodesWithSameAnnotation(nodes, nodeToAnnotationMap, disjointSet);
 
-  auto optimizationInput = constructOptimizationInput(originalGraph, nodes, edges, timeline, disjointSet, nodeToAnnotationMap);
+  bool hasOnlyOneStage = true;
+  for (auto node : nodes) {
+    if (compareKernelNodeFunctionHandle(node, dummyKernelForStageSeparatorHandle)) {
+      hasOnlyOneStage = false;
+      break;
+    }
+  }
 
-  auto optimizedGraph = this->optimize<TwoStepOptimizationStrategy>(optimizationInput);
+  std::map<cudaGraphNode_t, int> nodeToStageIndexMap;
+  if (!hasOnlyOneStage) {
+    mapNodeToStage(originalGraph, edges, nodeToStageIndexMap);
+  }
 
-  if (optimizedGraph.optimal) {
-    return optimizedGraph;
+  if (hasOnlyOneStage) {
+    auto optimizationInput = constructOptimizationInput(originalGraph, nodes, edges, timeline, disjointSet, nodeToAnnotationMap);
+
+    auto optimizedGraph = this->optimize<TwoStepOptimizationStrategy>(optimizationInput);
+
+    if (optimizedGraph.optimal) {
+      return optimizedGraph;
+    } else {
+      LOG_TRACE_WITH_INFO("Could not find any feasible solution");
+      exit(-1);
+    }
   } else {
-    LOG_TRACE_WITH_INFO("Could not find any feasible solution");
-    exit(-1);
+    auto optimizationInputs = constructOptimizationInputsForStages(
+      originalGraph, nodes, edges, timeline, disjointSet, nodeToAnnotationMap, nodeToStageIndexMap
+    );
+
+    std::vector<OptimizationOutput> optimizationOutputs;
+    for (int i = 0; i < optimizationInputs.size(); i++) {
+      optimizationOutputs.push_back(this->optimize<TwoStepOptimizationStrategy>(optimizationInputs[i]));
+      if (optimizationOutputs.rbegin()->optimal == false) {
+        LOG_TRACE_WITH_INFO("Could not find any feasible solution for stage %d", i);
+        exit(-1);
+      }
+    }
+
+    return mergeOptimizationOutputs(optimizationOutputs);
   }
 }
 

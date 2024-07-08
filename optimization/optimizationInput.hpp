@@ -23,6 +23,8 @@ struct OptimizationInput {
   std::vector<TaskGroup> nodes;
   std::map<TaskGroupId, std::vector<TaskGroupId>> edges;
 
+  bool forceAllArraysToResideOnHostInitiallyAndFinally;
+
   float originalTotalRunningTime;
 };
 

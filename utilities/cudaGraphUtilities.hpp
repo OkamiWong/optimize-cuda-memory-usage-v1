@@ -19,4 +19,6 @@ std::vector<cudaGraphNode_t> getNodesWithZeroOutDegree(cudaGraph_t graph);
 
 void getKernelNodeParams(cudaGraphNode_t kernelNode, CUDA_KERNEL_NODE_PARAMS &nodeParams);
 
+bool compareKernelNodeFunctionHandle(cudaGraphNode_t kernelNode, CUfunction functionHandle);
+
 }  // namespace memopt

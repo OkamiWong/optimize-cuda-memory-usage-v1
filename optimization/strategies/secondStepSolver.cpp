@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <iterator>
 #include <numeric>
 
@@ -15,6 +16,8 @@
 using namespace operations_research;
 
 namespace memopt {
+
+int stageCount = 0;
 
 // Need separate the or_tools reference with cu files,
 // because nvcc cannot compile or_tools
@@ -159,8 +162,11 @@ struct IntegerProgrammingSolver {
       initiallyAllocatedOnDevice.push_back(solver->MakeBoolVar(fmt::format("I_{{{}}}", i)));
       initiallyAllocatedOnDevice[i]->SetUB(0);
     }
-    for (auto arr : input.applicationInputArrays) {
-      initiallyAllocatedOnDevice[arr]->SetUB(1);
+
+    if (!input.forceAllArraysToResideOnHostInitiallyAndFinally) {
+      for (auto arr : input.applicationInputArrays) {
+        initiallyAllocatedOnDevice[arr]->SetUB(1);
+      }
     }
 
     // Add decision variables for prefetching
@@ -226,6 +232,12 @@ struct IntegerProgrammingSolver {
             constraint->SetCoefficient(o[u][j][v], -1);
           }
         }
+      }
+    }
+
+    if (input.forceAllArraysToResideOnHostInitiallyAndFinally) {
+      for (int j = 0; j < numberOfArrays; j++) {
+        x[numberOfTaskGroups - 1][j]->SetUB(0);
       }
     }
 
@@ -462,9 +474,20 @@ struct IntegerProgrammingSolver {
   }
 
   void printSolution(MPSolver::ResultStatus resultStatus) {
-    LOG_TRACE_WITH_INFO("Printing solution to secondStepSolver.out");
+    stageCount++;
+    std::string outputFilePath = "secondStepSolver.out";
+    if (stageCount > 1) {
+      if (stageCount == 2) {
+        LOG_TRACE_WITH_INFO("Moving secondStepSolver.out to secondStepSolverOutputs/0.out");
+        system("mkdir -p secondStepSolverOutputs");
+        system("cp secondStepSolver.out secondStepSolverOutputs/0.out");
+      }
+      outputFilePath = fmt::format("secondStepSolverOutputs/{}.out", stageCount - 1);
+    }
 
-    auto fp = fopen("secondStepSolver.out", "w");
+    LOG_TRACE_WITH_INFO("Printing solution to %s", outputFilePath.c_str());
+
+    auto fp = fopen(outputFilePath.c_str(), "w");
 
     fmt::print(fp, "Result status: {}\n", resultStatus == MPSolver::OPTIMAL ? "OPTIMAL" : "FEASIBLE");
 

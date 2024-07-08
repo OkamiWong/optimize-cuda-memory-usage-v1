@@ -3043,6 +3043,7 @@ cudaGraph_t recordCudaGraph(Domain* domain) {
   for (int i = 0; i < ConfigurationManager::getConfig().lulesh.iterationBatchSize; i++) {
     for (int j = 0; j < NUM_TASKS; j++) {
       executeRandomTask(domain, true, j, addressUpdate, s);
+      if (j == 5) endStage(s);
     }
   }
 

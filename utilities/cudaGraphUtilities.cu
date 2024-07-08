@@ -71,4 +71,18 @@ void getKernelNodeParams(cudaGraphNode_t kernelNode, CUDA_KERNEL_NODE_PARAMS &no
   checkCudaErrors(cuGraphKernelNodeGetParams(kernelNode, &nodeParams));
 }
 
+bool compareKernelNodeFunctionHandle(cudaGraphNode_t kernelNode, CUfunction functionHandle) {
+  cudaGraphNodeType nodeType;
+  checkCudaErrors(cudaGraphNodeGetType(kernelNode, &nodeType));
+  if (nodeType == cudaGraphNodeTypeKernel) {
+    CUDA_KERNEL_NODE_PARAMS nodeParams;
+    getKernelNodeParams(kernelNode, nodeParams);
+
+    if (nodeParams.func == functionHandle) {
+      return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace memopt

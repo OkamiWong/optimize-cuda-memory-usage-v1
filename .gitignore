@@ -13,3 +13,4 @@ defaultConfig.json
 *.dot
 *.z3-trace
 *.out
+secondStepSolverOutputs/

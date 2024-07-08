@@ -26,4 +26,10 @@ __host__ void annotateNextTask(
   cudaStream_t stream
 );
 
+__global__ void dummyKernelForStageSeparator();
+
+__host__ void endStage(
+  cudaStream_t stream
+);
+
 }  // namespace memopt

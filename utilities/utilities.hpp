@@ -2,10 +2,37 @@
 
 #include <chrono>
 #include <cstdlib>
+#include <functional>
 #include <sstream>
 #include <string>
 
 namespace memopt {
+
+class ScopeGuard {
+ public:
+  ScopeGuard() = default;
+  ScopeGuard(const std::function<void()>& callback) : m_callback{callback} {}
+  ScopeGuard(std::function<void()>&& callback) : m_callback{std::move(callback)} {}
+  ScopeGuard& operator=(const ScopeGuard& other) = delete;
+  ScopeGuard(const ScopeGuard& other) = delete;
+  ScopeGuard& operator=(ScopeGuard&& other) {
+    std::swap(m_callback, other.m_callback);
+    return *this;
+  }
+  ScopeGuard(ScopeGuard&& other) { *this = std::move(other); }
+  ~ScopeGuard() {
+    if (m_callback) {
+      m_callback();
+    }
+  }
+
+  void disarm() {
+    m_callback = {};
+  }
+
+ private:
+  std::function<void()> m_callback;
+};
 
 class SystemWallClock {
  public:
@@ -13,7 +40,7 @@ class SystemWallClock {
   void end();
   float getTimeInSeconds();
   float peekCurrentTimeInSeconds();
-  void logWithCurrentTime(const char *message);
+  void logWithCurrentTime(const char* message);
 
  private:
   std::chrono::time_point<std::chrono::system_clock> startTimePoint, endTimePoint;

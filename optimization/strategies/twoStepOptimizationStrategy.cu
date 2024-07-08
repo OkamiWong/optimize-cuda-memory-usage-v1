@@ -77,17 +77,22 @@ FirstStepSolver::Input convertToFirstStepInput(OptimizationInput &optimizationIn
 }
 
 SecondStepSolver::Input convertToSecondStepInput(OptimizationInput &optimizationInput, FirstStepSolver::Output &firstStepOutput) {
+  const int numberOfTaskGroups = firstStepOutput.taskGroupExecutionOrder.size();
+  const int sentinelTaskGroupIndex = numberOfTaskGroups - 1;
+
   SecondStepSolver::Input secondStepInput;
   secondStepInput.prefetchingBandwidth = ConfigurationManager::getConfig().optimization.prefetchingBandwidthInGB * 1e9;
   secondStepInput.offloadingBandwidth = ConfigurationManager::getConfig().optimization.prefetchingBandwidthInGB * 1e9;
   secondStepInput.originalTotalRunningTime = optimizationInput.originalTotalRunningTime;
+  secondStepInput.forceAllArraysToResideOnHostInitiallyAndFinally = optimizationInput.forceAllArraysToResideOnHostInitiallyAndFinally;
 
-  secondStepInput.taskGroupRunningTimes.resize(optimizationInput.nodes.size());
-  secondStepInput.taskGroupInputArrays.resize(optimizationInput.nodes.size());
-  secondStepInput.taskGroupOutputArrays.resize(optimizationInput.nodes.size());
+  secondStepInput.taskGroupRunningTimes.resize(numberOfTaskGroups);
+  secondStepInput.taskGroupInputArrays.resize(numberOfTaskGroups);
+  secondStepInput.taskGroupOutputArrays.resize(numberOfTaskGroups);
 
-  for (int i = 0; i < optimizationInput.nodes.size(); i++) {
-    // Second step assumes task groups are sorted in execution order.
+  for (int i = 0; i < numberOfTaskGroups; i++) {
+    if (i == sentinelTaskGroupIndex) continue;
+
     auto &node = optimizationInput.nodes[firstStepOutput.taskGroupExecutionOrder[i]];
 
     secondStepInput.taskGroupRunningTimes[i] = node.runningTime;
@@ -99,6 +104,8 @@ SecondStepSolver::Input convertToSecondStepInput(OptimizationInput &optimization
       secondStepInput.taskGroupOutputArrays[i].insert(MemoryManager::managedMemoryAddressToIndexMap[arrayAddress]);
     }
   }
+
+  secondStepInput.taskGroupRunningTimes[sentinelTaskGroupIndex] = 0;
 
   secondStepInput.arraySizes.resize(MemoryManager::managedMemoryAddresses.size());
   for (const auto &[ptr, index] : MemoryManager::managedMemoryAddressToIndexMap) {
@@ -140,14 +147,14 @@ float calculateLongestPath(OptimizationOutput &optimizedGraph, std::map<int, flo
     for (auto v : optimizedGraph.edges[u]) {
       dis[v] = std::max(dis[v], dis[u] + nodeWeight[v]);
       inDegree[v]--;
-      if(inDegree[v] == 0){
+      if (inDegree[v] == 0) {
         q.push(v);
       }
     }
   }
 
   float longestPathLength = 0;
-  for(auto u : optimizedGraph.nodes){
+  for (auto u : optimizedGraph.nodes) {
     longestPathLength = std::max(longestPathLength, dis[u]);
   }
   return longestPathLength;
@@ -158,6 +165,9 @@ OptimizationOutput convertToOptimizationOutput(
   FirstStepSolver::Output &firstStepOutput,
   SecondStepSolver::Output &secondStepOutput
 ) {
+  const int numberOfTaskGroups = firstStepOutput.taskGroupExecutionOrder.size();
+  const int sentinelTaskGroupIndex = numberOfTaskGroups - 1;
+
   OptimizationOutput optimizedGraph;
 
   if (!secondStepOutput.optimal) {
@@ -176,18 +186,18 @@ OptimizationOutput convertToOptimizationOutput(
 
   // Add task groups
   std::vector<int> taskGroupStartNodes, taskGroupBodyNodes, taskGroupEndNodes;
-  for (int i = 0; i < optimizationInput.nodes.size(); i++) {
+  for (int i = 0; i < numberOfTaskGroups; i++) {
     taskGroupStartNodes.push_back(optimizedGraph.addEmptyNode());
     taskGroupBodyNodes.push_back(optimizedGraph.addEmptyNode());
     taskGroupEndNodes.push_back(optimizedGraph.addEmptyNode());
 
     nodeWeight[taskGroupStartNodes[i]] = 0;
-    nodeWeight[taskGroupBodyNodes[i]] = optimizationInput.nodes[i].runningTime;
+    nodeWeight[taskGroupBodyNodes[i]] = i == sentinelTaskGroupIndex ? 0 : optimizationInput.nodes[i].runningTime;
     nodeWeight[taskGroupEndNodes[i]] = 0;
   }
 
   // Add edges between task groups
-  for (int i = 1; i < firstStepOutput.taskGroupExecutionOrder.size(); i++) {
+  for (int i = 1; i < numberOfTaskGroups; i++) {
     const auto previousTaskGroupId = firstStepOutput.taskGroupExecutionOrder[i - 1];
     const auto currentTaskGroupId = firstStepOutput.taskGroupExecutionOrder[i];
     optimizedGraph.addEdge(
@@ -197,7 +207,9 @@ OptimizationOutput convertToOptimizationOutput(
   }
 
   // Add nodes and edges inside task groups
-  for (int i = 0; i < optimizationInput.nodes.size(); i++) {
+  for (int i = 0; i < numberOfTaskGroups; i++) {
+    if (i == sentinelTaskGroupIndex) continue;
+
     auto &taskGroup = optimizationInput.nodes[i];
 
     std::map<TaskId, int> taskIdToOutputNodeIdMap;
@@ -226,6 +238,9 @@ OptimizationOutput convertToOptimizationOutput(
       }
     }
   }
+
+  optimizedGraph.addEdge(taskGroupStartNodes[sentinelTaskGroupIndex], taskGroupBodyNodes[sentinelTaskGroupIndex]);
+  optimizedGraph.addEdge(taskGroupBodyNodes[sentinelTaskGroupIndex], taskGroupEndNodes[sentinelTaskGroupIndex]);
 
   // Add prefetches
   for (const auto &[startingNodeIndex, arrayIndex] : secondStepOutput.prefetches) {
@@ -286,6 +301,9 @@ OptimizationOutput TwoStepOptimizationStrategy::run(OptimizationInput &input) {
   auto firstStepInput = convertToFirstStepInput(input);
   FirstStepSolver firstStepSolver(std::move(firstStepInput));
   auto firstStepOutput = firstStepSolver.solve();
+
+  // Add one sentinel task group at the end
+  firstStepOutput.taskGroupExecutionOrder.push_back(firstStepOutput.taskGroupExecutionOrder.size());
 
   auto secondStepInput = convertToSecondStepInput(input, firstStepOutput);
   SecondStepSolver secondStepSolver;
