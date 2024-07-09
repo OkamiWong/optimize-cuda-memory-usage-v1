@@ -4,7 +4,7 @@ add_executable(captureGraph captureGraph.cu)
 target_link_libraries(captureGraph memopt)
 
 add_executable(modifyKernelNodeParams modifyKernelNodeParams.cu)
-target_link_libraries(modifyKernelNodeParams memopt -lcuda)
+target_link_libraries(modifyKernelNodeParams memopt CUDA::cuda_driver)
 
 add_executable(monitorMemoryUsage monitorMemoryUsage.cu)
 target_link_libraries(monitorMemoryUsage memopt fmt::fmt)

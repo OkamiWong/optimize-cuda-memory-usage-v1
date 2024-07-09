@@ -15,7 +15,7 @@ target_link_libraries(
   cudaGraphExecutionTimelineProfiler
   peakMemoryUsageProfiler
   utilities
-  -lcuda
+  CUDA::cuda_driver
 )
 
 add_subdirectory(strategies)
