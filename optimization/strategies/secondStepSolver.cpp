@@ -402,7 +402,7 @@ struct IntegerProgrammingSolver {
       }
     }
 
-    const float infinityForTime = 10.0 * originalTotalRunningTime;
+    const float infinityForTime = 1000.0 * originalTotalRunningTime;
 
     for (int u = 0; u < numberOfVertices; u++) {
       if (u != getTaskGroupStartVertexIndex(0)) {
