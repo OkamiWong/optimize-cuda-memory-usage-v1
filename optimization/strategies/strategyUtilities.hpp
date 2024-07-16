@@ -6,6 +6,6 @@
 namespace memopt {
 
 void printOptimizationInput(OptimizationInput &input);
-void printOptimizationOutput(OptimizationOutput &output);
+void printOptimizationOutput(OptimizationOutput &output, int stageIndex);
 
 }  // namespace memopt

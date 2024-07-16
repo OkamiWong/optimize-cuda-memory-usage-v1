@@ -345,6 +345,8 @@ OptimizationInput constructOptimizationInput(
 
   optimizationInput.forceAllArraysToResideOnHostInitiallyAndFinally = false;
 
+  optimizationInput.stageIndex = 0;
+
   return optimizationInput;
 }
 
@@ -385,6 +387,7 @@ std::vector<OptimizationInput> constructOptimizationInputsForStages(
       )
     );
     optimizationInputs.rbegin()->forceAllArraysToResideOnHostInitiallyAndFinally = true;
+    optimizationInputs.rbegin()->stageIndex = i;
   }
   return optimizationInputs;
 }

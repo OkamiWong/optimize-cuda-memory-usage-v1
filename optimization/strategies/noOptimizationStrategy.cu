@@ -61,7 +61,7 @@ OptimizationOutput NoOptimizationStrategy::run(OptimizationInput &input) {
     }
   }
 
-  printOptimizationOutput(output);
+  printOptimizationOutput(output, input.stageIndex);
 
   return output;
 }

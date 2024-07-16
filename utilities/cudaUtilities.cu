@@ -1,4 +1,5 @@
 #include <cassert>
+#include <cstdlib>
 
 #include "configurationManager.hpp"
 #include "cudaUtilities.hpp"
@@ -30,6 +31,9 @@ void initializeCudaDevice(bool displayDeviceInfo) {
   }
 
   warmUpCudaDevice();
+
+  // Create folder for debug outputs
+  system("mkdir -p debug");
 }
 
 void enablePeerAccessForNvlink(int deviceA, int deviceB) {

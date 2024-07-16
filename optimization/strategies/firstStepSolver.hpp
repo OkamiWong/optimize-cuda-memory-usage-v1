@@ -12,6 +12,7 @@ class FirstStepSolver {
     TaskGroupId n;
     std::vector<std::vector<TaskGroupId>> edges;
     std::vector<std::vector<size_t>> dataDependencyOverlapInBytes;
+    int stageIndex;
   };
 
   struct Output {

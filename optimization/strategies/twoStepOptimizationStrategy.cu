@@ -73,6 +73,8 @@ FirstStepSolver::Input convertToFirstStepInput(OptimizationInput &optimizationIn
     }
   }
 
+  firstStepInput.stageIndex = optimizationInput.stageIndex;
+
   return firstStepInput;
 }
 
@@ -85,6 +87,7 @@ SecondStepSolver::Input convertToSecondStepInput(OptimizationInput &optimization
   secondStepInput.offloadingBandwidth = ConfigurationManager::getConfig().optimization.prefetchingBandwidthInGB * 1e9;
   secondStepInput.originalTotalRunningTime = optimizationInput.originalTotalRunningTime;
   secondStepInput.forceAllArraysToResideOnHostInitiallyAndFinally = optimizationInput.forceAllArraysToResideOnHostInitiallyAndFinally;
+  secondStepInput.stageIndex = optimizationInput.stageIndex;
 
   secondStepInput.taskGroupRunningTimes.resize(numberOfTaskGroups);
   secondStepInput.taskGroupInputArrays.resize(numberOfTaskGroups);
@@ -311,7 +314,7 @@ OptimizationOutput TwoStepOptimizationStrategy::run(OptimizationInput &input) {
 
   auto output = convertToOptimizationOutput(input, firstStepOutput, secondStepOutput);
 
-  printOptimizationOutput(output);
+  printOptimizationOutput(output, input.stageIndex);
 
   return output;
 }

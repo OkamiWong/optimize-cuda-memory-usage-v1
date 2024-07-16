@@ -33,9 +33,10 @@ void printTaskGroups(FILE *fp, OptimizationInput &input) {
 }
 
 void printOptimizationInput(OptimizationInput &input) {
-  LOG_TRACE_WITH_INFO("Printing OptimizationInput to optimizationInput.dot");
+  std::string outputFilePath = fmt::format("debug/{}.optimizationInput.dot", input.stageIndex);
+  LOG_TRACE_WITH_INFO("Printing OptimizationInput to %s", outputFilePath.c_str());
 
-  auto fp = fopen("optimizationInput.dot", "w");
+  auto fp = fopen(outputFilePath.c_str(), "w");
 
   fmt::print(fp, "digraph G {{\n");
 
@@ -76,10 +77,11 @@ void printEdges(FILE *fp, OptimizationOutput &output) {
   }
 }
 
-void printOptimizationOutput(OptimizationOutput &output) {
-  LOG_TRACE_WITH_INFO("Printing OptimizationOutput to optimizationOutput.dot");
+void printOptimizationOutput(OptimizationOutput &output, int stageIndex) {
+  std::string outputFilePath = fmt::format("debug/{}.optimizationOutput.dot", stageIndex);
+  LOG_TRACE_WITH_INFO("Printing OptimizationOutput to %s", outputFilePath.c_str());
 
-  auto fp = fopen("optimizationOutput.dot", "w");
+  auto fp = fopen(outputFilePath.c_str(), "w");
 
   fmt::print(fp, "digraph G {{\n");
 

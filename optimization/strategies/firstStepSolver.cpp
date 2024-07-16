@@ -66,9 +66,10 @@ void FirstStepSolver::dfs(size_t currentTotalOverlap) {
 }
 
 void FirstStepSolver::printSolution() {
-  LOG_TRACE_WITH_INFO("Printing solution to firstStepSolver.out");
+  std::string outputFilePath = fmt::format("debug/{}.firstStepSolver.out", input.stageIndex);
+  LOG_TRACE_WITH_INFO("Printing solution to %s", outputFilePath.c_str());
 
-  auto fp = fopen("firstStepSolver.out", "w");
+  auto fp = fopen(outputFilePath.c_str(), "w");
 
   fmt::print(fp, "maxTotalOverlap = {}\n", this->maxTotalOverlap);
 

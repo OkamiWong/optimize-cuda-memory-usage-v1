@@ -22,6 +22,7 @@ class SecondStepSolver {
     float originalTotalRunningTime;
 
     bool forceAllArraysToResideOnHostInitiallyAndFinally;
+    int stageIndex;
   };
 
   struct Output {

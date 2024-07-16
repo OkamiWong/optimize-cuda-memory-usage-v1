@@ -23,9 +23,11 @@ struct OptimizationInput {
   std::vector<TaskGroup> nodes;
   std::map<TaskGroupId, std::vector<TaskGroupId>> edges;
 
+  float originalTotalRunningTime;
+
   bool forceAllArraysToResideOnHostInitiallyAndFinally;
 
-  float originalTotalRunningTime;
+  int stageIndex;
 };
 
 }  // namespace memopt

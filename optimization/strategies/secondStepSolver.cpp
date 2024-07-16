@@ -16,9 +16,6 @@
 using namespace operations_research;
 
 namespace memopt {
-
-int stageCount = 0;
-
 // Need separate the or_tools reference with cu files,
 // because nvcc cannot compile or_tools
 struct IntegerProgrammingSolver {
@@ -474,17 +471,7 @@ struct IntegerProgrammingSolver {
   }
 
   void printSolution(MPSolver::ResultStatus resultStatus) {
-    stageCount++;
-    std::string outputFilePath = "secondStepSolver.out";
-    if (stageCount > 1) {
-      if (stageCount == 2) {
-        LOG_TRACE_WITH_INFO("Moving secondStepSolver.out to secondStepSolverOutputs/0.out");
-        system("mkdir -p secondStepSolverOutputs");
-        system("cp secondStepSolver.out secondStepSolverOutputs/0.out");
-      }
-      outputFilePath = fmt::format("secondStepSolverOutputs/{}.out", stageCount - 1);
-    }
-
+    std::string outputFilePath = fmt::format("debug/{}.secondStepSolver.out", input.stageIndex);
     LOG_TRACE_WITH_INFO("Printing solution to %s", outputFilePath.c_str());
 
     auto fp = fopen(outputFilePath.c_str(), "w");
@@ -556,9 +543,10 @@ struct IntegerProgrammingSolver {
 
   // For checking scale of numbers
   void printDurationsAndSizes() {
-    LOG_TRACE_WITH_INFO("Printing input to secondStepSolverInput.out");
+    std::string outputFilePath = fmt::format("debug/{}.secondStepSolverInput.out", input.stageIndex);
+    LOG_TRACE_WITH_INFO("Printing input to %s", outputFilePath.c_str());
 
-    auto fp = fopen("secondStepSolverInput.out", "w");
+    auto fp = fopen(outputFilePath.c_str(), "w");
     float minDuration = std::numeric_limits<float>::max();
     float maxDuration = 0;
     for (int i = 0; i < numberOfTaskGroups; i++) {
