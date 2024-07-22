@@ -29,6 +29,8 @@ struct Configuration {
   } generic;
 
   struct Optimization {
+    bool loadExistingPlan = false;
+    std::string planPath = "optimizationPlan.json";
     bool mergeConcurrentCudaGraphNodes = true;
     double prefetchingBandwidthInGB = 281.0;
     double acceptableRunningTimeFactor = 10.0;
@@ -40,6 +42,8 @@ struct Configuration {
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(
       Optimization,
+      loadExistingPlan,
+      planPath,
       mergeConcurrentCudaGraphNodes,
       prefetchingBandwidthInGB,
       acceptableRunningTimeFactor,
@@ -122,7 +126,7 @@ class ConfigurationManager {
   }
 
   static void validateConfiguration() {
-    if (configuration.generic.optimize && configuration.generic.useUM){
+    if (configuration.generic.optimize && configuration.generic.useUM) {
       throw std::invalid_argument("generic.optimize and generic.useUM cannot be true at the same time");
     }
   }

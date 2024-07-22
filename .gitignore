@@ -9,7 +9,8 @@ config.json
 currentConfig.json
 defaultConfig.json
 
-# Debug
+# Artifacts
+*Plan*.json
 *.dot
 *.z3-trace
 *.out

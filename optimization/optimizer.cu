@@ -445,6 +445,76 @@ OptimizationOutput mergeOptimizationOutputs(std::vector<OptimizationOutput> &opt
   return mergedOptimizationOutput;
 }
 
+struct SerializableOptimizationOutputNode {
+  int nodeId;
+  std::vector<int> edges;
+  OptimizationOutput::NodeType nodeType;
+  int taskId;
+  OptimizationOutput::DataMovement::Direction direction;
+  int arrayId;
+
+  NLOHMANN_DEFINE_TYPE_INTRUSIVE(
+    SerializableOptimizationOutputNode,
+    nodeId,
+    nodeType,
+    edges,
+    taskId,
+    direction,
+    arrayId
+  );
+};
+
+void writeOptimizationOutputToFile(OptimizationOutput &output, const std::string &path) {
+  LOG_TRACE_WITH_INFO("Printing optimization plan to %s", path.c_str());
+
+  std::vector<SerializableOptimizationOutputNode> serializableNodes;
+  for (auto i : output.nodes) {
+    SerializableOptimizationOutputNode node;
+    node.nodeId = i;
+    node.edges = output.edges[i];
+    node.nodeType = output.nodeIdToNodeTypeMap[i];
+    if (node.nodeType == OptimizationOutput::NodeType::task) {
+      node.taskId = output.nodeIdToTaskIdMap[i];
+    } else if (node.nodeType == OptimizationOutput::NodeType::dataMovement) {
+      node.direction = output.nodeIdToDataMovementMap[i].direction;
+      node.arrayId = output.nodeIdToDataMovementMap[i].arrayId;
+    }
+
+    serializableNodes.push_back(node);
+  }
+
+  nlohmann::json j;
+  j["nodes"] = serializableNodes;
+  j["arraysInitiallyAllocatedOnDevice"] = output.arraysInitiallyAllocatedOnDevice;
+  std::string s = j.dump(2);
+  std::ofstream f(path);
+  f << s << std::endl;
+}
+
+OptimizationOutput loadOptimizationOutput(const std::string &path) {
+  LOG_TRACE_WITH_INFO("Loading optimization plan from %s", path.c_str());
+
+  std::ifstream f(path);
+  auto j = nlohmann::json::parse(f);
+  auto serializableNodes = j.at("nodes").get<std::vector<SerializableOptimizationOutputNode>>();
+
+  OptimizationOutput output;
+  for (const auto &node : serializableNodes) {
+    output.nodes.push_back(node.nodeId);
+    output.edges[node.nodeId] = node.edges;
+    output.nodeIdToNodeTypeMap[node.nodeId] = node.nodeType;
+    if (node.nodeType == OptimizationOutput::NodeType::task) {
+      output.nodeIdToTaskIdMap[node.nodeId] = node.taskId;
+    } else {
+      output.nodeIdToDataMovementMap[node.nodeId] = {node.direction, node.arrayId};
+    }
+  }
+
+  output.arraysInitiallyAllocatedOnDevice = j.at("arraysInitiallyAllocatedOnDevice").get<std::vector<ArrayId>>();
+
+  return output;
+}
+
 Optimizer *Optimizer::instance = nullptr;
 
 Optimizer *Optimizer::getInstance() {
@@ -455,6 +525,10 @@ Optimizer *Optimizer::getInstance() {
 }
 
 OptimizationOutput Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
+  if (ConfigurationManager::getConfig().optimization.loadExistingPlan) {
+    return loadOptimizationOutput(ConfigurationManager::getConfig().optimization.planPath);
+  }
+
   registerDummyKernelHandles();
   ScopeGuard scopeGuard([]() -> void { cleanUpDummyKernelFuncHandleRegistrations(); });
 
@@ -491,10 +565,11 @@ OptimizationOutput Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
   if (hasOnlyOneStage) {
     auto optimizationInput = constructOptimizationInput(originalGraph, nodes, edges, timeline, disjointSet, nodeToAnnotationMap);
 
-    auto optimizedGraph = this->optimize<TwoStepOptimizationStrategy>(optimizationInput);
+    auto optimizationOutput = this->optimize<TwoStepOptimizationStrategy>(optimizationInput);
 
-    if (optimizedGraph.optimal) {
-      return optimizedGraph;
+    if (optimizationOutput.optimal) {
+      writeOptimizationOutputToFile(optimizationOutput, ConfigurationManager::getConfig().optimization.planPath);
+      return optimizationOutput;
     } else {
       LOG_TRACE_WITH_INFO("Could not find any feasible solution");
       exit(-1);
@@ -513,7 +588,9 @@ OptimizationOutput Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
       }
     }
 
-    return mergeOptimizationOutputs(optimizationOutputs);
+    auto mergedOptimizationOutput = mergeOptimizationOutputs(optimizationOutputs);
+    writeOptimizationOutputToFile(mergedOptimizationOutput, ConfigurationManager::getConfig().optimization.planPath);
+    return mergedOptimizationOutput;
   }
 }
 

@@ -1,23 +1,25 @@
 #pragma once
 
 #include <map>
+#include <string>
 #include <utility>
 #include <vector>
 
+#include "../include/json.hpp"
 #include "../utilities/types.hpp"
 
 namespace memopt {
 
 struct OptimizationOutput {
   enum class NodeType {
-    empty,
+    empty = 0,
     task,
     dataMovement
   };
 
   struct DataMovement {
     enum class Direction {
-      hostToDevice,
+      hostToDevice = 0,
       deviceToHost
     };
     Direction direction;
