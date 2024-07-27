@@ -33,9 +33,10 @@ struct Configuration {
     std::string planPath = "optimizationPlan.json";
     bool mergeConcurrentCudaGraphNodes = true;
     double prefetchingBandwidthInGB = 281.0;
-    double acceptableRunningTimeFactor = 10.0;
+    double acceptableRunningTimeFactor = 0.0;
     int minManagedArraySize = 0;
     std::string solver = "SCIP";
+    double maxPeakMemoryUsageInMiB = 0.0;
     double weightOfPeakMemoryUsage = 1.0;
     double weightOfTotalRunningTime = 0.0001;
     double weightOfNumberOfMigrations = 0.00001;
@@ -49,6 +50,7 @@ struct Configuration {
       acceptableRunningTimeFactor,
       minManagedArraySize,
       solver,
+      maxPeakMemoryUsageInMiB,
       weightOfPeakMemoryUsage,
       weightOfTotalRunningTime,
       weightOfNumberOfMigrations

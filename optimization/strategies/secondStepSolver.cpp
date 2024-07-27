@@ -416,8 +416,13 @@ struct IntegerProgrammingSolver {
       }
     }
 
-    auto zLastKernelConstraint = solver->MakeRowConstraint(0, originalTotalRunningTime * ConfigurationManager::getConfig().optimization.acceptableRunningTimeFactor);
-    zLastKernelConstraint->SetCoefficient(z[getTaskGroupVertexIndex(numberOfTaskGroups - 1)], 1);
+    if (ConfigurationManager::getConfig().optimization.acceptableRunningTimeFactor > std::numeric_limits<double>::epsilon()) {
+      auto zLastKernelConstraint = solver->MakeRowConstraint(
+        0,
+        originalTotalRunningTime * ConfigurationManager::getConfig().optimization.acceptableRunningTimeFactor
+      );
+      zLastKernelConstraint->SetCoefficient(z[getTaskGroupVertexIndex(numberOfTaskGroups - 1)], 1);
+    }
   }
 
   void addKernelDataDependencyConstraints() {
@@ -447,6 +452,14 @@ struct IntegerProgrammingSolver {
       for (int j = 0; j < numberOfArrays; j++) {
         constraint->SetCoefficient(x[i][j], -static_cast<double>(this->input.arraySizes[j]) / 1024.0 / 1024.0);
       }
+    }
+
+    if (ConfigurationManager::getConfig().optimization.maxPeakMemoryUsageInMiB > std::numeric_limits<double>::epsilon()) {
+      auto maxPeakMemoryUsageConstraint = solver->MakeRowConstraint(
+        0,
+        ConfigurationManager::getConfig().optimization.maxPeakMemoryUsageInMiB
+      );
+      maxPeakMemoryUsageConstraint->SetCoefficient(peakMemoryUsage, 1);
     }
   }
 
@@ -603,12 +616,18 @@ struct IntegerProgrammingSolver {
     defineNumberOfDataMovements();
 
     auto objective = solver->MutableObjective();
-    objective->SetCoefficient(peakMemoryUsage, ConfigurationManager::getConfig().optimization.weightOfPeakMemoryUsage);
-    objective->SetCoefficient(numberOfDataMovements, ConfigurationManager::getConfig().optimization.weightOfNumberOfMigrations);
-    objective->SetCoefficient(
-      z[getTaskGroupVertexIndex(numberOfTaskGroups - 1)],
-      originalPeakMemoryUsageToTotalRunningTimeRatio * ConfigurationManager::getConfig().optimization.weightOfTotalRunningTime
-    );
+    if (ConfigurationManager::getConfig().optimization.weightOfPeakMemoryUsage > std::numeric_limits<double>::epsilon()) {
+      objective->SetCoefficient(peakMemoryUsage, ConfigurationManager::getConfig().optimization.weightOfPeakMemoryUsage);
+    }
+    if (ConfigurationManager::getConfig().optimization.weightOfNumberOfMigrations > std::numeric_limits<double>::epsilon()) {
+      objective->SetCoefficient(numberOfDataMovements, ConfigurationManager::getConfig().optimization.weightOfNumberOfMigrations);
+    }
+    if (ConfigurationManager::getConfig().optimization.weightOfTotalRunningTime > std::numeric_limits<double>::epsilon()) {
+      objective->SetCoefficient(
+        z[getTaskGroupVertexIndex(numberOfTaskGroups - 1)],
+        originalPeakMemoryUsageToTotalRunningTimeRatio * ConfigurationManager::getConfig().optimization.weightOfTotalRunningTime
+      );
+    }
     objective->SetMinimization();
 
     solver->set_time_limit(1000 * 60 * 30);
