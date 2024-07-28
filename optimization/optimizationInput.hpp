@@ -25,7 +25,8 @@ struct OptimizationInput {
 
   float originalTotalRunningTime;
 
-  bool forceAllArraysToResideOnHostInitiallyAndFinally;
+  bool specifyArraysInitiallyAllocatedOnDevice;
+  std::vector<ArrayId> arraysInitiallyAllocatedOnDevice;
 
   int stageIndex;
 };
