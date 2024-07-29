@@ -160,12 +160,7 @@ struct IntegerProgrammingSolver {
       initiallyAllocatedOnDevice[i]->SetUB(0);
     }
 
-    if (input.specifyArraysInitiallyAllocatedOnDevice) {
-      for (auto arr : input.arraysInitiallyAllocatedOnDevice) {
-        initiallyAllocatedOnDevice[arr]->SetLB(1);
-        initiallyAllocatedOnDevice[arr]->SetUB(1);
-      }
-    } else {
+    if (!input.forceAllArraysToResideOnHostInitiallyAndFinally) {
       for (auto arr : input.applicationInputArrays) {
         initiallyAllocatedOnDevice[arr]->SetUB(1);
       }
@@ -234,6 +229,12 @@ struct IntegerProgrammingSolver {
             constraint->SetCoefficient(o[u][j][v], -1);
           }
         }
+      }
+    }
+
+    if (input.forceAllArraysToResideOnHostInitiallyAndFinally) {
+      for (int j = 0; j < numberOfArrays; j++) {
+        x[numberOfTaskGroups - 1][j]->SetUB(0);
       }
     }
 

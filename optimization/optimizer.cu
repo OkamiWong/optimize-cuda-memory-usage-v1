@@ -4,7 +4,6 @@
 #include <cassert>
 #include <exception>
 #include <limits>
-#include <queue>
 #include <utility>
 
 #include "../profiling/annotation.hpp"
@@ -344,7 +343,7 @@ OptimizationInput constructOptimizationInput(
 
   optimizationInput.originalTotalRunningTime = static_cast<float>(globalMaxEnd - globalMinStart) * 1e-9f;
 
-  optimizationInput.specifyArraysInitiallyAllocatedOnDevice = false;
+  optimizationInput.forceAllArraysToResideOnHostInitiallyAndFinally = false;
 
   optimizationInput.stageIndex = 0;
 
@@ -387,55 +386,10 @@ std::vector<OptimizationInput> constructOptimizationInputsForStages(
         originalGraph, nodesPerStage[i], edgesPerStage[i], timeline, disjointSet, nodeToAnnotationMap
       )
     );
+    optimizationInputs.rbegin()->forceAllArraysToResideOnHostInitiallyAndFinally = true;
     optimizationInputs.rbegin()->stageIndex = i;
   }
   return optimizationInputs;
-}
-
-std::vector<ArrayId> getArraysRemainedOnDeviceAfterPlanExecution(const OptimizationOutput &optimizationOutput) {
-  std::map<int, int> inDegrees;
-  for (const auto &[u, outEdges] : optimizationOutput.edges) {
-    for (const auto &v : outEdges) {
-      inDegrees[v] += 1;
-    }
-  }
-
-  std::queue<int> nodesToExecute;
-  for (const auto &u : optimizationOutput.nodes) {
-    if (inDegrees[u] == 0) {
-      nodesToExecute.push(u);
-    }
-  }
-
-  std::set<ArrayId> arraysOnDevice(
-    optimizationOutput.arraysInitiallyAllocatedOnDevice.begin(),
-    optimizationOutput.arraysInitiallyAllocatedOnDevice.end()
-  );
-
-  // Kahn Algorithm
-  while (!nodesToExecute.empty()) {
-    auto u = nodesToExecute.front();
-    nodesToExecute.pop();
-    auto nodeType = optimizationOutput.nodeIdToNodeTypeMap.at(u);
-    if (nodeType == OptimizationOutput::NodeType::dataMovement) {
-      auto dataMovement = optimizationOutput.nodeIdToDataMovementMap.at(u);
-      if (dataMovement.direction == OptimizationOutput::DataMovement::Direction::hostToDevice) {
-        arraysOnDevice.insert(dataMovement.arrayId);
-      } else {
-        arraysOnDevice.erase(dataMovement.arrayId);
-      }
-    }
-
-    for (auto &v : optimizationOutput.edges.at(u)) {
-      inDegrees[v]--;
-      if (inDegrees[v] == 0) {
-        nodesToExecute.push(v);
-      }
-    }
-  }
-
-  std::vector<ArrayId> arraysRemained(arraysOnDevice.begin(), arraysOnDevice.end());
-  return arraysRemained;
 }
 
 OptimizationOutput mergeOptimizationOutputs(std::vector<OptimizationOutput> &optimizationOutputs) {
@@ -486,7 +440,7 @@ OptimizationOutput mergeOptimizationOutputs(std::vector<OptimizationOutput> &opt
     globalNodeIndexOffset += output.nodes.size();
   }
 
-  mergedOptimizationOutput.arraysInitiallyAllocatedOnDevice = optimizationOutputs[0].arraysInitiallyAllocatedOnDevice;
+  mergedOptimizationOutput.arraysInitiallyAllocatedOnDevice.clear();
 
   return mergedOptimizationOutput;
 }
@@ -627,11 +581,6 @@ OptimizationOutput Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
 
     std::vector<OptimizationOutput> optimizationOutputs;
     for (int i = 0; i < optimizationInputs.size(); i++) {
-      if (i > 0) {
-        optimizationInputs[i].specifyArraysInitiallyAllocatedOnDevice = true;
-        optimizationInputs[i].arraysInitiallyAllocatedOnDevice
-          = getArraysRemainedOnDeviceAfterPlanExecution(optimizationOutputs[i - 1]);
-      }
       optimizationOutputs.push_back(this->optimize<TwoStepOptimizationStrategy>(optimizationInputs[i]));
       if (optimizationOutputs.rbegin()->optimal == false) {
         LOG_TRACE_WITH_INFO("Could not find any feasible solution for stage %d", i);

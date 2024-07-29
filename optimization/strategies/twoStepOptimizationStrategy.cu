@@ -86,10 +86,7 @@ SecondStepSolver::Input convertToSecondStepInput(OptimizationInput &optimization
   secondStepInput.prefetchingBandwidth = ConfigurationManager::getConfig().optimization.prefetchingBandwidthInGB * 1e9;
   secondStepInput.offloadingBandwidth = ConfigurationManager::getConfig().optimization.prefetchingBandwidthInGB * 1e9;
   secondStepInput.originalTotalRunningTime = optimizationInput.originalTotalRunningTime;
-
-  secondStepInput.specifyArraysInitiallyAllocatedOnDevice = optimizationInput.specifyArraysInitiallyAllocatedOnDevice;
-  secondStepInput.arraysInitiallyAllocatedOnDevice = optimizationInput.arraysInitiallyAllocatedOnDevice;
-
+  secondStepInput.forceAllArraysToResideOnHostInitiallyAndFinally = optimizationInput.forceAllArraysToResideOnHostInitiallyAndFinally;
   secondStepInput.stageIndex = optimizationInput.stageIndex;
 
   secondStepInput.taskGroupRunningTimes.resize(numberOfTaskGroups);

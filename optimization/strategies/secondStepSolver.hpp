@@ -21,9 +21,7 @@ class SecondStepSolver {
 
     float originalTotalRunningTime;
 
-    bool specifyArraysInitiallyAllocatedOnDevice;
-    std::vector<ArrayId> arraysInitiallyAllocatedOnDevice;
-
+    bool forceAllArraysToResideOnHostInitiallyAndFinally;
     int stageIndex;
   };
 
