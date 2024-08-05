@@ -347,6 +347,34 @@ OptimizationInput constructOptimizationInput(
 
   optimizationInput.stageIndex = 0;
 
+  // Print statistics
+  double averageTaskGroupRunningTime = 0.0;
+  double averageTaskGroupDataDependencySizeInGiB = 0.0;
+  double averageTaskGroupProcessingSpeed = 0.0;
+  for (const auto &tg : optimizationInput.nodes) {
+    averageTaskGroupRunningTime += tg.runningTime;
+
+    size_t s = 0;
+    for (auto p : tg.dataDependency.inputs) {
+      s += MemoryManager::managedMemoryAddressToSizeMap[p];
+    }
+    for (auto p : tg.dataDependency.outputs) {
+      s += MemoryManager::managedMemoryAddressToSizeMap[p];
+    }
+
+    averageTaskGroupDataDependencySizeInGiB += (double)s / 1024.0 / 1024.0 / 1024.0;
+
+    averageTaskGroupProcessingSpeed += (double)s / 1024.0 / 1024.0 / 1024.0 / tg.runningTime;
+  }
+  averageTaskGroupRunningTime /= optimizationInput.nodes.size();
+  averageTaskGroupDataDependencySizeInGiB /= optimizationInput.nodes.size();
+  averageTaskGroupProcessingSpeed /= optimizationInput.nodes.size();
+
+  LOG_TRACE_WITH_INFO("Number of task groups: %d", (int)optimizationInput.nodes.size());
+  LOG_TRACE_WITH_INFO("Average task group running time (s): %.12lf", averageTaskGroupRunningTime);
+  LOG_TRACE_WITH_INFO("Average task group data dependency size (GiB): %.12lf", averageTaskGroupDataDependencySizeInGiB);
+  LOG_TRACE_WITH_INFO("Average task group data processing speed (GiB / s): %.12lf", averageTaskGroupProcessingSpeed);
+
   return optimizationInput;
 }
 
