@@ -23,6 +23,8 @@
 
 using namespace memopt;
 
+const std::string INPUT_MATRIX_FILE_PATH = "tiledCholeskyInputMatrix.in";
+
 size_t N;
 size_t B;
 size_t T;
@@ -389,6 +391,15 @@ void initializeDeviceData(double *h_originalMatrix, std::vector<double *> &d_til
 }
 
 void tiledCholesky(bool optimize, bool verify) {
+  if (ConfigurationManager::getConfig().tiledCholesky.mode
+      == Configuration::TiledCholesky::Mode::readInputMatrixFromFileAndRunBeyondDeviceCapacity) {
+    if (!ConfigurationManager::getConfig().generic.optimize
+        || !ConfigurationManager::getConfig().optimization.loadExistingPlan) {
+      LOG_TRACE_WITH_INFO("Must enable optimization and load existing plan when problem size is beyond device memory capacity");
+      exit(-1);
+    }
+  }
+
   SystemWallClock clock;
   clock.start();
 
@@ -399,20 +410,49 @@ void tiledCholesky(bool optimize, bool verify) {
   // Initialize data
   clock.logWithCurrentTime("Initialzing host data");
   auto h_originalMatrix = std::make_unique<double[]>(N * N);  // Column-major
-  initializeHostData(h_originalMatrix.get());
+
+  if (ConfigurationManager::getConfig().tiledCholesky.mode
+      == Configuration::TiledCholesky::Mode::readInputMatrixFromFileAndRunBeyondDeviceCapacity) {
+    clock.logWithCurrentTime("Loading input matrix from file");
+    std::ifstream fin(INPUT_MATRIX_FILE_PATH);
+    std::string s;
+    int i = 0;
+    while (std::getline(fin, s)) {
+      h_originalMatrix[i++] = std::stod(s);
+    }
+    clock.logWithCurrentTime("Input matrix loaded");
+  } else {
+    initializeHostData(h_originalMatrix.get());
+  }
+
   clock.logWithCurrentTime("Host data initialized");
+
+  if (ConfigurationManager::getConfig().tiledCholesky.mode
+      == Configuration::TiledCholesky::Mode::dumpInputMatrixToFile) {
+    clock.logWithCurrentTime("Dumping input matrix");
+    std::ofstream fout(INPUT_MATRIX_FILE_PATH);
+    fout << std::setprecision(10);
+    for (size_t i = 0; i < N * N; i++) {
+      fout << h_originalMatrix[i] << '\n';
+    }
+    clock.logWithCurrentTime("Input matrix dumped");
+    return;
+  }
 
   // Initialize device data
   clock.logWithCurrentTime("Initialzing device data");
   std::vector<double *> d_tiles(T * T);
   for (int i = 0; i < T * T; i++) {
-    if (ConfigurationManager::getConfig().generic.useUM) {
+    if (ConfigurationManager::getConfig().generic.useUM
+        || ConfigurationManager::getConfig().tiledCholesky.mode == Configuration::TiledCholesky::Mode::readInputMatrixFromFileAndRunBeyondDeviceCapacity) {
       checkCudaErrors(cudaMallocManaged(&d_tiles[i], tileSize));
     } else {
       checkCudaErrors(cudaMalloc(&d_tiles[i], tileSize));
     }
   }
-  initializeDeviceData(h_originalMatrix.get(), d_tiles);
+
+  // initializeDeviceData(h_originalMatrix.get(), d_tiles);
+
   clock.logWithCurrentTime("Device data initialized");
 
   auto getMatrixBlock = [&](int i, int j) {
@@ -596,6 +636,29 @@ void tiledCholesky(bool optimize, bool verify) {
   checkCudaErrors(cudaGraphDebugDotPrint(graph, "./graph.dot", 0));
 
   clock.logWithCurrentTime("Graph printed");
+
+  if (ConfigurationManager::getConfig().tiledCholesky.mode
+      == Configuration::TiledCholesky::Mode::readInputMatrixFromFileAndRunBeyondDeviceCapacity) {
+    auto optimizedGraph = profileAndOptimize(graph);
+
+    initializeDeviceData(h_originalMatrix.get(), d_tiles);
+
+    float runningTime;
+    std::map<void *, void *> managedDeviceArrayToHostArrayMap;
+    executeOptimizedGraph(
+      optimizedGraph,
+      [&](int taskId, std::map<void *, void *> addressUpdate, cudaStream_t stream) {
+        tiledCholeskyTaskManager->executeRandomTask(getMatrixBlock, taskId, addressUpdate, stream);
+      },
+      runningTime,
+      managedDeviceArrayToHostArrayMap
+    );
+
+    checkCudaErrors(cudaDeviceSynchronize());
+    fmt::print("Total time used (s): {}\n", runningTime);
+
+    return;
+  }
 
   if (optimize) {
     auto optimizedGraph = profileAndOptimize(graph);

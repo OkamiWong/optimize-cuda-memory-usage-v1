@@ -13,5 +13,6 @@ defaultConfig.json
 *Plan*.json
 *.dot
 *.z3-trace
+*.in
 *.out
 debug/

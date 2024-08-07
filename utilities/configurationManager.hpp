@@ -76,11 +76,17 @@ struct Configuration {
   struct TiledCholesky {
     int n = 256;
     int t = 4;
+    enum class Mode {
+      normal = 0,
+      dumpInputMatrixToFile,
+      readInputMatrixFromFileAndRunBeyondDeviceCapacity
+    } mode = Mode::normal;
 
     NLOHMANN_DEFINE_TYPE_INTRUSIVE(
       TiledCholesky,
       n,
-      t
+      t,
+      mode
     );
   } tiledCholesky;
 
