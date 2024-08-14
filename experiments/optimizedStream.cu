@@ -113,8 +113,11 @@ void runOptimizedStream(size_t arraySize, int numberOfKernels, int prefetchCycle
   checkCudaErrors(cudaStreamCreate(&computeStream));
   checkCudaErrors(cudaStreamCreate(&dataMovementStream));
 
+  int numberOfKernelsPrefetchedOnTheFly = 0;
+
   for (int i = 0; i < numberOfKernels; i++) {
     if (i != 1 && i > 0 && (i - 1) % prefetchCycleLength == 0) {
+      numberOfKernelsPrefetchedOnTheFly++;
       LOG_TRACE_WITH_INFO("Kernel %d is prefetched", i);
 
       checkCudaErrors(cudaMallocHost(&aOnStorageDevice[i], arraySize));
@@ -172,6 +175,8 @@ void runOptimizedStream(size_t arraySize, int numberOfKernels, int prefetchCycle
 
   clock.end(computeStream);
   checkCudaErrors(cudaStreamSynchronize(computeStream));
+
+  LOG_TRACE_WITH_INFO("Number of kernels prefetched: %d", numberOfKernelsPrefetchedOnTheFly);
 
   const auto peakMemoryUsage = profiler.end();
   LOG_TRACE_WITH_INFO(
