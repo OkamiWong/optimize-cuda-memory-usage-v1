@@ -76,7 +76,7 @@ void warmUpDataMovement(int deviceA, int deviceB) {
 
   int *arrayOnA;
   if (deviceA == cudaCpuDeviceId) {
-    arrayOnA = (int *)malloc(ARRAY_SIZE);
+    checkCudaErrors(cudaMallocHost(&arrayOnA, ARRAY_SIZE));
     memset(arrayOnA, 0, ARRAY_SIZE);
   } else {
     checkCudaErrors(cudaSetDevice(deviceA));
@@ -86,7 +86,7 @@ void warmUpDataMovement(int deviceA, int deviceB) {
 
   int *arrayOnB;
   if (deviceB == cudaCpuDeviceId) {
-    arrayOnB = (int *)malloc(ARRAY_SIZE);
+    checkCudaErrors(cudaMallocHost(&arrayOnB, ARRAY_SIZE));
   } else {
     checkCudaErrors(cudaSetDevice(deviceB));
     checkCudaErrors(cudaMalloc(&arrayOnB, ARRAY_SIZE));
@@ -98,13 +98,13 @@ void warmUpDataMovement(int deviceA, int deviceB) {
   checkCudaErrors(cudaDeviceSynchronize());
 
   if (deviceA == cudaCpuDeviceId) {
-    free(arrayOnA);
+    cudaFreeHost(arrayOnA);
   } else {
     checkCudaErrors(cudaFree(arrayOnA));
   }
 
   if (deviceB == cudaCpuDeviceId) {
-    free(arrayOnB);
+    cudaFreeHost(arrayOnB);
   } else {
     checkCudaErrors(cudaFree(arrayOnB));
   }
@@ -141,8 +141,8 @@ void runOptimizedStream(size_t arraySize, int numberOfKernels, int prefetchCycle
     if (i != 1 && i % prefetchCycleLength == 1) {
       LOG_TRACE_WITH_INFO("Kernel %d is prefetched", i);
 
-      aOnStorageDevice[i] = (float *)malloc(arraySize);
-      bOnStorageDevice[i] = (float *)malloc(arraySize);
+      checkCudaErrors(cudaMallocHost(&aOnStorageDevice[i], arraySize));
+      checkCudaErrors(cudaMallocHost(&bOnStorageDevice[i], arraySize));
       memset(aOnStorageDevice[i], 0, arraySize);
       memset(bOnStorageDevice[i], 0, arraySize);
     } else {
