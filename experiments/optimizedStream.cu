@@ -24,50 +24,29 @@ __global__ void initializeArrayKernel(T *array, T initialValue, size_t count) {
   }
 }
 
-template <typename T>
-__global__ void addKernel(const T *a, const T *b, T *c) {
-  const size_t i = blockDim.x * blockIdx.x + threadIdx.x;
-  c[i] = a[i] + b[i];
-}
+#define TBSIZE 1024
+#define DOT_NUM_BLOCKS 256
 
-template <typename T>
-__global__ void checkResultKernel(const T *c, const T expectedValue) {
-  const int i = blockDim.x * blockIdx.x + threadIdx.x;
-  if (c[i] != expectedValue) {
-    printf("[checkResultKernel] found c[%d] = %f, while expectedValue = %f\n", i, c[i], expectedValue);
+template <class T>
+__global__ void dot_kernel(const T *a, const T *b, T *sum, int array_size) {
+  __shared__ T tb_sum[TBSIZE];
+
+  int i = blockDim.x * blockIdx.x + threadIdx.x;
+  const size_t local_i = threadIdx.x;
+
+  tb_sum[local_i] = 0.0;
+  for (; i < array_size; i += blockDim.x * gridDim.x)
+    tb_sum[local_i] += a[i] * b[i];
+
+  for (int offset = blockDim.x / 2; offset > 0; offset /= 2) {
+    __syncthreads();
+    if (local_i < offset) {
+      tb_sum[local_i] += tb_sum[local_i + offset];
+    }
   }
-}
 
-void warmUpDevice(const int deviceId) {
-  checkCudaErrors(cudaSetDevice(deviceId));
-  constexpr size_t WARMUP_ARRAY_SIZE = 1024ull * 1024 * 1024;  // 1GiB
-  constexpr size_t WARMUP_ARRAY_LENGTH = WARMUP_ARRAY_SIZE / sizeof(float);
-  constexpr size_t BLOCK_SIZE = 1024;
-  constexpr size_t GRID_SIZE = WARMUP_ARRAY_LENGTH / BLOCK_SIZE;
-
-  constexpr float initA = 1;
-  constexpr float initB = 2;
-  constexpr float expectedC = initA + initB;
-
-  float *a, *b, *c;
-  checkCudaErrors(cudaMalloc(&a, WARMUP_ARRAY_SIZE));
-  checkCudaErrors(cudaMalloc(&b, WARMUP_ARRAY_SIZE));
-  checkCudaErrors(cudaMalloc(&c, WARMUP_ARRAY_SIZE));
-
-  initializeArrayKernel<<<GRID_SIZE, BLOCK_SIZE>>>(a, initA, WARMUP_ARRAY_SIZE);
-  initializeArrayKernel<<<GRID_SIZE, BLOCK_SIZE>>>(b, initB, WARMUP_ARRAY_SIZE);
-
-  addKernel<<<GRID_SIZE, BLOCK_SIZE>>>(a, b, c);
-
-  checkResultKernel<<<GRID_SIZE, BLOCK_SIZE>>>(c, expectedC);
-
-  checkCudaErrors(cudaDeviceSynchronize());
-
-  checkCudaErrors(cudaFree(a));
-  checkCudaErrors(cudaFree(b));
-  checkCudaErrors(cudaFree(c));
-
-  checkCudaErrors(cudaDeviceSynchronize());
+  if (local_i == 0)
+    sum[blockIdx.x] = tb_sum[local_i];
 }
 
 void warmUpDataMovement(int deviceA, int deviceB) {
@@ -93,7 +72,6 @@ void warmUpDataMovement(int deviceA, int deviceB) {
     initializeArrayKernel<<<ARRAY_LENGTH / 1024, 1024>>>(arrayOnB, 0, ARRAY_LENGTH);
   }
 
-  cudaStream_t stream;
   checkCudaErrors(cudaMemcpy(arrayOnA, arrayOnB, ARRAY_SIZE, cudaMemcpyDefault));
   checkCudaErrors(cudaDeviceSynchronize());
 
@@ -116,8 +94,6 @@ void runOptimizedStream(size_t arraySize, int numberOfKernels, int prefetchCycle
   const size_t GRID_SIZE = arrayLength / BLOCK_SIZE;
 
   assert(arrayLength % BLOCK_SIZE == 0ull);
-
-  warmUpDevice(COMPUTE_DEVICE_ID);
 
   warmUpDataMovement(STORAGE_DEVICE_ID, COMPUTE_DEVICE_ID);
   warmUpDataMovement(COMPUTE_DEVICE_ID, STORAGE_DEVICE_ID);
@@ -152,6 +128,9 @@ void runOptimizedStream(size_t arraySize, int numberOfKernels, int prefetchCycle
       initializeArrayKernel<<<GRID_SIZE, BLOCK_SIZE, 0, dataMovementStream>>>(bOnComputeDevice[i], (float)0, arrayLength);
       checkCudaErrors(cudaDeviceSynchronize());
     }
+
+    checkCudaErrors(cudaMalloc(&cOnComputeDevice[i], DOT_NUM_BLOCKS * sizeof(float)));
+    checkCudaErrors(cudaMemset(cOnComputeDevice[i], 0, DOT_NUM_BLOCKS * sizeof(float)));
   }
 
   // Compute
@@ -183,8 +162,7 @@ void runOptimizedStream(size_t arraySize, int numberOfKernels, int prefetchCycle
       }
     }
 
-    checkCudaErrors(cudaMallocAsync(&cOnComputeDevice[i], arraySize, computeStream));
-    addKernel<<<GRID_SIZE, BLOCK_SIZE, 0, computeStream>>>(aOnComputeDevice[i], bOnComputeDevice[i], cOnComputeDevice[i]);
+    dot_kernel<<<DOT_NUM_BLOCKS, TBSIZE, 0, computeStream>>>(aOnComputeDevice[i], bOnComputeDevice[i], cOnComputeDevice[i], arraySize / sizeof(float));
     checkCudaErrors(cudaFreeAsync(aOnComputeDevice[i], computeStream));
     checkCudaErrors(cudaFreeAsync(bOnComputeDevice[i], computeStream));
   }
@@ -193,7 +171,7 @@ void runOptimizedStream(size_t arraySize, int numberOfKernels, int prefetchCycle
   checkCudaErrors(cudaStreamSynchronize(computeStream));
 
   const float runningTime = clock.getTimeInSeconds();
-  const float bandwidth = static_cast<float>(arraySize) * 3.0 * numberOfKernels / 1e9 / runningTime;
+  const float bandwidth = static_cast<float>(arraySize) * 2.0 * numberOfKernels / 1e9 / runningTime;
   LOG_TRACE_WITH_INFO("Total running time (s): %.6f", runningTime);
   LOG_TRACE_WITH_INFO("Bandwidth (GB/s): %.2f", bandwidth);
 
