@@ -15,3 +15,9 @@ target_link_libraries(
   optimizedStream
   memopt
 )
+
+add_executable(optimizedStreamNvlink optimizedStreamNvlink.cu)
+target_link_libraries(
+  optimizedStreamNvlink
+  memopt
+)
