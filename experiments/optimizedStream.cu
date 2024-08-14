@@ -13,7 +13,7 @@
 
 using namespace memopt;
 
-constexpr int COMPUTE_DEVICE_ID = 0;
+constexpr int COMPUTE_DEVICE_ID = 1;
 constexpr int STORAGE_DEVICE_ID = cudaCpuDeviceId;
 
 template <typename T>
@@ -114,7 +114,7 @@ void runOptimizedStream(size_t arraySize, int numberOfKernels, int prefetchCycle
   checkCudaErrors(cudaStreamCreate(&dataMovementStream));
 
   for (int i = 0; i < numberOfKernels; i++) {
-    if (i != 1 && i % prefetchCycleLength == 1) {
+    if (i != 1 && i > 0 && (i - 1) % prefetchCycleLength == 0) {
       LOG_TRACE_WITH_INFO("Kernel %d is prefetched", i);
 
       checkCudaErrors(cudaMallocHost(&aOnStorageDevice[i], arraySize));
@@ -142,11 +142,14 @@ void runOptimizedStream(size_t arraySize, int numberOfKernels, int prefetchCycle
   cudaEvent_t endOfKernelEvent;
   checkCudaErrors(cudaEventCreate(&endOfKernelEvent));
 
+  PeakMemoryUsageProfiler profiler;
+  profiler.start();
+
   CudaEventClock clock;
   clock.start(computeStream);
 
   for (int i = 0; i < numberOfKernels; i++) {
-    if (i % prefetchCycleLength == 1) {
+    if (i > 0 && (i - 1) % prefetchCycleLength == 0) {
       if (i + prefetchCycleLength < numberOfKernels) {
         checkCudaErrors(cudaEventRecord(endOfKernelEvent, computeStream));
         checkCudaErrors(cudaStreamWaitEvent(dataMovementStream, endOfKernelEvent));
@@ -169,6 +172,12 @@ void runOptimizedStream(size_t arraySize, int numberOfKernels, int prefetchCycle
 
   clock.end(computeStream);
   checkCudaErrors(cudaStreamSynchronize(computeStream));
+
+  const auto peakMemoryUsage = profiler.end();
+  LOG_TRACE_WITH_INFO(
+    "Peak memory usage (MiB): %.2f",
+    static_cast<float>(peakMemoryUsage) / 1024.0 / 1024.0
+  );
 
   const float runningTime = clock.getTimeInSeconds();
   const float bandwidth = static_cast<float>(arraySize) * 2.0 * numberOfKernels / 1e9 / runningTime;
