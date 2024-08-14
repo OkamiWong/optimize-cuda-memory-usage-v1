@@ -23,6 +23,10 @@ void printEdges(FILE *fp, OptimizationInput &input) {
 void printTaskGroup(FILE *fp, int index, OptimizationInput::TaskGroup &taskGroup) {
   fmt::print(fp, "subgraph {} {{\n", getTaskGroupName(index));
   fmt::print(fp, "label=\"{} (size={})\"\n", getTaskGroupName(index), taskGroup.nodes.size());
+  fmt::print(fp, "// Tasks: ");
+  for (auto taskId : taskGroup.nodes) {
+    fmt::print(fp, "{}, ", taskId);
+  }
   fmt::print(fp, "}}\n");
 }
 
