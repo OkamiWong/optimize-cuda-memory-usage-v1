@@ -13,29 +13,8 @@
 
 using namespace memopt;
 
-constexpr int NVLINK_DEVICE_ID_A = 1;
-constexpr int NVLINK_DEVICE_ID_B = 2;
-
-void enablePeerAccessForNvlink() {
-  int canAccessPeerAToB, canAccessPeerBToA;
-  checkCudaErrors(cudaDeviceCanAccessPeer(&canAccessPeerAToB, NVLINK_DEVICE_ID_A, NVLINK_DEVICE_ID_B));
-  checkCudaErrors(cudaDeviceCanAccessPeer(&canAccessPeerBToA, NVLINK_DEVICE_ID_B, NVLINK_DEVICE_ID_A));
-
-  assert(canAccessPeerAToB);
-  assert(canAccessPeerBToA);
-
-  checkCudaErrors(cudaSetDevice(NVLINK_DEVICE_ID_A));
-  checkCudaErrors(cudaDeviceEnablePeerAccess(NVLINK_DEVICE_ID_B, 0));
-  checkCudaErrors(cudaSetDevice(NVLINK_DEVICE_ID_B));
-  checkCudaErrors(cudaDeviceEnablePeerAccess(NVLINK_DEVICE_ID_A, 0));
-}
-
-void disablePeerAccessForNvlink() {
-  checkCudaErrors(cudaSetDevice(NVLINK_DEVICE_ID_A));
-  checkCudaErrors(cudaDeviceDisablePeerAccess(NVLINK_DEVICE_ID_B));
-  checkCudaErrors(cudaSetDevice(NVLINK_DEVICE_ID_B));
-  checkCudaErrors(cudaDeviceDisablePeerAccess(NVLINK_DEVICE_ID_A));
-}
+constexpr int COMPUTE_DEVICE_ID = 0;
+constexpr int STORAGE_DEVICE_ID = cudaCpuDeviceId;
 
 template <typename T>
 __global__ void initializeArrayKernel(T *array, T initialValue, size_t count) {
@@ -96,49 +75,54 @@ void warmUpDataMovement(int deviceA, int deviceB) {
   const size_t ARRAY_LENGTH = ARRAY_SIZE / sizeof(int);
 
   int *arrayOnA;
-  checkCudaErrors(cudaSetDevice(deviceA));
-  checkCudaErrors(cudaMalloc(&arrayOnA, ARRAY_SIZE));
+  if (deviceA == cudaCpuDeviceId) {
+    arrayOnA = (int *)malloc(ARRAY_SIZE);
+    memset(arrayOnA, 0, ARRAY_SIZE);
+  } else {
+    checkCudaErrors(cudaSetDevice(deviceA));
+    checkCudaErrors(cudaMalloc(&arrayOnA, ARRAY_SIZE));
+    initializeArrayKernel<<<ARRAY_LENGTH / 1024, 1024>>>(arrayOnA, 0, ARRAY_LENGTH);
+  }
 
   int *arrayOnB;
-  checkCudaErrors(cudaSetDevice(deviceB));
-  checkCudaErrors(cudaMalloc(&arrayOnB, ARRAY_SIZE));
-  initializeArrayKernel<<<ARRAY_LENGTH / 1024, 1024>>>(arrayOnB, 0, ARRAY_LENGTH);
-
-  checkCudaErrors(cudaSetDevice(deviceA));
+  if (deviceB == cudaCpuDeviceId) {
+    arrayOnB = (int *)malloc(ARRAY_SIZE);
+  } else {
+    checkCudaErrors(cudaSetDevice(deviceB));
+    checkCudaErrors(cudaMalloc(&arrayOnB, ARRAY_SIZE));
+    initializeArrayKernel<<<ARRAY_LENGTH / 1024, 1024>>>(arrayOnB, 0, ARRAY_LENGTH);
+  }
 
   cudaStream_t stream;
-  checkCudaErrors(cudaStreamCreate(&stream));
-  checkCudaErrors(cudaMemcpyAsync(arrayOnA, arrayOnB, ARRAY_SIZE, cudaMemcpyDeviceToDevice, stream));
-  checkCudaErrors(cudaStreamSynchronize(stream));
-  checkCudaErrors(cudaStreamDestroy(stream));
+  checkCudaErrors(cudaMemcpy(arrayOnA, arrayOnB, ARRAY_SIZE, cudaMemcpyDefault));
+  checkCudaErrors(cudaDeviceSynchronize());
 
-  checkCudaErrors(cudaFree(arrayOnA));
+  if (deviceA == cudaCpuDeviceId) {
+    free(arrayOnA);
+  } else {
+    checkCudaErrors(cudaFree(arrayOnA));
+  }
 
-  checkCudaErrors(cudaSetDevice(deviceB));
-  checkCudaErrors(cudaFree(arrayOnB));
+  if (deviceB == cudaCpuDeviceId) {
+    free(arrayOnB);
+  } else {
+    checkCudaErrors(cudaFree(arrayOnB));
+  }
 }
 
-void runOptimizedStreamWithNvlink(size_t arraySize, int numberOfKernels, int prefetchCycleLength) {
+void runOptimizedStream(size_t arraySize, int numberOfKernels, int prefetchCycleLength) {
   const size_t arrayLength = arraySize / sizeof(float);
   constexpr size_t BLOCK_SIZE = 1024;
   const size_t GRID_SIZE = arrayLength / BLOCK_SIZE;
 
   assert(arrayLength % BLOCK_SIZE == 0ull);
 
-  constexpr int COMPUTE_DEVICE_ID = NVLINK_DEVICE_ID_A;
-  constexpr int STORAGE_DEVICE_ID = NVLINK_DEVICE_ID_B;
-
-  constexpr float initA = 1;
-  constexpr float initB = 2;
-  constexpr float expectedC = initA + initB;
-
-  enablePeerAccessForNvlink();
-
   warmUpDevice(COMPUTE_DEVICE_ID);
-  warmUpDevice(STORAGE_DEVICE_ID);
 
   warmUpDataMovement(STORAGE_DEVICE_ID, COMPUTE_DEVICE_ID);
   warmUpDataMovement(COMPUTE_DEVICE_ID, STORAGE_DEVICE_ID);
+
+  checkCudaErrors(cudaSetDevice(COMPUTE_DEVICE_ID));
 
   // Initialize data
   auto aOnComputeDevice = std::make_unique<float *[]>(numberOfKernels);
@@ -157,25 +141,20 @@ void runOptimizedStreamWithNvlink(size_t arraySize, int numberOfKernels, int pre
     if (i != 1 && i % prefetchCycleLength == 1) {
       LOG_TRACE_WITH_INFO("Kernel %d is prefetched", i);
 
-      checkCudaErrors(cudaSetDevice(STORAGE_DEVICE_ID));
-      checkCudaErrors(cudaMalloc(&aOnStorageDevice[i], arraySize));
-      checkCudaErrors(cudaMalloc(&bOnStorageDevice[i], arraySize));
-      initializeArrayKernel<<<GRID_SIZE, BLOCK_SIZE>>>(aOnStorageDevice[i], initA, arrayLength);
-      initializeArrayKernel<<<GRID_SIZE, BLOCK_SIZE>>>(bOnStorageDevice[i], initB, arrayLength);
-      checkCudaErrors(cudaDeviceSynchronize());
+      aOnStorageDevice[i] = (float *)malloc(arraySize);
+      bOnStorageDevice[i] = (float *)malloc(arraySize);
+      memset(aOnStorageDevice[i], 0, arraySize);
+      memset(bOnStorageDevice[i], 0, arraySize);
     } else {
-      checkCudaErrors(cudaSetDevice(COMPUTE_DEVICE_ID));
       checkCudaErrors(cudaMallocAsync(&aOnComputeDevice[i], arraySize, dataMovementStream));
       checkCudaErrors(cudaMallocAsync(&bOnComputeDevice[i], arraySize, dataMovementStream));
-      initializeArrayKernel<<<GRID_SIZE, BLOCK_SIZE, 0, dataMovementStream>>>(aOnComputeDevice[i], initA, arrayLength);
-      initializeArrayKernel<<<GRID_SIZE, BLOCK_SIZE, 0, dataMovementStream>>>(bOnComputeDevice[i], initB, arrayLength);
+      initializeArrayKernel<<<GRID_SIZE, BLOCK_SIZE, 0, dataMovementStream>>>(aOnComputeDevice[i], (float)0, arrayLength);
+      initializeArrayKernel<<<GRID_SIZE, BLOCK_SIZE, 0, dataMovementStream>>>(bOnComputeDevice[i], (float)0, arrayLength);
       checkCudaErrors(cudaDeviceSynchronize());
     }
   }
 
   // Compute
-  checkCudaErrors(cudaSetDevice(COMPUTE_DEVICE_ID));
-
   auto prefetchEvents = std::make_unique<cudaEvent_t[]>(numberOfKernels / prefetchCycleLength);
   for (int i = 0; i < numberOfKernels / prefetchCycleLength; i++) {
     checkCudaErrors(cudaEventCreate(&prefetchEvents[i]));
@@ -195,8 +174,8 @@ void runOptimizedStreamWithNvlink(size_t arraySize, int numberOfKernels, int pre
 
         checkCudaErrors(cudaMallocAsync(&aOnComputeDevice[i + prefetchCycleLength], arraySize, dataMovementStream));
         checkCudaErrors(cudaMallocAsync(&bOnComputeDevice[i + prefetchCycleLength], arraySize, dataMovementStream));
-        checkCudaErrors(cudaMemcpyAsync(aOnComputeDevice[i + prefetchCycleLength], aOnStorageDevice[i + prefetchCycleLength], arraySize, cudaMemcpyDeviceToDevice, dataMovementStream));
-        checkCudaErrors(cudaMemcpyAsync(bOnComputeDevice[i + prefetchCycleLength], bOnStorageDevice[i + prefetchCycleLength], arraySize, cudaMemcpyDeviceToDevice, dataMovementStream));
+        checkCudaErrors(cudaMemcpyAsync(aOnComputeDevice[i + prefetchCycleLength], aOnStorageDevice[i + prefetchCycleLength], arraySize, cudaMemcpyDefault, dataMovementStream));
+        checkCudaErrors(cudaMemcpyAsync(bOnComputeDevice[i + prefetchCycleLength], bOnStorageDevice[i + prefetchCycleLength], arraySize, cudaMemcpyDefault, dataMovementStream));
         checkCudaErrors(cudaEventRecord(prefetchEvents[(i - 1) / prefetchCycleLength], dataMovementStream));
       }
       if (i != 1) {
@@ -206,10 +185,8 @@ void runOptimizedStreamWithNvlink(size_t arraySize, int numberOfKernels, int pre
 
     checkCudaErrors(cudaMallocAsync(&cOnComputeDevice[i], arraySize, computeStream));
     addKernel<<<GRID_SIZE, BLOCK_SIZE, 0, computeStream>>>(aOnComputeDevice[i], bOnComputeDevice[i], cOnComputeDevice[i]);
-    checkResultKernel<<<1, 1, 0, computeStream>>>(cOnComputeDevice[i], expectedC);
     checkCudaErrors(cudaFreeAsync(aOnComputeDevice[i], computeStream));
     checkCudaErrors(cudaFreeAsync(bOnComputeDevice[i], computeStream));
-    checkCudaErrors(cudaFreeAsync(cOnComputeDevice[i], computeStream));
   }
 
   clock.end(computeStream);
@@ -228,16 +205,6 @@ void runOptimizedStreamWithNvlink(size_t arraySize, int numberOfKernels, int pre
 
   checkCudaErrors(cudaStreamDestroy(computeStream));
   checkCudaErrors(cudaStreamDestroy(dataMovementStream));
-
-  checkCudaErrors(cudaSetDevice(STORAGE_DEVICE_ID));
-  for (int i = 0; i < numberOfKernels; i++) {
-    if (i != 1 && i % prefetchCycleLength == 1) {
-      checkCudaErrors(cudaFree(aOnStorageDevice[i]));
-      checkCudaErrors(cudaFree(bOnStorageDevice[i]));
-    }
-  }
-
-  disablePeerAccessForNvlink();
 }
 
 int main(int argc, char **argv) {
@@ -252,7 +219,7 @@ int main(int argc, char **argv) {
   int prefetchCycleLength;
   cmdl("prefetch-cycle-length", 4) >> prefetchCycleLength;  // Prefetch the 6th, 10th,..., 22nd kernels by default
 
-  runOptimizedStreamWithNvlink(arraySize, numberOfKernels, prefetchCycleLength);
+  runOptimizedStream(arraySize, numberOfKernels, prefetchCycleLength);
 
   return 0;
 }
