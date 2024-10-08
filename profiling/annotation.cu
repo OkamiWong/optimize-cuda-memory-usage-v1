@@ -38,6 +38,13 @@ __host__ void annotateNextTask(
   dummyKernelForAnnotation<<<1, 1, 0, stream>>>(taskAnnotation);
 }
 
+__host__ void annotateNextTask(
+  TaskId taskId,
+  cudaStream_t stream
+) {
+  annotateNextTask(taskId, {}, {}, stream);
+}
+
 __global__ void dummyKernelForStageSeparator() {
   return;
 }

@@ -61,9 +61,14 @@ std::vector<cudaGraphNode_t> getNodesWithZeroOutDegree(cudaGraph_t graph) {
   return nodesWithZeroOutDegree;
 }
 
-void getKernelNodeParams(cudaGraphNode_t kernelNode, CUDA_KERNEL_NODE_PARAMS &nodeParams) {
+cudaGraphNodeType getNodeType(cudaGraphNode_t kernelNode) {
   cudaGraphNodeType nodeType;
   checkCudaErrors(cudaGraphNodeGetType(kernelNode, &nodeType));
+  return nodeType;
+}
+
+void getKernelNodeParams(cudaGraphNode_t kernelNode, CUDA_KERNEL_NODE_PARAMS &nodeParams) {
+  cudaGraphNodeType nodeType = getNodeType(kernelNode);
   assert(nodeType == cudaGraphNodeTypeKernel);
 
   // Why switch to driver API:
@@ -72,8 +77,7 @@ void getKernelNodeParams(cudaGraphNode_t kernelNode, CUDA_KERNEL_NODE_PARAMS &no
 }
 
 bool compareKernelNodeFunctionHandle(cudaGraphNode_t kernelNode, CUfunction functionHandle) {
-  cudaGraphNodeType nodeType;
-  checkCudaErrors(cudaGraphNodeGetType(kernelNode, &nodeType));
+  cudaGraphNodeType nodeType = getNodeType(kernelNode);
   if (nodeType == cudaGraphNodeTypeKernel) {
     CUDA_KERNEL_NODE_PARAMS nodeParams;
     getKernelNodeParams(kernelNode, nodeParams);

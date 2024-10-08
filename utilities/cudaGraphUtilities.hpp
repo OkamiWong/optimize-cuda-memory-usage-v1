@@ -17,6 +17,8 @@ cudaGraphNode_t getRootNode(cudaGraph_t graph);
 
 std::vector<cudaGraphNode_t> getNodesWithZeroOutDegree(cudaGraph_t graph);
 
+cudaGraphNodeType getNodeType(cudaGraphNode_t kernelNode);
+
 void getKernelNodeParams(cudaGraphNode_t kernelNode, CUDA_KERNEL_NODE_PARAMS &nodeParams);
 
 bool compareKernelNodeFunctionHandle(cudaGraphNode_t kernelNode, CUfunction functionHandle);

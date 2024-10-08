@@ -1537,12 +1537,13 @@ __global__ __launch_bounds__(64, 4) void CalcVolumeForceForElems_kernel(
 
 static inline void CalcVolumeForceForElems(const Real_t hgcoef, Domain* domain) {
   if (domain->annotate) {
-    annotateNextTask(
-      0,
-      {domain->volo.raw(), domain->v.raw(), domain->p.raw(), domain->q.raw(), domain->nodelist.raw(), domain->ss.raw(), domain->elemMass.raw(), domain->x.raw(), domain->y.raw(), domain->z.raw(), domain->xd.raw(), domain->yd.raw(), domain->zd.raw(), domain->nodeElemCount.raw(), domain->nodeElemStart.raw(), domain->nodeElemCornerList.raw()},
-      {domain->fx.raw(), domain->fy.raw(), domain->fz.raw()},
-      domain->mainStream
-    );
+    // annotateNextTask(
+    //   0,
+    //   {domain->volo.raw(), domain->v.raw(), domain->p.raw(), domain->q.raw(), domain->nodelist.raw(), domain->ss.raw(), domain->elemMass.raw(), domain->x.raw(), domain->y.raw(), domain->z.raw(), domain->xd.raw(), domain->yd.raw(), domain->zd.raw(), domain->nodeElemCount.raw(), domain->nodeElemStart.raw(), domain->nodeElemCornerList.raw()},
+    //   {domain->fx.raw(), domain->fy.raw(), domain->fz.raw()},
+    //   domain->mainStream
+    // );
+    annotateNextTask(0, domain->mainStream);
   }
 
   // Call IncreaseTime_kernel to increase time concurrently
@@ -1633,12 +1634,13 @@ __global__ void CalcAccelerationForNodes_kernel(int numNode, Real_t* xdd, Real_t
 
 static inline void CalcAccelerationForNodes(Domain* domain) {
   if (domain->annotate) {
-    annotateNextTask(
-      1,
-      {domain->fx.raw(), domain->fy.raw(), domain->fz.raw(), domain->nodalMass.raw()},
-      {domain->xdd.raw(), domain->ydd.raw(), domain->zdd.raw()},
-      domain->mainStream
-    );
+    // annotateNextTask(
+    //   1,
+    //   {domain->fx.raw(), domain->fy.raw(), domain->fz.raw(), domain->nodalMass.raw()},
+    //   {domain->xdd.raw(), domain->ydd.raw(), domain->zdd.raw()},
+    //   domain->mainStream
+    // );
+    annotateNextTask(1, domain->mainStream);
   }
 
   Index_t dimBlock = 128;
@@ -1665,12 +1667,13 @@ static inline void ApplyAccelerationBoundaryConditionsForNodesInXAxis(Domain* do
   Index_t dimGrid = PAD_DIV(domain->numSymmX, dimBlock);
   if (domain->numSymmX > 0) {
     if (domain->annotate) {
-      annotateNextTask(
-        2,
-        {domain->symmX.raw()},
-        {domain->xdd.raw()},
-        domain->mainStream
-      );
+      // annotateNextTask(
+      //   2,
+      //   {domain->symmX.raw()},
+      //   {domain->xdd.raw()},
+      //   domain->mainStream
+      // );
+      annotateNextTask(2, domain->mainStream);
     }
 
     ApplyAccelerationBoundaryConditionsForNodes_kernel<<<dimGrid, dimBlock, 0, domain->mainStream>>>(
@@ -1686,12 +1689,13 @@ static inline void ApplyAccelerationBoundaryConditionsForNodesInYAxis(Domain* do
   Index_t dimGrid = PAD_DIV(domain->numSymmY, dimBlock);
   if (domain->numSymmY > 0) {
     if (domain->annotate) {
-      annotateNextTask(
-        3,
-        {domain->symmY.raw()},
-        {domain->ydd.raw()},
-        domain->mainStream
-      );
+      // annotateNextTask(
+      //   3,
+      //   {domain->symmY.raw()},
+      //   {domain->ydd.raw()},
+      //   domain->mainStream
+      // );
+      annotateNextTask(3, domain->mainStream);
     }
 
     ApplyAccelerationBoundaryConditionsForNodes_kernel<<<dimGrid, dimBlock, 0, domain->mainStream>>>(
@@ -1707,12 +1711,13 @@ static inline void ApplyAccelerationBoundaryConditionsForNodesInZAxis(Domain* do
   Index_t dimGrid = PAD_DIV(domain->numSymmZ, dimBlock);
   if (domain->numSymmZ > 0) {
     if (domain->annotate) {
-      annotateNextTask(
-        4,
-        {domain->symmZ.raw()},
-        {domain->zdd.raw()},
-        domain->mainStream
-      );
+      // annotateNextTask(
+      //   4,
+      //   {domain->symmZ.raw()},
+      //   {domain->zdd.raw()},
+      //   domain->mainStream
+      // );
+      annotateNextTask(4, domain->mainStream);
     }
 
     ApplyAccelerationBoundaryConditionsForNodes_kernel<<<dimGrid, dimBlock, 0, domain->mainStream>>>(
@@ -1749,12 +1754,13 @@ __global__ void CalcPositionAndVelocityForNodes_kernel(int numNode, const Real_t
 
 static inline void CalcPositionAndVelocityForNodes(const Real_t u_cut, Domain* domain) {
   if (domain->annotate) {
-    annotateNextTask(
-      5,
-      {domain->x.raw(), domain->y.raw(), domain->z.raw(), domain->xd.raw(), domain->yd.raw(), domain->zd.raw(), domain->xdd.raw(), domain->ydd.raw(), domain->zdd.raw()},
-      {domain->x.raw(), domain->y.raw(), domain->z.raw(), domain->xd.raw(), domain->yd.raw(), domain->zd.raw()},
-      domain->mainStream
-    );
+    // annotateNextTask(
+    //   5,
+    //   {domain->x.raw(), domain->y.raw(), domain->z.raw(), domain->xd.raw(), domain->yd.raw(), domain->zd.raw(), domain->xdd.raw(), domain->ydd.raw(), domain->zdd.raw()},
+    //   {domain->x.raw(), domain->y.raw(), domain->z.raw(), domain->xd.raw(), domain->yd.raw(), domain->zd.raw()},
+    //   domain->mainStream
+    // );
+    annotateNextTask(5, domain->mainStream);
   }
 
   Index_t dimBlock = 128;
@@ -2623,14 +2629,15 @@ static inline void ApplyMaterialPropertiesAndUpdateVolume(Domain* domain) {
 
 static inline void LagrangeElementsCalcKinematicsAndMonotonicQGradient(Domain* domain) {
   if (domain->annotate) {
-    annotateNextTask(
-      6,
-      {domain->nodelist.raw(), domain->volo.raw(), domain->v.raw(),
-       domain->x.raw(), domain->y.raw(), domain->z.raw(),
-       domain->xd.raw(), domain->yd.raw(), domain->zd.raw()},
-      {domain->delv.raw(), domain->arealg.raw(), domain->vdov.raw()},
-      domain->mainStream
-    );
+    // annotateNextTask(
+    //   6,
+    //   {domain->nodelist.raw(), domain->volo.raw(), domain->v.raw(),
+    //    domain->x.raw(), domain->y.raw(), domain->z.raw(),
+    //    domain->xd.raw(), domain->yd.raw(), domain->zd.raw()},
+    //   {domain->delv.raw(), domain->arealg.raw(), domain->vdov.raw()},
+    //   domain->mainStream
+    // );
+    annotateNextTask(6, domain->mainStream);
   }
 
   int allElem = domain->numElem +                   /* local elem */
@@ -2659,16 +2666,17 @@ static inline void LagrangeElementsCalcKinematicsAndMonotonicQGradient(Domain* d
 
 static inline void LagrangeElementsCalcMonotonicQRegionForElems(Domain* domain) {
   if (domain->annotate) {
-    annotateNextTask(
-      7,
-      {domain->regElemlist.raw(), domain->elemBC.raw(),
-       domain->lxim.raw(), domain->lxip.raw(), domain->letam.raw(),
-       domain->letap.raw(), domain->lzetam.raw(), domain->lzetap.raw(),
-       domain->vdov.raw(), domain->elemMass.raw(), domain->volo.raw(),
-       domain->q.raw()},
-      {domain->qq.raw(), domain->ql.raw()},
-      domain->mainStream
-    );
+    // annotateNextTask(
+    //   7,
+    //   {domain->regElemlist.raw(), domain->elemBC.raw(),
+    //    domain->lxim.raw(), domain->lxip.raw(), domain->letam.raw(),
+    //    domain->letap.raw(), domain->lzetam.raw(), domain->lzetap.raw(),
+    //    domain->vdov.raw(), domain->elemMass.raw(), domain->volo.raw(),
+    //    domain->q.raw()},
+    //   {domain->qq.raw(), domain->ql.raw()},
+    //   domain->mainStream
+    // );
+    annotateNextTask(7, domain->mainStream);
   }
 
   domain->dxx.free(domain->mainStream);
@@ -2683,14 +2691,15 @@ static inline void LagrangeElementsCalcMonotonicQRegionForElems(Domain* domain) 
 
 static inline void LagrangeElementApplyMaterialPropertiesAndUpdateVolume(Domain* domain) {
   if (domain->annotate) {
-    annotateNextTask(
-      8,
-      {domain->ql.raw(), domain->qq.raw(), domain->vnew.raw(), domain->v.raw(),
-       domain->regElemlist.raw(), domain->e.raw(), domain->delv.raw(),
-       domain->p.raw(), domain->q.raw(), domain->regCSR.raw(), domain->regReps.raw()},
-      {domain->v.raw(), domain->e.raw(), domain->p.raw(), domain->q.raw(), domain->ss.raw()},
-      domain->mainStream
-    );
+    // annotateNextTask(
+    //   8,
+    //   {domain->ql.raw(), domain->qq.raw(), domain->vnew.raw(), domain->v.raw(),
+    //    domain->regElemlist.raw(), domain->e.raw(), domain->delv.raw(),
+    //    domain->p.raw(), domain->q.raw(), domain->regCSR.raw(), domain->regReps.raw()},
+    //   {domain->v.raw(), domain->e.raw(), domain->p.raw(), domain->q.raw(), domain->ss.raw()},
+    //   domain->mainStream
+    // );
+    annotateNextTask(8, domain->mainStream);
   }
 
   domain->delx_xi.free(domain->mainStream);
@@ -2960,6 +2969,7 @@ static inline void CalcTimeConstraintsForElems(Domain* domain) {
       {},
       domain->mainStream
     );
+    // annotateNextTask(9, domain->mainStream);
   }
 
   Real_t qqc = domain->qqc;

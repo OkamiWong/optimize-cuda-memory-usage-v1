@@ -26,6 +26,11 @@ __host__ void annotateNextTask(
   cudaStream_t stream
 );
 
+__host__ void annotateNextTask(
+  TaskId taskId,
+  cudaStream_t stream
+);
+
 __global__ void dummyKernelForStageSeparator();
 
 __host__ void endStage(

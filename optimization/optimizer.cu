@@ -9,6 +9,7 @@
 #include "../profiling/annotation.hpp"
 #include "../profiling/cudaGraphExecutionTimelineProfiler.hpp"
 #include "../profiling/memoryManager.hpp"
+#include "../profiling/memred.hpp"
 #include "../utilities/configurationManager.hpp"
 #include "../utilities/cudaGraphUtilities.hpp"
 #include "../utilities/cudaUtilities.hpp"
@@ -158,6 +159,84 @@ void mergeNodesWithSameAnnotation(
   }
 }
 
+TaskId getTaskId(cudaGraphNode_t annotationNode) {
+  CUDA_KERNEL_NODE_PARAMS nodeParams;
+  getKernelNodeParams(annotationNode, nodeParams);
+  assert(nodeParams.func == dummyKernelForAnnotationHandle);
+
+  auto taskAnnotationPtr = reinterpret_cast<TaskAnnotation *>(nodeParams.kernelParams[0]);
+  return taskAnnotationPtr->taskId;
+}
+
+OptimizationInput::TaskGroup::DataDependency convertTaskAnnotationToTaskGroupDataDependency(
+  const TaskAnnotation &taskAnnotation
+) {
+  OptimizationInput::TaskGroup::DataDependency dep;
+  for (int i = 0; i < TaskAnnotation::MAX_NUM_PTR; i++) {
+    void *ptr = taskAnnotation.inputs[i];
+    if (ptr == nullptr) break;
+    dep.inputs.insert(ptr);
+  }
+  for (int i = 0; i < TaskAnnotation::MAX_NUM_PTR; i++) {
+    void *ptr = taskAnnotation.outputs[i];
+    if (ptr == nullptr) break;
+    dep.outputs.insert(ptr);
+  }
+  return dep;
+}
+
+OptimizationInput::TaskGroup::DataDependency getDataDependencyFromAnnotationNode(cudaGraphNode_t annotationNode) {
+  CUDA_KERNEL_NODE_PARAMS nodeParams;
+  getKernelNodeParams(annotationNode, nodeParams);
+  assert(nodeParams.func == dummyKernelForAnnotationHandle);
+
+  auto taskAnnotationPtr = reinterpret_cast<TaskAnnotation *>(nodeParams.kernelParams[0]);
+  return convertTaskAnnotationToTaskGroupDataDependency(*taskAnnotationPtr);
+}
+
+void mergeDataDependency(OptimizationInput::TaskGroup::DataDependency &dataDependency, const OptimizationInput::TaskGroup::DataDependency &additionalDataDependency) {
+  dataDependency.inputs.insert(additionalDataDependency.inputs.begin(), additionalDataDependency.inputs.end());
+  dataDependency.outputs.insert(additionalDataDependency.outputs.begin(), additionalDataDependency.outputs.end());
+}
+
+void getTaskDataDependencies(
+  std::vector<cudaGraphNode_t> &nodes,
+  std::map<cudaGraphNode_t, cudaGraphNode_t> &nodeToAnnotationMap,
+  std::map<TaskId, OptimizationInput::TaskGroup::DataDependency> &taskIdToDataDependencyMap
+) {
+  MemRedAnalysisParser analysisParser;
+
+  std::map<cudaGraphNode_t, std::vector<cudaGraphNode_t>> annotationToNodesMap;
+  for (const auto [node, annotationNode] : nodeToAnnotationMap) {
+    annotationToNodesMap[annotationNode].push_back(node);
+  }
+
+  for (auto [annotationNode, nodes] : annotationToNodesMap) {
+    const TaskId taskId = getTaskId(annotationNode);
+    auto dataDependency = getDataDependencyFromAnnotationNode(annotationNode);
+
+    if (dataDependency.inputs.empty() && dataDependency.outputs.empty()) {
+      // This task's data dependency should be inferred from compiler pass
+      // and kernel parameters.
+
+      for (auto node : nodes) {
+        auto nodeType = getNodeType(node);
+
+        // Currently, only kernel's data dependency can be analyzed automatically.
+        if (nodeType == cudaGraphNodeTypeKernel) {
+          // Skip dummy kernels
+          if (!compareKernelNodeFunctionHandle(node, dummyKernelForAnnotationHandle)
+              && !compareKernelNodeFunctionHandle(node, dummyKernelForStageSeparatorHandle)) {
+            mergeDataDependency(dataDependency, analysisParser.getKernelDataDependency(node));
+          }
+        }
+      }
+    }
+
+    taskIdToDataDependencyMap[taskId] = dataDependency;
+  }
+}
+
 void mapNodeToStageDfs(
   cudaGraphNode_t currentNode,
   int currentStageIndex,
@@ -193,51 +272,14 @@ void mapNodeToStage(
   mapNodeToStageDfs(rootNode, 0, edges, nodeToStageIndexMap);
 }
 
-OptimizationInput::TaskGroup::DataDependency convertTaskAnnotationToTaskGroupDataDependency(
-  const TaskAnnotation &taskAnnotation
-) {
-  OptimizationInput::TaskGroup::DataDependency dep;
-  for (int i = 0; i < TaskAnnotation::MAX_NUM_PTR; i++) {
-    void *ptr = taskAnnotation.inputs[i];
-    if (ptr == nullptr) break;
-    dep.inputs.insert(ptr);
-  }
-  for (int i = 0; i < TaskAnnotation::MAX_NUM_PTR; i++) {
-    void *ptr = taskAnnotation.outputs[i];
-    if (ptr == nullptr) break;
-    dep.outputs.insert(ptr);
-  }
-  return dep;
-}
-
-TaskId getTaskId(cudaGraphNode_t annotationNode) {
-  CUDA_KERNEL_NODE_PARAMS nodeParams;
-  getKernelNodeParams(annotationNode, nodeParams);
-  assert(nodeParams.func == dummyKernelForAnnotationHandle);
-
-  auto taskAnnotationPtr = reinterpret_cast<TaskAnnotation *>(nodeParams.kernelParams[0]);
-  return taskAnnotationPtr->taskId;
-}
-
-void mergeDataDependency(OptimizationInput::TaskGroup &taskGroup, cudaGraphNode_t annotationNode) {
-  CUDA_KERNEL_NODE_PARAMS nodeParams;
-  getKernelNodeParams(annotationNode, nodeParams);
-  assert(nodeParams.func == dummyKernelForAnnotationHandle);
-
-  auto taskAnnotationPtr = reinterpret_cast<TaskAnnotation *>(nodeParams.kernelParams[0]);
-  auto taskDataDependency = convertTaskAnnotationToTaskGroupDataDependency(*taskAnnotationPtr);
-
-  taskGroup.dataDependency.inputs.insert(taskDataDependency.inputs.begin(), taskDataDependency.inputs.end());
-  taskGroup.dataDependency.outputs.insert(taskDataDependency.outputs.begin(), taskDataDependency.outputs.end());
-}
-
 OptimizationInput constructOptimizationInput(
   cudaGraph_t originalGraph,
   std::vector<cudaGraphNode_t> &nodes,
   std::map<cudaGraphNode_t, std::vector<cudaGraphNode_t>> &edges,
   CudaGraphExecutionTimeline &timeline,
   DisjointSet<cudaGraphNode_t> &disjointSet,
-  std::map<cudaGraphNode_t, cudaGraphNode_t> &nodeToAnnotationMap
+  std::map<cudaGraphNode_t, cudaGraphNode_t> &nodeToAnnotationMap,
+  std::map<TaskId, OptimizationInput::TaskGroup::DataDependency> &taskIdToDataDependencyMap
 ) {
   LOG_TRACE();
 
@@ -318,7 +360,7 @@ OptimizationInput constructOptimizationInput(
   for (auto &taskGroup : optimizationInput.nodes) {
     std::vector<std::pair<uint64_t, uint64_t>> nodeLifetimes;
     for (auto taskId : taskGroup.nodes) {
-      mergeDataDependency(taskGroup, taskIdToAnnotationNodeMap[taskId]);
+      mergeDataDependency(taskGroup.dataDependency, taskIdToDataDependencyMap[taskId]);
       nodeLifetimes.insert(nodeLifetimes.end(), taskIdToNodeLifetimes[taskId].begin(), taskIdToNodeLifetimes[taskId].end());
     }
 
@@ -385,6 +427,7 @@ std::vector<OptimizationInput> constructOptimizationInputsForStages(
   CudaGraphExecutionTimeline &timeline,
   DisjointSet<cudaGraphNode_t> &disjointSet,
   std::map<cudaGraphNode_t, cudaGraphNode_t> &nodeToAnnotationMap,
+  std::map<TaskId, OptimizationInput::TaskGroup::DataDependency> &taskIdToDataDependencyMap,
   std::map<cudaGraphNode_t, int> &nodeToStageIndexMap
 ) {
   std::vector<std::vector<cudaGraphNode_t>> nodesPerStage;
@@ -411,7 +454,7 @@ std::vector<OptimizationInput> constructOptimizationInputsForStages(
   for (int i = 0; i < numberOfStages; i++) {
     optimizationInputs.push_back(
       constructOptimizationInput(
-        originalGraph, nodesPerStage[i], edgesPerStage[i], timeline, disjointSet, nodeToAnnotationMap
+        originalGraph, nodesPerStage[i], edgesPerStage[i], timeline, disjointSet, nodeToAnnotationMap, taskIdToDataDependencyMap
       )
     );
     optimizationInputs.rbegin()->forceAllArraysToResideOnHostInitiallyAndFinally = true;
@@ -577,6 +620,9 @@ OptimizationOutput Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
 
   mergeNodesWithSameAnnotation(nodes, nodeToAnnotationMap, disjointSet);
 
+  std::map<TaskId, OptimizationInput::TaskGroup::DataDependency> taskIdToDataDependencyMap;
+  getTaskDataDependencies(nodes, nodeToAnnotationMap, taskIdToDataDependencyMap);
+
   bool hasOnlyOneStage = true;
   for (auto node : nodes) {
     if (compareKernelNodeFunctionHandle(node, dummyKernelForStageSeparatorHandle)) {
@@ -591,7 +637,7 @@ OptimizationOutput Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
   }
 
   if (hasOnlyOneStage) {
-    auto optimizationInput = constructOptimizationInput(originalGraph, nodes, edges, timeline, disjointSet, nodeToAnnotationMap);
+    auto optimizationInput = constructOptimizationInput(originalGraph, nodes, edges, timeline, disjointSet, nodeToAnnotationMap, taskIdToDataDependencyMap);
 
     auto optimizationOutput = this->optimize<TwoStepOptimizationStrategy>(optimizationInput);
 
@@ -604,7 +650,7 @@ OptimizationOutput Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
     }
   } else {
     auto optimizationInputs = constructOptimizationInputsForStages(
-      originalGraph, nodes, edges, timeline, disjointSet, nodeToAnnotationMap, nodeToStageIndexMap
+      originalGraph, nodes, edges, timeline, disjointSet, nodeToAnnotationMap, taskIdToDataDependencyMap, nodeToStageIndexMap
     );
 
     std::vector<OptimizationOutput> optimizationOutputs;
