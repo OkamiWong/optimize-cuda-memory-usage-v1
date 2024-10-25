@@ -7,7 +7,7 @@
 
 namespace memopt {
 
-__global__ void dummyKernelForAnnotation(TaskAnnotation taskAnnotation) {
+__global__ void dummyKernelForAnnotation(TaskAnnotation taskAnnotation, bool inferDataDependency) {
   return;
 }
 
@@ -35,14 +35,16 @@ __host__ void annotateNextTask(
   memcpy(taskAnnotation.inputs, std::data(inputs), inputs.size() * sizeof(void *));
   memcpy(taskAnnotation.outputs, std::data(outputs), outputs.size() * sizeof(void *));
 
-  dummyKernelForAnnotation<<<1, 1, 0, stream>>>(taskAnnotation);
+  dummyKernelForAnnotation<<<1, 1, 0, stream>>>(taskAnnotation, false);
 }
 
 __host__ void annotateNextTask(
   TaskId taskId,
   cudaStream_t stream
 ) {
-  annotateNextTask(taskId, {}, {}, stream);
+  TaskAnnotation taskAnnotation;
+  taskAnnotation.taskId = taskId;
+  dummyKernelForAnnotation<<<1, 1, 0, stream>>>(taskAnnotation, true);
 }
 
 __global__ void dummyKernelForStageSeparator() {

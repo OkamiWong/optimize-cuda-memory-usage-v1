@@ -17,7 +17,7 @@ struct TaskAnnotation {
   void *outputs[MAX_NUM_PTR];
 };
 
-__global__ void dummyKernelForAnnotation(TaskAnnotation taskAnnotation);
+__global__ void dummyKernelForAnnotation(TaskAnnotation taskAnnotation, bool inferDataDependency);
 
 __host__ void annotateNextTask(
   TaskId taskId,

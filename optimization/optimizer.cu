@@ -33,7 +33,7 @@ void registerDummyKernelHandles() {
 
   cudaStreamBeginCapture(s, cudaStreamCaptureModeGlobal);
   TaskAnnotation a{};
-  dummyKernelForAnnotation<<<1, 1, 0, s>>>(a);
+  dummyKernelForAnnotation<<<1, 1, 0, s>>>(a, false);
   cudaStreamEndCapture(s, &(dummyKernelForAnnotationGraph));
   CUDA_KERNEL_NODE_PARAMS rootNodeParams;
   getKernelNodeParams(getRootNode(dummyKernelForAnnotationGraph), rootNodeParams);
@@ -185,13 +185,14 @@ OptimizationInput::TaskGroup::DataDependency convertTaskAnnotationToTaskGroupDat
   return dep;
 }
 
-OptimizationInput::TaskGroup::DataDependency getDataDependencyFromAnnotationNode(cudaGraphNode_t annotationNode) {
+void getDataDependencyFromAnnotationNode(cudaGraphNode_t annotationNode, OptimizationInput::TaskGroup::DataDependency &dataDependency, bool &inferDataDependency) {
   CUDA_KERNEL_NODE_PARAMS nodeParams;
   getKernelNodeParams(annotationNode, nodeParams);
   assert(nodeParams.func == dummyKernelForAnnotationHandle);
 
   auto taskAnnotationPtr = reinterpret_cast<TaskAnnotation *>(nodeParams.kernelParams[0]);
-  return convertTaskAnnotationToTaskGroupDataDependency(*taskAnnotationPtr);
+  dataDependency = convertTaskAnnotationToTaskGroupDataDependency(*taskAnnotationPtr);
+  inferDataDependency = *reinterpret_cast<bool *>(nodeParams.kernelParams[1]);
 }
 
 void mergeDataDependency(OptimizationInput::TaskGroup::DataDependency &dataDependency, const OptimizationInput::TaskGroup::DataDependency &additionalDataDependency) {
@@ -213,9 +214,11 @@ void getTaskDataDependencies(
 
   for (auto [annotationNode, nodes] : annotationToNodesMap) {
     const TaskId taskId = getTaskId(annotationNode);
-    auto dataDependency = getDataDependencyFromAnnotationNode(annotationNode);
+    OptimizationInput::TaskGroup::DataDependency dataDependency;
+    bool inferDataDependency;
+    getDataDependencyFromAnnotationNode(annotationNode, dataDependency, inferDataDependency);
 
-    if (dataDependency.inputs.empty() && dataDependency.outputs.empty()) {
+    if (inferDataDependency) {
       // This task's data dependency should be inferred from compiler pass
       // and kernel parameters.
 
