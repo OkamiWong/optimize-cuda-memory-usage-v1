@@ -451,7 +451,7 @@ void tiledCholesky(bool optimize, bool verify) {
     }
   }
 
-  // initializeDeviceData(h_originalMatrix.get(), d_tiles);
+  initializeDeviceData(h_originalMatrix.get(), d_tiles);
 
   clock.logWithCurrentTime("Device data initialized");
 
