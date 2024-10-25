@@ -596,6 +596,9 @@ Optimizer *Optimizer::getInstance() {
 }
 
 OptimizationOutput Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
+  SystemWallClock clock;
+  clock.start();
+
   if (ConfigurationManager::getConfig().optimization.loadExistingPlan) {
     return loadOptimizationOutput(ConfigurationManager::getConfig().optimization.planPath);
   }
@@ -639,6 +642,9 @@ OptimizationOutput Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
   if (hasOnlyOneStage) {
     auto optimizationInput = constructOptimizationInput(originalGraph, nodes, edges, timeline, disjointSet, nodeToAnnotationMap, taskIdToDataDependencyMap);
 
+    clock.end();
+    LOG_TRACE_WITH_INFO("Time for profiling (seconds): %.4f", clock.getTimeInSeconds());
+
     auto optimizationOutput = this->optimize<TwoStepOptimizationStrategy>(optimizationInput);
 
     if (optimizationOutput.optimal) {
@@ -652,6 +658,9 @@ OptimizationOutput Optimizer::profileAndOptimize(cudaGraph_t originalGraph) {
     auto optimizationInputs = constructOptimizationInputsForStages(
       originalGraph, nodes, edges, timeline, disjointSet, nodeToAnnotationMap, taskIdToDataDependencyMap, nodeToStageIndexMap
     );
+
+    clock.end();
+    LOG_TRACE_WITH_INFO("Time for profiling (seconds): %.4f", clock.getTimeInSeconds());
 
     std::vector<OptimizationOutput> optimizationOutputs;
     for (int i = 0; i < optimizationInputs.size(); i++) {
